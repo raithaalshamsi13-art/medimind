@@ -1,0 +1,116 @@
+# Expo HAS CHANGED
+
+Read the exact versioned docs at https://docs.expo.dev/versions/v57.0.0/ before writing any code.
+
+Version facts for this project:
+
+- Expo **SDK 57**, React Native **0.86**, React **19.2**, TypeScript **6**
+- Routes live in **`src/app/`**, not `app/`
+- Import path alias: `@/*` → `src/*`, `@/assets/*` → `assets/*`
+- **In SDK 56+, importing from `@react-navigation/*` is not supported.** Theme
+  primitives, navigators and hooks all come from `expo-router` entry points.
+- `experiments.reactCompiler` is **on** — follow the Rules of React strictly
+  (no mutation of props or of values captured in render).
+- `tabBarIcon` receives `color: ColorValue`, not `string`.
+- The template ships **no `babel.config.js`** (Metro has a built-in default).
+  Jest needs one on disk or every suite dies with a SyntaxError while parsing
+  React Native's Flow-typed files — hence the minimal `babel.config.js` here.
+  It produces a byte-identical app bundle, so it is safe.
+- `expo/tsconfig.base` does not enable ambient Jest types, so `tsconfig.json`
+  sets `"types": ["jest"]`. Without it `tsc --noEmit` fails on `__tests__`.
+- `npx expo install <pkg> -- --save-dev` does **not** work — the passthrough is
+  ignored and packages land in `dependencies`. Use `npm install --save-dev`
+  for dev-only tooling, and pin the version `expo install` chose.
+- Typed routes reject template literals: use
+  `router.push({ pathname: '/medication/[id]', params: { id } })`, not
+  `` router.push(`/medication/${id}`) ``.
+- **Keep native-only modules out of the web bundle with a `.web.ts` file.**
+  Importing `expo-sqlite` at all — even without calling it — makes Metro bundle
+  its Web Worker, and the dev server then dies with
+  *"Worker chunk not found for: expo-sqlite/web/worker.ts"*. `src/db/database.ts`
+  is paired with `src/db/database.web.ts`, which imports nothing native. Metro
+  picks the `.web` variant automatically. Registering `wasm` in a metro config
+  makes a production export succeed but does **not** fix the dev server — the
+  platform split fixes both, so prefer it.
+- **Zustand v5 selectors must return a stable snapshot.** A selector that
+  builds a new array (`state.medications.filter(...)`) makes React think the
+  store changed on every render. Select the stored array or a primitive, and
+  derive with `useMemo` in the component — see the note in
+  `src/stores/useMedicationStore.ts`.
+
+---
+
+# MediMind conventions
+
+MediMind is a medication-management app: **SCAN → CHECK → CONFIRM → REMIND → TRACK.**
+It reads a medicine label, verifies it, and only then schedules reminders.
+
+## Medical safety rules — these are not negotiable
+
+- Never invent medical information. Only surface what is actually on the label.
+- Any field that could not be read confidently must be `null` and shown to the
+  user as "could not be determined", with a manual-entry path.
+- Never auto-save AI/OCR output. The user confirms or edits it first.
+- Never tell a user to take an extra or double dose.
+- No diagnosis, no prescribing, no unsupported medical advice.
+- Expired medicine → prominent warning, and **no normal reminder is created**.
+
+## Code conventions
+
+- Screens in `src/app/` render UI and delegate to a store or service. No
+  business logic, no SQL, no direct AI calls in a screen.
+- All text goes through `<AppText>`; all colours and sizes come from
+  `useTheme()`. Never hardcode a hex colour or a font size in a component.
+- Buttons and tappable rows respect `theme.touch` (48 minimum, 56 default,
+  64 for primary actions).
+- Colour never carries meaning on its own — always pair it with a text label
+  and an icon.
+- Services are defined as an interface plus implementations, so a mock can be
+  swapped in (`MedicationScannerService` → mock / real).
+- Validate external data (AI responses, form input) with Zod at the boundary.
+- The logo is rendered only via `<Logo/>` / `<LogoMark/>`
+  (`src/components/brand/Logo.tsx`). Never re-assemble it from an icon + text.
+- Icon assets are **generated**, not hand-edited: edit
+  `assets/images/logo-lockup.png` then re-run `scripts/generate-icons.ps1`.
+  Brand colours live in the `BRAND` constant in `src/theme/colors.ts`.
+- Secrets: only `EXPO_PUBLIC_*` publishable values may reach the bundle. The
+  Anthropic API key stays on the Supabase Edge Function.
+- **Never add an admin account or a hardcoded login.** The only preset
+  credentials are the demo account in `src/config/demo.ts`, which is created
+  via the normal sign-up path, shown openly on screen, and rendered only while
+  `demoMode` is on.
+
+## Verify before claiming done
+
+```powershell
+npm run typecheck
+npm test
+npm run check:contrast          # only needed when colours changed
+npx expo export --platform ios --platform web --output-dir .bundle-check  # then delete it
+```
+
+After changing ANY colour token, run `npm run check:contrast`. It reads the
+palette from `src/theme/colors.ts` and fails if a text pair drops below 4.5:1
+or an outline/divider below 3:1.
+
+**Target platforms: iOS (Expo Go) is primary; web must not crash.** Always
+export both — web is what catches "this native module always exists"
+assumptions. Any native-only API needs a web fallback or an explicit
+"not available here" state, as `src/lib/storage.ts` does.
+
+Tests mock native modules rather than stubbing the logic under test — see
+`__tests__/services/LocalAuthService.test.ts`, which swaps expo-secure-store
+for an in-memory Map and expo-crypto for Node's real `crypto`.
+
+The SQL is tested for real: `src/db/types.ts` defines a small `SqlDatabase`
+interface so the repository can run against Node's built-in `node:sqlite` in
+Jest (`__tests__/helpers/testDatabase.ts`). Migrations, CHECK constraints and
+`COLLATE NOCASE` ordering are all exercised by a genuine SQLite engine — do not
+replace this with a hand-written mock.
+
+## Environment note
+
+The repository sits under a path containing a space (`c:\Medimind app\`). Use
+**relative paths** in shell commands from the project directory; absolute
+quoted paths can be mis-parsed. Native local builds dislike spaces in paths too
+— we use EAS cloud builds, which are unaffected.
