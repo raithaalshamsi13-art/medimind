@@ -12,6 +12,10 @@
  *     screen with a native-looking status bar and the right title.
  *   - `apple-touch-icon` + `manifest.json` (served from /public) give the home
  *     screen the real MediMind icon instead of a screenshot.
+ *   - The root is sized with `100dvh` (dynamic viewport height). Expo's reset
+ *     uses `height: 100%`, which on iOS Safari measures the FULL screen even
+ *     when the browser toolbar or home indicator covers the bottom of it, so
+ *     the tab bar ended up partly off-screen. `dvh` tracks the visible area.
  *   - The html/body background matches the app's pale blue so the areas behind
  *     the notch and the overscroll bounce never flash white.
  */
@@ -20,6 +24,29 @@ import { ScrollViewStyleReset } from 'expo-router/html';
 import type { PropsWithChildren } from 'react';
 
 const BACKGROUND = '#DFEDF8';
+
+const WEB_CSS = `
+  html, body {
+    background-color: ${BACKGROUND};
+    overscroll-behavior: none;
+  }
+  body {
+    -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: transparent;
+  }
+  /* Size the app to the VISIBLE viewport, not the full screen. Older iOS
+     falls back to -webkit-fill-available; modern browsers use dvh. */
+  html, body, #root {
+    height: 100%;
+    min-height: -webkit-fill-available;
+  }
+  @supports (height: 100dvh) {
+    html, body, #root {
+      height: 100dvh;
+      min-height: 100dvh;
+    }
+  }
+`;
 
 export default function Root({ children }: PropsWithChildren) {
   return (
@@ -43,18 +70,9 @@ export default function Root({ children }: PropsWithChildren) {
         <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
         <link rel="manifest" href="/manifest.json" />
 
+        {/* Expo's reset first, then our overrides so they win the cascade. */}
         <ScrollViewStyleReset />
-        <style
-          // Keep the document itself from scrolling in standalone mode; the app's
-          // own ScrollViews handle scrolling. `overscroll-behavior` stops the
-          // rubber-band bounce that reveals the page background.
-          dangerouslySetInnerHTML={{
-            __html: `
-              html, body { background-color: ${BACKGROUND}; overscroll-behavior: none; }
-              body { -webkit-text-size-adjust: 100%; -webkit-tap-highlight-color: transparent; }
-            `,
-          }}
-        />
+        <style dangerouslySetInnerHTML={{ __html: WEB_CSS }} />
       </head>
       <body>{children}</body>
     </html>
