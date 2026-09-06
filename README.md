@@ -19,6 +19,15 @@ information, and only then suggests a reminder for the user to confirm.
 
 ---
 
+## Project summary
+
+A complete record of everything built so far, the reasoning behind each decision,
+test coverage, bugs fixed, and what remains is kept in
+[docs/PROJECT_SUMMARY.md](docs/PROJECT_SUMMARY.md). It is written to be lifted
+straight into the graduation report.
+
+---
+
 ## Tech stack
 
 | Layer | Technology |
