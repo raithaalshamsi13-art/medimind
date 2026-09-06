@@ -20,7 +20,7 @@ repository, not estimated._
 | Stack | Expo SDK 57 · React Native 0.86 · React 19.2 · TypeScript 6 · Expo Router · SQLite · Zustand · Zod |
 | Source | 115 tracked files · ~9,700 lines across `src/`, tests, server function and scripts |
 | Tests | **171 passing** in 10 suites — including real-SQLite tests and a WCAG contrast checker |
-| Commits | 6, all verified (typecheck + tests + iOS and web bundles) before committing |
+| Commits | 9, all verified (typecheck + tests + iOS and web bundles) before committing |
 | Milestones | M1 Foundation ✅ · M2 UI & Auth ✅ · M3 Database & CRUD ✅ · Assistant ✅ · M4 Scanner ⬜ · M5 Reminders ⬜ · M6 Polish ⬜ |
 | Native build needed | **None.** Everything runs in Expo Go — no Xcode, no Mac, no Android Studio, no Apple developer account |
 
