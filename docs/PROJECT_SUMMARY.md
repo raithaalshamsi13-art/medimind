@@ -509,7 +509,7 @@ auth suite.
 
 | Task | What it needs |
 |---|---|
-| Deploy to Vercel · Railway · Supabase | ✅ Live: web at medimind-medimind3.vercel.app, API on Railway, Postgres + Auth on Supabase (`docs/DEPLOYMENT.md`). The assistant needs prepaid Anthropic credit before it answers via Claude. |
+| Deploy to Vercel · Railway · Supabase | ✅ Live: web at medimind-medimind3.vercel.app, API on Railway, Postgres + Auth on Supabase (`docs/DEPLOYMENT.md`). The assistant answers through Google Gemini (free tier) — verified live. |
 | Push to GitHub | ✅ Done — pushes are now automated from this environment |
 
 ---
