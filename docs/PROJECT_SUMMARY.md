@@ -335,21 +335,238 @@ Everything above works with the phone in Airplane Mode.
 
 ---
 
-## 12. What remains
+## 12. The original brief, phase by phase
 
-| Milestone | Scope |
-|---|---|
-| **M4 — Scanner & safety** | Camera (`expo-camera`, iOS usage description), `MedicationScannerService` with `MockMedicationScanner` (safe / expired / unreadable demo scenarios) and `ClaudeVisionScanner` behind an Edge Function, scan-result confirmation screen (never auto-save), `MedicationSafetyService` (expired → prominent warning + voice, no normal reminder; missing/unclear → review) |
-| **M5 — Reminders** | Schema v2 (reminders, doses), suggested schedule pre-filled from `domain/dosing.ts`, local notifications with Taken/Missed actions (works in Expo Go on iOS), Schedule tab, dose tracking, gentle missed-dose follow-up |
-| **M6 — Polish** | Voice alerts (`expo-speech`), History tab, remaining Settings, Supabase auth + sync, accessibility pass, error-state pass, final test coverage |
-| Deploy the assistant's Claude backend | Needs a Supabase project and an Anthropic API key — four steps in `supabase/README.md` |
-| Push to GitHub | `scripts\push-to-github.cmd` — one interactive sign-in the first time |
+The project brief defined nineteen development phases plus a testing phase.
+This is where each one stands.
+
+| Phase (from the brief) | Status | Notes |
+|---|---|---|
+| 1 Project setup | ✅ Done | Expo SDK 57, TypeScript, Expo Router, theme, structure, env config |
+| 2 UI foundation — splash, onboarding, auth, dashboard | ✅ Done | Splash uses the real logo; demo account added on top |
+| 3 Medication management — add/view/edit/delete/search/details | ✅ Done | |
+| 4 Database | ✅ Done for medications | `reminders` and `doses` tables arrive with Phase 9–11 as schema v2 |
+| 5 Medication scanner (camera → OCR/AI → data) | ⬜ Not started | **Next.** `MedicationScannerService` interface + mock + Claude vision |
+| 6 Scan result confirmation (Confirm / Edit, never auto-save) | ⬜ Not started | Reuses `MedicationForm` for the Edit path |
+| 7 Safety engine (expiry, missing info, unclear label) | ⬜ Not started | `safety_status` column and labels already exist; only the service is missing |
+| 8 Manual entry | ✅ Done | Validated form, blank → `null`, calendar-date checks |
+| 9 Smart reminders (suggested schedule, editable) | ◐ Foundations | `domain/dosing.ts` already derives times from the label; the reminder screens and table are not built |
+| 10 Notifications (local, Taken / Missed, permissions) | ⬜ Not started | Confirmed to work inside Expo Go on iOS — no native build needed |
+| 11 Dose tracking (today + history) | ⬜ Not started | Schedule and History tabs are placeholders |
+| 12 Missed dose (gentle reminder, never "double up") | ◐ Wording done | The assistant already gives the safe missed-dose answer; the notification-driven follow-up is not built |
+| 13 Voice alerts (TTS, toggle in Settings) | ⬜ Not started | `voiceAlertsEnabled` setting exists; `expo-speech` not yet wired |
+| 14 Offline support | ✅ Done by design | Local-first SQLite, on-device auth, offline assistant; AI features say so when they need internet |
+| 15 Settings (profile, notifications, voice, accessibility, privacy, about, logout) | ◐ Partial | Profile, appearance, accessibility, about, logout done; notifications / voice / privacy screens pending |
+| 16 Accessibility | ◐ Strong foundation | Large text, high contrast, WCAG-checked palettes, 48 pt targets, labels never colour-only; a final screen-reader pass remains |
+| 17 Error handling (friendly messages everywhere) | ◐ Partial | `Result<T>` + error catalogue used throughout; camera / notification / OCR cases arrive with their features |
+| 18 Security | ◐ Partial | No secrets in the bundle, per-user scoping, minimal data, no admin login; Supabase RLS pending |
+| 19 Demo mode (safe / expired / unreadable scenarios) | ◐ Partial | `demoMode` flag, demo account and offline assistant exist; the three scanner scenarios arrive with Phase 5 |
+| 20 Testing | ◐ Ongoing | 171 tests covering auth, medication, database, storage, assistant, dosing; scanner / safety / reminder / notification suites to come |
+
+**Not planned, by the brief's own rule ("do not overbuild"):** social features,
+chat between users, hospital systems, payments, analytics dashboards, AI
+diagnosis.
 
 ---
 
-## 13. Commit history
+## 13. Remaining work in detail
 
-```
+### Milestone 4 — Scanner, confirmation, safety engine, demo scenarios
+
+Covers Phases 5, 6, 7 and 19. This is the heart of the project and needs the
+iPhone (the camera cannot run in a browser).
+
+**Camera (Phase 5)**
+- Install `expo-camera`; add `NSCameraUsageDescription` to `app.json` (iOS
+  crashes on first camera use without it).
+- `src/app/scan/index.tsx` — permission request with a plain-language reason,
+  live preview, capture button at 64 pt, a "having trouble? enter manually"
+  escape hatch. Permission denied → friendly explanation + Settings deep link,
+  never a dead end.
+- `src/app/scan/processing.tsx` — "Reading the label…" with a cancel.
+
+**Scanner service (Phase 5, Rule 29)**
+- `src/services/scanner/MedicationScannerService.ts` — interface:
+  `scan(imageUri) → Result<ScanResult>`, where every field of `ScanResult` is
+  `string | null` plus a per-field confidence and an overall `confidence`.
+- `MockMedicationScanner` — three deterministic scenarios selectable in demo
+  mode: **Safe Medicine** (future expiry), **Expired Demo Medicine** (past
+  expiry), **Unreadable** (low confidence). This is what the graduation demo
+  runs on, so it can never be broken by a network or a key.
+- `ClaudeVisionScanner` — sends the photo to a new Edge Function
+  (`supabase/functions/scan`) that calls a Claude vision model with a strict
+  JSON schema; the response is validated with Zod so any field the model is
+  unsure about becomes `null`. Same key-stays-on-the-server design as the
+  assistant.
+- Factory picks mock vs real from `demoMode` and `EXPO_PUBLIC_SCAN_ENDPOINT`.
+
+**Confirmation (Phase 6)**
+- `src/app/scan/result.tsx` — shows Name, Dosage, Expiry, Instructions,
+  Frequency, each with "Could not be determined" where `null`, a confidence
+  hint, and two buttons: **Confirm** and **Edit**. Nothing is saved until
+  Confirm. Edit opens the existing `MedicationForm` pre-filled.
+- `src/app/scan/unreadable.tsx` — "We couldn't clearly read this label" with
+  **Scan again** and **Enter manually**.
+
+**Safety engine (Phase 7)**
+- `src/services/safety/MedicationSafetyService.ts` — a pure function
+  `evaluate(medication, today) → { status, issues[] }`:
+  expired → `EXPIRED`; within 30 days → `EXPIRING_SOON`; no expiry, dosage or
+  frequency → `NEEDS_REVIEW` with the missing fields named; low scan confidence
+  → `NEEDS_REVIEW`; otherwise `SAFE`.
+- Runs on confirm, on manual save, on edit, and on app launch (dates move).
+- **EXPIRED** produces a prominent banner — the word "EXPIRED" plus "Please
+  verify this medication before using it", never colour alone — a voice alert
+  (Phase 13), and **no normal reminder is offered**.
+- The `Badge` on medicine cards and the detail page lights up (the hooks are
+  already in place, hidden while everything is `UNKNOWN`).
+- Tests: future / today / past / missing expiry; each missing field; confidence
+  thresholds.
+
+### Milestone 5 — Reminders, notifications, dose tracking, missed doses
+
+Covers Phases 9, 10, 11 and 12.
+
+**Schema v2 (Phase 4 completion)**
+- Migration 2 adds `reminders` (id, medication_id, user_id, dose, time,
+  frequency, days, start_date, end_date, enabled) and `doses` (id,
+  medication_id, reminder_id, user_id, scheduled_time, status
+  UPCOMING|TAKEN|MISSED|SKIPPED, timestamp, notification_id), both with
+  `FOREIGN KEY … ON DELETE CASCADE` so deleting a medicine cleans up
+  everything. `PRAGMA foreign_keys = ON` is already set.
+- `ReminderRepository`, `DoseRepository` with the same per-user scoping and
+  the same real-SQLite tests.
+
+**Smart reminders (Phase 9)**
+- `src/app/reminder/create.tsx` — opened after a SAFE confirmation. Pre-filled
+  from `domain/dosing.ts`: "Paracetamol · 1 tablet · twice daily · 8:00 AM and
+  8:00 PM". Editable: time(s), dose, frequency, days, start and end date. Big
+  **Confirm reminder** button.
+- `src/app/reminder/[id].tsx` — edit / enable-disable / delete.
+- Expired medicines cannot create a normal reminder (Phase 7 rule).
+
+**Notifications (Phase 10)**
+- `expo-notifications`: permission request with the reason explained; if
+  denied, a screen explaining why reminders need it, with a link to Settings.
+- `NotificationService` schedules a local notification per reminder time:
+  "Time for your medication — Paracetamol, 1 tablet", with **Taken** and
+  **Missed** action buttons. Rescheduled on edit, cancelled on delete.
+- Works inside Expo Go on iOS, so still no native build.
+
+**Dose tracking (Phase 11)**
+- Schedule tab becomes "Today": each dose with time and status —
+  8:00 AM Taken · 2:00 PM Taken · 8:00 PM Upcoming — and buttons to mark Taken
+  or Missed from inside the app too.
+- History tab: past days grouped by date; medicine, scheduled time, status.
+  Deliberately simple — no charts (Phase 11: "do not make the analytics
+  unnecessarily complicated").
+- Dashboard "Doses taken today" count becomes real.
+
+**Missed dose (Phase 12)**
+- A dose not marked within a grace window becomes MISSED and triggers one
+  gentle follow-up notification: "You may have missed your 8:00 AM Paracetamol.
+  Follow the instructions on the label, and ask a pharmacist if unsure." Never
+  "take it now" and never "take two".
+
+### Milestone 6 — Voice, settings, accessibility, security, hardening
+
+Covers Phases 13, 15, 16, 17, 18 and the rest of 20.
+
+**Voice alerts (Phase 13)** — `VoiceService` over `expo-speech`. Reminder:
+"It is time for your medication." Safety: "Warning. This medication appears to
+be expired. Please check the medication before using it." Honours the existing
+`voiceAlertsEnabled` toggle; a "Test voice" button in Settings.
+
+**Settings (Phase 15)** — Notifications screen (master switch, permission
+status, test notification), Voice screen, Privacy screen (what is stored, where,
+what the assistant is told, delete-my-data), Edit profile.
+
+**Accessibility (Phase 16)** — VoiceOver pass on every screen, focus order on
+forms, `accessibilityLiveRegion` on safety banners, Dynamic Type check with
+Large text on.
+
+**Error handling (Phase 17)** — the remaining cases from the brief, each with a
+friendly message and a way forward: camera denied, notification denied, OCR /
+AI failure, no internet during a scan, unclear label. No technical text ever
+reaches the screen.
+
+**Security (Phase 18)** — `SupabaseAuthService` behind the existing
+`AuthService` interface; Postgres schema with **Row Level Security** policies
+mirroring the on-device `user_id` scoping; optional cloud sync of medicines
+and reminders through `SyncService` (local stays the source of truth).
+
+**Testing (Phase 20)** — suites for scanner (success, failure, unclear,
+incorrect OCR), safety (future / today / past / missing expiry), reminders
+(create, edit, delete, enable/disable), dose tracking (taken, missed, upcoming),
+offline (open saved medicine, view reminders, manual entry), and the existing
+auth suite.
+
+### Two deployment tasks outside the milestones
+
+| Task | What it needs |
+|---|---|
+| Deploy the assistant's Claude backend | A Supabase project and an Anthropic API key; four steps in `supabase/README.md`; then turn Demo Mode off |
+| Push to GitHub | Run `scripts\push-to-github.cmd` once and sign in; after that pushes can be automated |
+
+---
+
+## 14. Success criteria from the brief
+
+| # | Criterion | Status |
+|---|---|---|
+| 1 | Install / run the app | ✅ Expo Go on iPhone, no native build |
+| 2 | Create an account | ✅ |
+| 3 | Log in | ✅ (plus one-tap demo account) |
+| 4 | View the home dashboard | ✅ |
+| 5 | Scan a medication label | ⬜ M4 |
+| 6 | Extract medication information | ⬜ M4 |
+| 7 | Review / edit the extracted information | ⬜ M4 (form already exists) |
+| 8 | Check expiration / safety | ⬜ M4 |
+| 9 | Receive a warning for an expired medication | ⬜ M4 |
+| 10 | Add a safe medication | ✅ manually; via scan in M4 |
+| 11 | Generate a reminder | ⬜ M5 (schedule derivation done) |
+| 12 | Receive a notification | ⬜ M5 |
+| 13 | Mark a dose as taken | ⬜ M5 |
+| 14 | Mark / view missed doses | ⬜ M5 |
+| 15 | View medication history | ⬜ M5 |
+| 16 | Use manual medication entry | ✅ |
+| 17 | Access saved medications offline | ✅ |
+| 18 | Use voice alerts | ⬜ M6 |
+| 19 | Manage notification / voice settings | ◐ toggles exist; screens in M6 |
+| 20 | Demonstrate the complete workflow reliably | ◐ Everything built so far works in Airplane Mode; scanner and reminders complete the story |
+
+**Beyond the brief:** the Ask MediMind assistant with dose scheduling, selectable
+colour themes, a WCAG contrast checker, and real-SQLite tests.
+
+---
+
+## 15. The demonstration story (brief §23) — step by step
+
+| Step | Action | Status |
+|---|---|---|
+| 1 | Open MediMind | ✅ |
+| 2 | Go to Scan Medication | ⬜ M4 |
+| 3 | Scan a medicine label | ⬜ M4 |
+| 4 | Show AI / OCR extraction | ⬜ M4 (mock in demo mode, Claude when deployed) |
+| 5 | Show medication details | ✅ detail screen exists |
+| 6 | Show safety verification | ⬜ M4 |
+| 7 | Demonstrate an expired-medication warning | ⬜ M4 (mock "Expired Demo Medicine") |
+| 8 | Scan / use a safe medication | ⬜ M4 (mock "Demo Medicine") |
+| 9 | Confirm the medication | ⬜ M4 |
+| 10 | Show the automatically suggested reminder | ⬜ M5 (times from `domain/dosing.ts`) |
+| 11 | Confirm the reminder | ⬜ M5 |
+| 12 | Show the notification | ⬜ M5 |
+| 13 | Mark the medication as taken | ⬜ M5 |
+| 14 | Show the medication history | ⬜ M5 |
+
+The demo runs on `MockMedicationScanner` and local notifications, so steps 2–14
+will work with no internet and no API key — exactly as the brief requires.
+
+---
+
+## 16. Commit history
+
+e3  2026-09-06  Add docs/PROJECT_SUMMARY.md — full record of features, decisions, tests and next steps
 4395d7a  2026-09-06  Assistant: answer next-dose questions from the recorded label schedule
 3c5bbb0  2026-09-06  Move the assistant into the tab bar as 'Ask' and remove the dashboard card
 0891d31  2026-09-06  Add one-click push helper script
@@ -360,7 +577,7 @@ a478570  2026-09-06  Add Ask MediMind assistant with offline and Claude-backed i
 
 ---
 
-## 14. Where to look for each thing
+## 17. Where to look for each thing
 
 | Topic | File |
 |---|---|
