@@ -48,7 +48,7 @@ Do them in this order — each later step needs a value from an earlier one.
 
    | Variable | Value |
    |---|---|
-   | `ANTHROPIC_API_KEY` | your key from https://console.anthropic.com |
+   | `ANTHROPIC_API_KEY` | your key from https://console.anthropic.com. **The account also needs prepaid credit** (Console → Plans & Billing → Buy credits); with a zero balance every request fails with "credit balance is too low", which the server reports in its `detail` field. A few dollars covers thousands of assistant replies. |
    | `APP_ACCESS_KEY` | any long random string, e.g. 32 letters and digits |
    | `ALLOWED_ORIGIN` | your Vercel URL once you have it (step 3), e.g. `https://medimind.vercel.app` — or `*` while testing |
 
