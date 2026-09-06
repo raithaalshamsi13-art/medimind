@@ -31,7 +31,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { ProviderError, selectProvider, type Turn } from './providers.js';
 
 /** Bumped on every change so /health shows which code is live. */
-const VERSION = '1.2.0';
+const VERSION = '1.2.1';
 
 const MAX_QUESTION_LENGTH = 500;
 const MAX_HISTORY_TURNS = 10;

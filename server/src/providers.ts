@@ -196,7 +196,7 @@ export function createAnthropicProvider(apiKey: string, model: string): LlmProvi
 // ---------------------------------------------------------------------------
 
 export const DEFAULT_MODELS = {
-  gemini: 'gemini-2.5-flash',
+  gemini: 'gemini-3.6-flash',
   groq: 'llama-3.3-70b-versatile',
   anthropic: 'claude-opus-5',
 } as const;
