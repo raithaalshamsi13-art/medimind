@@ -1,23 +1,40 @@
-# Supabase backend
+# Supabase — database and accounts
 
-Server-side pieces of MediMind. Nothing here ships inside the app bundle.
+Supabase provides MediMind's cloud PostgreSQL database and user accounts. It is
+the server-side mirror of the on-device SQLite schema, with **Row Level
+Security** so every user can only reach their own rows.
 
-| Function | Purpose |
+| File | Purpose |
 |---|---|
-| `functions/assistant` | Holds the Anthropic API key and answers "Ask MediMind" questions with Claude. |
+| `schema.sql` | Tables (`profiles`, `medications`, `reminders`, `doses`), indexes, RLS policies, triggers |
 
-## Deploying the assistant
+The AI proxy is **not** here — it runs on Railway (see `../server/`).
 
-1. Install the Supabase CLI and link the project: `supabase link --project-ref <ref>`
-2. Set the secret: `supabase secrets set ANTHROPIC_API_KEY=sk-ant-...`
-3. Deploy: `supabase functions deploy assistant`
-4. In the app's `.env.local`:
-   `EXPO_PUBLIC_ASSISTANT_ENDPOINT=https://<ref>.supabase.co/functions/v1/assistant`
-5. In the app, turn **Demo Mode off** in Settings. The assistant badge changes
-   from "Offline assistant" to "AI assistant".
+## Setup (once)
 
-Until then the app uses its built-in offline assistant, which answers from the
-user's saved records without any network.
+1. Create a project at https://supabase.com (free tier).
+2. **SQL Editor → New query**, paste the whole of `schema.sql`, **Run**.
+3. **Authentication → Providers**: leave Email enabled. For a smoother demo,
+   turn **Confirm email** off (Authentication → Settings) so sign-ups work
+   without checking an inbox.
+4. **Project Settings → Data API**: copy the **Project URL** and the
+   **anon public** key into the app's `.env.local`:
 
-The function validates every field it receives, caps question length and
-history, and never logs the user's medicines.
+   ```
+   EXPO_PUBLIC_SUPABASE_URL=https://<project-ref>.supabase.co
+   EXPO_PUBLIC_SUPABASE_ANON_KEY=<anon key>
+   ```
+
+   Also add both as Environment Variables on the Vercel project.
+
+The anon key is a **public** client key — it is safe in the app bundle because
+every table is protected by RLS. The `service_role` key must never be used in
+the app or in Vercel.
+
+## What the app does with it
+
+- `SupabaseAuthService` (Milestone 6) signs users up and in against Supabase
+  Auth, replacing the on-device `LocalAuthService` when these variables are set.
+- `SyncService` (Milestone 6) mirrors medicines, reminders and doses to these
+  tables. The phone remains the source of truth; the cloud is a backup and a
+  way to use a second device.

@@ -1,34 +1,44 @@
 /**
- * MediMind assistant proxy — a Supabase Edge Function (Deno).
+ * MediMind API server — deployed on Railway.
  *
  * WHY THIS EXISTS
- * The Anthropic API key must never ship inside the mobile app (Phase 18). This
- * function holds it as a server secret. The app sends a question plus the
- * user's saved medicine details; this function adds the system prompt, calls
- * Claude, and returns plain text.
+ * The Anthropic API key must never ship inside the app (Phase 18). This
+ * service holds it as a Railway environment variable. The app sends a question
+ * plus the user's saved medicine details; this service adds the system prompt,
+ * calls Claude, and returns plain text.
  *
- * DEPLOY
- *   supabase functions deploy assistant
- *   supabase secrets set ANTHROPIC_API_KEY=sk-ant-...
- * then in the app's .env.local:
- *   EXPO_PUBLIC_ASSISTANT_ENDPOINT=https://<project-ref>.supabase.co/functions/v1/assistant
+ * ENDPOINTS
+ *   GET  /health      → { ok: true }
+ *   POST /assistant   → { reply: string, model: string }
  *
- * This file is excluded from the app's TypeScript program (see tsconfig.json
- * "exclude") because it targets the Deno runtime, not React Native.
+ * ENVIRONMENT (set in the Railway dashboard → Variables)
+ *   ANTHROPIC_API_KEY   required
+ *   APP_ACCESS_KEY      optional; if set, requests must carry it as `x-app-key`
+ *                       (abuse mitigation, not authentication)
+ *   ALLOWED_ORIGIN      optional; CORS origin, default "*"
+ *   PORT                set by Railway automatically
+ *
+ * Deliberately dependency-light: Node's built-in http server plus the official
+ * Anthropic SDK. Nothing here logs the user's medicines.
  */
 
-import Anthropic from 'npm:@anthropic-ai/sdk';
+import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
+
+import Anthropic from '@anthropic-ai/sdk';
 
 const MODEL = 'claude-opus-5';
 const MAX_QUESTION_LENGTH = 500;
 const MAX_HISTORY_TURNS = 10;
 const MAX_MEDICATIONS = 50;
+const MAX_BODY_BYTES = 64 * 1024;
 
-const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
-};
+/** Per-IP: this many requests per window. Enough for a person, not a script. */
+const RATE_LIMIT = { windowMs: 10 * 60 * 1000, max: 40 };
+
+const PORT = Number(process.env.PORT ?? 8787);
+const API_KEY = process.env.ANTHROPIC_API_KEY ?? '';
+const APP_ACCESS_KEY = process.env.APP_ACCESS_KEY ?? '';
+const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN ?? '*';
 
 /**
  * Stable across every request, so it is cached (cache_control below). The
@@ -63,10 +73,36 @@ type MedicationContext = {
 };
 type Body = { question?: unknown; history?: unknown; medications?: unknown };
 
-function json(status: number, body: unknown): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { ...CORS_HEADERS, 'Content-Type': 'application/json' },
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+const CORS_HEADERS: Record<string, string> = {
+  'Access-Control-Allow-Origin': ALLOWED_ORIGIN,
+  'Access-Control-Allow-Headers': 'authorization, content-type, x-app-key',
+  'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
+};
+
+function json(res: ServerResponse, status: number, body: unknown): void {
+  res.writeHead(status, { ...CORS_HEADERS, 'Content-Type': 'application/json' });
+  res.end(JSON.stringify(body));
+}
+
+function readBody(req: IncomingMessage): Promise<string> {
+  return new Promise((resolve, reject) => {
+    let size = 0;
+    const chunks: Buffer[] = [];
+    req.on('data', (chunk: Buffer) => {
+      size += chunk.length;
+      if (size > MAX_BODY_BYTES) {
+        reject(new Error('body too large'));
+        req.destroy();
+        return;
+      }
+      chunks.push(chunk);
+    });
+    req.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')));
+    req.on('error', reject);
   });
 }
 
@@ -98,9 +134,7 @@ function isMedication(value: unknown): value is MedicationContext {
 }
 
 function describeMedications(medications: MedicationContext[]): string {
-  if (medications.length === 0) {
-    return 'The user has not saved any medicines yet.';
-  }
+  if (medications.length === 0) return 'The user has not saved any medicines yet.';
   const lines = medications.map((m) =>
     [
       `- ${m.name}`,
@@ -121,27 +155,58 @@ function describeMedications(medications: MedicationContext[]): string {
   );
 }
 
-Deno.serve(async (req: Request) => {
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { status: 204, headers: CORS_HEADERS });
+// Simple in-memory rate limit. Good enough for one small instance; swap for a
+// shared store if the service is ever scaled out.
+const hits = new Map<string, { count: number; resetAt: number }>();
+function isRateLimited(ip: string): boolean {
+  const now = Date.now();
+  const entry = hits.get(ip);
+  if (!entry || entry.resetAt < now) {
+    hits.set(ip, { count: 1, resetAt: now + RATE_LIMIT.windowMs });
+    return false;
   }
-  if (req.method !== 'POST') return json(405, { error: 'POST only' });
+  entry.count += 1;
+  return entry.count > RATE_LIMIT.max;
+}
 
-  const apiKey = Deno.env.get('ANTHROPIC_API_KEY');
-  if (!apiKey) {
-    return json(500, { error: 'ANTHROPIC_API_KEY is not configured on the server' });
+// ---------------------------------------------------------------------------
+// Handlers
+// ---------------------------------------------------------------------------
+
+const client = API_KEY ? new Anthropic({ apiKey: API_KEY }) : null;
+
+async function handleAssistant(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  if (!client) {
+    json(res, 500, { error: 'ANTHROPIC_API_KEY is not configured on the server' });
+    return;
+  }
+
+  if (APP_ACCESS_KEY && req.headers['x-app-key'] !== APP_ACCESS_KEY) {
+    json(res, 401, { error: 'Missing or invalid app key' });
+    return;
+  }
+
+  const ip =
+    (req.headers['x-forwarded-for'] as string | undefined)?.split(',')[0]?.trim() ??
+    req.socket.remoteAddress ??
+    'unknown';
+  if (isRateLimited(ip)) {
+    json(res, 429, { error: 'Too many requests. Please wait a few minutes.' });
+    return;
   }
 
   let body: Body;
   try {
-    body = (await req.json()) as Body;
+    body = JSON.parse(await readBody(req)) as Body;
   } catch {
-    return json(400, { error: 'Request body must be JSON' });
+    json(res, 400, { error: 'Request body must be JSON under 64 KB' });
+    return;
   }
 
   const question = typeof body.question === 'string' ? body.question.trim() : '';
   if (question.length === 0 || question.length > MAX_QUESTION_LENGTH) {
-    return json(400, { error: `question must be 1-${MAX_QUESTION_LENGTH} characters` });
+    json(res, 400, { error: `question must be 1-${MAX_QUESTION_LENGTH} characters` });
+    return;
   }
 
   const history = Array.isArray(body.history)
@@ -150,8 +215,6 @@ Deno.serve(async (req: Request) => {
   const medications = Array.isArray(body.medications)
     ? body.medications.filter(isMedication).slice(0, MAX_MEDICATIONS)
     : [];
-
-  const client = new Anthropic({ apiKey });
 
   try {
     const response = await client.beta.messages.create({
@@ -172,7 +235,8 @@ Deno.serve(async (req: Request) => {
     });
 
     if (response.stop_reason === 'refusal') {
-      return json(200, { reply: SAFE_DECLINE, model: response.model });
+      json(res, 200, { reply: SAFE_DECLINE, model: response.model });
+      return;
     }
 
     const text = response.content
@@ -181,16 +245,41 @@ Deno.serve(async (req: Request) => {
       .join('\n')
       .trim();
 
-    return json(200, { reply: text.length > 0 ? text : SAFE_DECLINE, model: response.model });
+    json(res, 200, { reply: text.length > 0 ? text : SAFE_DECLINE, model: response.model });
   } catch (error) {
     if (error instanceof Anthropic.RateLimitError) {
-      return json(429, { error: 'The assistant is busy. Please try again in a moment.' });
+      json(res, 429, { error: 'The assistant is busy. Please try again in a moment.' });
+      return;
     }
     if (error instanceof Anthropic.APIError) {
       console.error('Anthropic API error', error.status, error.message);
-      return json(502, { error: 'The assistant is unavailable right now.' });
+      json(res, 502, { error: 'The assistant is unavailable right now.' });
+      return;
     }
     console.error('Unexpected error', error);
-    return json(500, { error: 'Unexpected server error.' });
+    json(res, 500, { error: 'Unexpected server error.' });
   }
+}
+
+const server = createServer(async (req, res) => {
+  const url = new URL(req.url ?? '/', 'http://localhost');
+
+  if (req.method === 'OPTIONS') {
+    res.writeHead(204, CORS_HEADERS);
+    res.end();
+    return;
+  }
+  if (req.method === 'GET' && (url.pathname === '/' || url.pathname === '/health')) {
+    json(res, 200, { ok: true, service: 'medimind-server', assistant: Boolean(client) });
+    return;
+  }
+  if (req.method === 'POST' && url.pathname === '/assistant') {
+    await handleAssistant(req, res);
+    return;
+  }
+  json(res, 404, { error: 'Not found' });
+});
+
+server.listen(PORT, () => {
+  console.log(`medimind-server listening on port ${PORT} (assistant ${client ? 'ready' : 'NOT configured'})`);
 });

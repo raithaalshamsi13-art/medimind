@@ -80,7 +80,7 @@ It reads a medicine label, verifies it, and only then schedules reminders.
   `assets/images/logo-lockup.png` then re-run `scripts/generate-icons.ps1`.
   Brand colours live in the `BRAND` constant in `src/theme/colors.ts`.
 - Secrets: only `EXPO_PUBLIC_*` publishable values may reach the bundle. The
-  Anthropic API key stays on the Supabase Edge Function.
+  Anthropic API key stays on the Railway API server (`server/`).
 - **Never add an admin account or a hardcoded login.** The only preset
   credentials are the demo account in `src/config/demo.ts`, which is created
   via the normal sign-up path, shown openly on screen, and rendered only while
@@ -90,8 +90,9 @@ It reads a medicine label, verifies it, and only then schedules reminders.
   must stay in the store, not in a service, so it cannot be bypassed by
   swapping implementations. Every assistant reply is rendered with the
   "may be wrong / check with your doctor" footer. The Claude call lives only
-  in `supabase/functions/assistant` (excluded from the app tsconfig); the app
-  must never import `@anthropic-ai/sdk` or hold an API key.
+  in `server/` (a separate Node package deployed on Railway, excluded from the
+  app tsconfig); the app must never import `@anthropic-ai/sdk` or hold an API
+  key.
 
 ## Verify before claiming done
 

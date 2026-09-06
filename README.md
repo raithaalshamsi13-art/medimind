@@ -36,10 +36,12 @@ straight into the graduation report.
 | Language | **TypeScript**, strict mode |
 | Navigation | **Expo Router** (file-based, routes live in `src/app/`) |
 | Local database | **SQLite** (`expo-sqlite`) — local-first, the phone is the source of truth |
-| Cloud backend | **Supabase** — PostgreSQL + Auth + Edge Functions, with Row Level Security |
+| Cloud database + accounts | **Supabase** — PostgreSQL + Auth, with Row Level Security (`supabase/schema.sql`) |
+| API server | **Node on Railway** (`server/`) — holds the Anthropic key, answers assistant questions |
+| Web hosting | **Vercel** (`vercel.json`) — static export of the app |
 | Auth | Supabase Auth (email + password), session cached in `expo-secure-store` |
 | Notifications | `expo-notifications` — locally scheduled, works offline |
-| AI label reading | `MedicationScannerService` interface: mock ⇄ Claude vision (via Edge Function) |
+| AI label reading | `MedicationScannerService` interface: mock ⇄ Claude vision (via the API server) |
 | Voice alerts | `expo-speech` (on-device text-to-speech) |
 | State | **Zustand** |
 | Validation | **Zod** — also validates AI output so unreadable fields become `null`, never invented |
@@ -132,6 +134,12 @@ npx expo export --platform ios --platform web --output-dir .bundle-check  # then
 Both platforms matter: `ios` is the demo target, and `web` catches assumptions
 that a native module always exists.
 
+### Deployment
+
+Hosting on **Vercel** (web), **Railway** (API server) and **Supabase**
+(database + accounts) is a click-through of each dashboard — see
+[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md).
+
 ### Environment configuration
 
 ```powershell
@@ -141,7 +149,7 @@ Copy-Item .env.example .env.local
 `.env.local` is git-ignored. **Only publishable values belong in it** — everything
 prefixed `EXPO_PUBLIC_` is compiled into the app bundle and readable by anyone
 who downloads the app. The Anthropic API key is *never* stored here; it lives as
-a secret on the Supabase Edge Function.
+a secret on the Railway API server.
 
 The app runs fully without any configuration: with no Supabase URL it stays
 local-only, and with no scan endpoint it uses the mock scanner (demo mode).
@@ -343,8 +351,8 @@ Two implementations behind one interface, chosen in
 - **`OfflineAssistant`** (active in Demo Mode, and whenever no proxy is
   configured) — deterministic rules that read the user's own records back in
   plain language. Needs no network. Every reply it can give is unit-tested.
-- **`ProxyAssistant`** — sends the question to the Supabase Edge Function in
-  [supabase/functions/assistant](supabase/functions/assistant/index.ts), which
+- **`ProxyAssistant`** — sends the question to the MediMind API server in
+  [server/](server/src/index.ts) (deployed on Railway), which
   holds the Anthropic API key server-side and calls Claude with a system prompt
   that forbids diagnosis, dosing advice and interaction claims. The app never
   sees the key.

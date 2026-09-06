@@ -47,10 +47,12 @@ their label says.
 | Language | **TypeScript, strict** | AI output is unpredictable JSON; the compiler forces every "could not read this" case to be handled instead of crashing. |
 | Navigation | **Expo Router** | A file in `src/app/` is a screen. Easiest structure to explain in a viva. |
 | Local database | **SQLite (`expo-sqlite`)**, local-first | The phone is the source of truth. Offline support (Phase 14) is free instead of painful, because reminders never needed the internet. |
-| Cloud (planned) | **Supabase** — Postgres + Auth + Edge Functions | Real SQL, Row Level Security ("users only see their own rows" is one policy), and a place to hold the AI key server-side. |
+| Cloud database + accounts | **Supabase** — Postgres + Auth | Real SQL and Row Level Security ("users only see their own rows" is one policy). Schema in `supabase/schema.sql`. |
+| API server | **Node on Railway** (`server/`) | Holds the Anthropic key server-side; a small dependency-light HTTP service with validation and rate limiting. |
+| Web hosting | **Vercel** (`vercel.json`) | Static export of the app, redeployed on every push. |
 | State | **Zustand** | ~1 KB; avoids Redux ceremony. |
 | Validation | **Zod** | One schema validates the manual-entry form *and* (from M4) the AI's output, so an unreadable field becomes `null`, never a guess. |
-| AI | **Claude (`claude-opus-5`)** via a server function | The key must never ship inside the app (Phase 18). The app talks to a function; the function talks to Claude. |
+| AI | **Claude (`claude-opus-5`)** via the Railway server | The key must never ship inside the app (Phase 18). The app talks to the server; the server talks to Claude. |
 | Testing | **Jest + jest-expo** | Pure services and domain logic are unit-tested; SQL is tested against a real engine (see §9). |
 
 ---
@@ -151,8 +153,8 @@ Reached from the **Ask** tab or a medicine's **Ask about this medicine** button.
   - `OfflineAssistant` — deterministic rules that read the user's own records
     back in plain language. Runs on the phone with no network. Active in Demo
     Mode. Every reply it can produce is unit-tested.
-  - `ProxyAssistant` — posts to the Supabase Edge Function in
-    `supabase/functions/assistant/`, which holds the Anthropic key server-side
+  - `ProxyAssistant` — posts to the MediMind API server in `server/` (deployed
+    on Railway), which holds the Anthropic key server-side
     and calls Claude with a system prompt forbidding diagnosis, dose changes and
     interaction claims. Includes the API's refusal-fallback. Written and ready;
     not yet deployed (needs a Supabase project and an API key).
@@ -200,7 +202,7 @@ Reached from the **Ask** tab or a medicine's **Ask about this medicine** button.
 | Enums enforced by `CHECK` constraints | `db/migrations.ts` | TypeScript protects the code; the constraint protects the data from *any* code. |
 | Every query scoped by `user_id` | both repositories | Same guarantee as Postgres Row Level Security, applied on-device. Tested for read, update and delete. |
 | No admin account, no hardcoded login | `AGENTS.md` rule | A backdoor is what an examiner looks for. The demo account is created via normal sign-up and shown openly. |
-| API key never in the app | `config/env.ts`, Edge Function | Anything in the bundle can be extracted from the APK in minutes. |
+| API key never in the app | `config/env.ts`, `server/` | Anything in the bundle can be extracted from the APK in minutes. |
 | Safety screen runs *before* any AI | `domain/assistant.ts`, `stores/useAssistantStore.ts` | Dangerous questions are answered by fixed text in code, not by a model's judgement. |
 | Amount never inferred; schedule never defaulted | `domain/dosing.ts`, `OfflineAssistant.ts` | The one thing a dose helper must not do is make up a dose. |
 | Minimal personal data | signup collects name, email, password only; assistant context is five label fields | Least data kept is least data leaked. |
@@ -393,7 +395,7 @@ iPhone (the camera cannot run in a browser).
   mode: **Safe Medicine** (future expiry), **Expired Demo Medicine** (past
   expiry), **Unreadable** (low confidence). This is what the graduation demo
   runs on, so it can never be broken by a network or a key.
-- `ClaudeVisionScanner` — sends the photo to a new Edge Function
+- `ClaudeVisionScanner` — sends the photo to a new endpoint on the API server
   (`supabase/functions/scan`) that calls a Claude vision model with a strict
   JSON schema; the response is validated with Zod so any field the model is
   unsure about becomes `null`. Same key-stays-on-the-server design as the
@@ -505,8 +507,8 @@ auth suite.
 
 | Task | What it needs |
 |---|---|
-| Deploy the assistant's Claude backend | A Supabase project and an Anthropic API key; four steps in `supabase/README.md`; then turn Demo Mode off |
-| Push to GitHub | Run `scripts\push-to-github.cmd` once and sign in; after that pushes can be automated |
+| Deploy to Vercel · Railway · Supabase | Click-through of each dashboard, step by step in `docs/DEPLOYMENT.md`; needs an Anthropic API key for the assistant |
+| Push to GitHub | ✅ Done — pushes are now automated from this environment |
 
 ---
 
@@ -593,7 +595,9 @@ a478570  2026-09-06  Add Ask MediMind assistant with offline and Claude-backed i
 | Assistant safety screen and wording | `src/domain/assistant.ts` |
 | Dose scheduling | `src/domain/dosing.ts` |
 | Offline assistant | `src/services/assistant/OfflineAssistant.ts` |
-| Claude proxy (server) | `supabase/functions/assistant/index.ts` |
+| API server (Railway) | `server/src/index.ts` |
+| Cloud schema + RLS (Supabase) | `supabase/schema.sql` |
+| Deployment guide | `docs/DEPLOYMENT.md` |
 | Contrast checker | `scripts/check-contrast.js` |
 | Icon generation | `scripts/generate-icons.ps1` |
 | Real-SQLite test adapter | `__tests__/helpers/testDatabase.ts` |

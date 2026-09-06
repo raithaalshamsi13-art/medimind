@@ -10,7 +10,7 @@
  *   - Scan endpoint URL                → just a URL.
  *
  * The Anthropic API key is deliberately absent. It lives as a secret on the
- * Supabase Edge Function and never touches the device.
+ * Railway API server (`server/`) and never touches the device.
  */
 
 function optional(value: string | undefined): string | null {
@@ -20,10 +20,16 @@ function optional(value: string | undefined): string | null {
 export const env = {
   supabaseUrl: optional(process.env.EXPO_PUBLIC_SUPABASE_URL),
   supabaseAnonKey: optional(process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY),
-  /** URL of the Edge Function that performs AI label extraction. */
+  /** URL of the API endpoint that performs AI label extraction (Milestone 4). */
   scanEndpoint: optional(process.env.EXPO_PUBLIC_SCAN_ENDPOINT),
-  /** URL of the Edge Function that answers assistant questions. */
+  /** URL of the API endpoint that answers assistant questions, e.g. https://<railway-domain>/assistant */
   assistantEndpoint: optional(process.env.EXPO_PUBLIC_ASSISTANT_ENDPOINT),
+  /**
+   * Shared access key sent to the assistant server as `x-app-key`. This is
+   * abuse mitigation (stops random internet traffic spending the AI budget),
+   * NOT authentication — it ships in the bundle and is therefore public.
+   */
+  assistantAccessKey: optional(process.env.EXPO_PUBLIC_ASSISTANT_ACCESS_KEY),
 } as const;
 
 /** Cloud auth + sync are available. When false, the app runs fully offline. */

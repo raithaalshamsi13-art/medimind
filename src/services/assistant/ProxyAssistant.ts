@@ -2,7 +2,7 @@
  * Claude-backed assistant, reached through a server-side proxy.
  *
  * SECURITY (Phase 18): the app never holds the Anthropic API key. It POSTs the
- * question to a Supabase Edge Function (`supabase/functions/assistant`), which
+ * question to the MediMind API server (`server/`, deployed on Railway), which
  * holds the key as a server secret, applies the system prompt, calls Claude,
  * and returns plain text. Anyone who decompiles the app finds only a URL.
  *
@@ -40,9 +40,11 @@ export class ProxyAssistant implements AssistantService {
 
     try {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      // Supabase Edge Functions expect the project's public anon key as a
-      // bearer token. It is a publishable value, not a secret.
+      // The Supabase anon key is a publishable client key; sent so the server
+      // can verify a Supabase session once SupabaseAuthService exists.
       if (env.supabaseAnonKey) headers.Authorization = `Bearer ${env.supabaseAnonKey}`;
+      // Abuse mitigation for the public server endpoint - see config/env.ts.
+      if (env.assistantAccessKey) headers['x-app-key'] = env.assistantAccessKey;
 
       const response = await fetch(this.endpoint, {
         method: 'POST',
