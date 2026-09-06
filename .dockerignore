@@ -1,0 +1,16 @@
+# Keep the Docker build context small: only server/ is needed for the image.
+node_modules
+server/node_modules
+server/dist
+.expo
+.bundle-check
+dist
+assets
+src
+__tests__
+docs
+scripts
+supabase
+*.md
+.env*
+.git
