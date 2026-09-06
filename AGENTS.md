@@ -79,6 +79,13 @@ It reads a medicine label, verifies it, and only then schedules reminders.
   credentials are the demo account in `src/config/demo.ts`, which is created
   via the normal sign-up path, shown openly on screen, and rendered only while
   `demoMode` is on.
+- **The assistant must never give medical advice.** `screenQuestion` in
+  `src/domain/assistant.ts` runs before either assistant implementation and
+  must stay in the store, not in a service, so it cannot be bypassed by
+  swapping implementations. Every assistant reply is rendered with the
+  "may be wrong / check with your doctor" footer. The Claude call lives only
+  in `supabase/functions/assistant` (excluded from the app tsconfig); the app
+  must never import `@anthropic-ai/sdk` or hold an API key.
 
 ## Verify before claiming done
 

@@ -22,6 +22,8 @@ export const env = {
   supabaseAnonKey: optional(process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY),
   /** URL of the Edge Function that performs AI label extraction. */
   scanEndpoint: optional(process.env.EXPO_PUBLIC_SCAN_ENDPOINT),
+  /** URL of the Edge Function that answers assistant questions. */
+  assistantEndpoint: optional(process.env.EXPO_PUBLIC_ASSISTANT_ENDPOINT),
 } as const;
 
 /** Cloud auth + sync are available. When false, the app runs fully offline. */
@@ -29,6 +31,9 @@ export const isSupabaseConfigured = Boolean(env.supabaseUrl && env.supabaseAnonK
 
 /** A real AI scanner is reachable. When false, we fall back to the mock. */
 export const isRealScannerConfigured = Boolean(env.scanEndpoint);
+
+/** The Claude-backed assistant proxy is reachable. When false, the offline assistant answers. */
+export const isAssistantConfigured = Boolean(env.assistantEndpoint);
 
 /** True in `expo start`, false in a production build. */
 export const isDev = __DEV__;

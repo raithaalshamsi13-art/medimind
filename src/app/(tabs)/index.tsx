@@ -79,6 +79,33 @@ export default function HomeScreen() {
         {/* ---------- Hero action: Scan ---------- */}
         <ScanHeroCard />
 
+        {/* ---------- Ask MediMind ---------- */}
+        <Card
+          onPress={() => router.push('/assistant')}
+          accessibilityLabel="Ask MediMind"
+          accessibilityHint="Opens the assistant to ask about your saved medicines">
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
+            <View
+              style={{
+                width: 48,
+                height: 48,
+                borderRadius: theme.radius.md,
+                backgroundColor: theme.colors.primarySoft,
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}>
+              <Ionicons name="chatbubble-ellipses-outline" size={26} color={theme.colors.primary} />
+            </View>
+            <View style={{ flex: 1, gap: theme.spacing.xxs }}>
+              <AppText variant="subheading">Ask MediMind</AppText>
+              <AppText variant="caption" color="textSecondary">
+                Questions about your saved medicines. Not medical advice.
+              </AppText>
+            </View>
+            <Ionicons name="chevron-forward" size={22} color={theme.colors.textMuted} />
+          </View>
+        </Card>
+
         {/* ---------- At-a-glance counts ---------- */}
         <View style={{ flexDirection: 'row', gap: theme.spacing.md }}>
           <StatCard

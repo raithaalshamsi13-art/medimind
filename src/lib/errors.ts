@@ -20,6 +20,7 @@ export type AppErrorCode =
   // Infrastructure
   | 'STORAGE_UNAVAILABLE'
   | 'NETWORK_UNAVAILABLE'
+  | 'ASSISTANT_UNAVAILABLE'
   | 'UNKNOWN';
 
 export type AppError = {
@@ -43,6 +44,8 @@ const FRIENDLY_MESSAGES: Record<AppErrorCode, string> = {
     'MediMind could not save data on this device. Please restart the app and try again.',
   NETWORK_UNAVAILABLE:
     'You appear to be offline. Your saved medicines and reminders still work without internet.',
+  ASSISTANT_UNAVAILABLE:
+    'The assistant could not be reached right now. Your saved medicines are not affected. Please try again later, or ask a pharmacist.',
   UNKNOWN: 'Something went wrong. Please try again.',
 };
 

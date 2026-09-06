@@ -320,3 +320,38 @@ in dark mode.
 | **M4** | Camera, scanner abstraction + mock, scan confirmation, safety engine, demo mode | ⬜ Next |
 | **M5** | Suggested reminders, local notifications, dose tracking | ⬜ |
 | **M6** | Voice alerts, offline sync, settings, accessibility, error handling, tests | ⬜ |
+
+### Ask MediMind (the assistant)
+
+A chat screen, reached from the dashboard card or from a medicine's
+**Ask about this medicine** button, that answers questions about the user's
+saved medicines: when they expire, what dosage or instructions were recorded,
+what to do about a missed dose.
+
+Two implementations behind one interface, chosen in
+[src/services/assistant/index.ts](src/services/assistant/index.ts):
+
+- **`OfflineAssistant`** (active in Demo Mode, and whenever no proxy is
+  configured) — deterministic rules that read the user's own records back in
+  plain language. Needs no network. Every reply it can give is unit-tested.
+- **`ProxyAssistant`** — sends the question to the Supabase Edge Function in
+  [supabase/functions/assistant](supabase/functions/assistant/index.ts), which
+  holds the Anthropic API key server-side and calls Claude with a system prompt
+  that forbids diagnosis, dosing advice and interaction claims. The app never
+  sees the key.
+
+Three safety layers apply regardless of implementation:
+
+1. **A one-time acknowledgement** the user must accept before first use, stating
+   that the assistant can be wrong and is not a substitute for a doctor.
+2. **A client-side safety screen** (`screenQuestion` in
+   [src/domain/assistant.ts](src/domain/assistant.ts)) that intercepts questions
+   about changing doses, mixing medicines, pregnancy, children or emergencies
+   and answers them with a fixed conservative message — they never reach a
+   model.
+3. **A footer on every reply bubble** — "May be wrong — check with your doctor or
+   pharmacist" — plus a warning banner pinned above the conversation.
+
+The assistant is told only `name`, `dosage`, `frequency`, `instructions` and
+`expirationDate` for each medicine — never notes, photos, ids or account data —
+and the conversation is not persisted.

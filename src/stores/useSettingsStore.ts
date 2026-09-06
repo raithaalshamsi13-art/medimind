@@ -34,6 +34,8 @@ export type SettingsFlags = {
   appearance: AppearancePreference;
   /** Which colour palette from `theme/palettes.ts` is in use. */
   paletteId: PaletteId;
+  /** User has read and accepted the assistant's "not medical advice" notice. */
+  assistantDisclaimerAcknowledged: boolean;
 };
 
 const defaultFlags: SettingsFlags = {
@@ -45,6 +47,7 @@ const defaultFlags: SettingsFlags = {
   demoMode: true,
   appearance: 'system',
   paletteId: DEFAULT_PALETTE_ID,
+  assistantDisclaimerAcknowledged: false,
 };
 
 /** Keys whose value is a boolean — all of them today, kept honest by types. */
@@ -74,6 +77,7 @@ function pickFlags(state: SettingsFlags): SettingsFlags {
     demoMode: state.demoMode,
     appearance: state.appearance,
     paletteId: state.paletteId,
+    assistantDisclaimerAcknowledged: state.assistantDisclaimerAcknowledged,
   };
 }
 

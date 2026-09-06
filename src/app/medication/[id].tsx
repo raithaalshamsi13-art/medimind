@@ -114,6 +114,15 @@ export default function MedicationDetailScreen() {
             }
           />
           <Button
+            label="Ask about this medicine"
+            icon="chatbubble-ellipses-outline"
+            variant="secondary"
+            onPress={() =>
+              router.push({ pathname: '/assistant', params: { medicationId: medication.id } })
+            }
+            accessibilityHint="Opens the assistant with questions about this medicine"
+          />
+          <Button
             label="Delete medicine"
             icon="trash-outline"
             variant="danger"
