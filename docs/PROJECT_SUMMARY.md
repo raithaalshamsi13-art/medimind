@@ -48,11 +48,11 @@ their label says.
 | Navigation | **Expo Router** | A file in `src/app/` is a screen. Easiest structure to explain in a viva. |
 | Local database | **SQLite (`expo-sqlite`)**, local-first | The phone is the source of truth. Offline support (Phase 14) is free instead of painful, because reminders never needed the internet. |
 | Cloud database + accounts | **Supabase** — Postgres + Auth | Real SQL and Row Level Security ("users only see their own rows" is one policy). Schema in `supabase/schema.sql`. |
-| API server | **Node on Railway** (`server/`) | Holds the Anthropic key server-side; a small dependency-light HTTP service with validation and rate limiting. |
+| API server | **Node on Railway** (`server/`) | Holds the AI key server-side; provider-agnostic (Gemini / Groq / Claude), with validation and rate limiting. |
 | Web hosting | **Vercel** (`vercel.json`) | Static export of the app, redeployed on every push. |
 | State | **Zustand** | ~1 KB; avoids Redux ceremony. |
 | Validation | **Zod** | One schema validates the manual-entry form *and* (from M4) the AI's output, so an unreadable field becomes `null`, never a guess. |
-| AI | **Claude (`claude-opus-5`)** via the Railway server | The key must never ship inside the app (Phase 18). The app talks to the server; the server talks to Claude. |
+| AI | **Google Gemini (free tier)** via the Railway server; Groq or Claude are drop-in alternatives chosen by which key is set | The key must never ship inside the app (Phase 18). The app talks to the server; the server talks to the model. A free provider keeps the demo independent of any paid balance. |
 | Testing | **Jest + jest-expo** | Pure services and domain logic are unit-tested; SQL is tested against a real engine (see §9). |
 
 ---

@@ -48,7 +48,9 @@ Do them in this order — each later step needs a value from an earlier one.
 
    | Variable | Value |
    |---|---|
-   | `ANTHROPIC_API_KEY` | your key from https://console.anthropic.com. **The account also needs prepaid credit** (Console → Plans & Billing → Buy credits); with a zero balance every request fails with "credit balance is too low", which the server reports in its `detail` field. A few dollars covers thousands of assistant replies. |
+   | `GEMINI_API_KEY` | **Recommended — free, no card.** Get one at https://aistudio.google.com/apikey (sign in with a Google account → *Create API key*). The server picks Gemini automatically when this is set. |
+   | `GROQ_API_KEY` | Alternative free option: https://console.groq.com/keys. Used if no Gemini key is set. |
+   | `ANTHROPIC_API_KEY` | Optional, paid: https://console.anthropic.com. Needs prepaid credit (Plans & Billing) or every request fails with "credit balance is too low". Used only if neither free key is set. |
    | `APP_ACCESS_KEY` | any long random string, e.g. 32 letters and digits |
    | `ALLOWED_ORIGIN` | your Vercel URL once you have it (step 3), e.g. `https://medimind.vercel.app` — or `*` while testing |
 
@@ -104,7 +106,7 @@ from "Offline assistant" to "AI assistant".
 
 | Value | Secret? | Where it is allowed |
 |---|---|---|
-| `ANTHROPIC_API_KEY` | **Yes** | Railway variables only. Never in the app, never in Vercel, never in git. |
+| `GEMINI_API_KEY` / `GROQ_API_KEY` / `ANTHROPIC_API_KEY` | **Yes** | Railway variables only. Never in the app, never in Vercel, never in git. Set just one. |
 | `APP_ACCESS_KEY` / `EXPO_PUBLIC_ASSISTANT_ACCESS_KEY` | No (it ships in the app) | Abuse mitigation so random traffic can't spend your AI credit. Not authentication. |
 | Supabase anon key | No | Public client key; every table is protected by Row Level Security. |
 | Supabase `service_role` key | **Yes** | Nowhere in this project. |

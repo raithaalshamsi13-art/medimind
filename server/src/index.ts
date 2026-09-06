@@ -2,34 +2,37 @@
  * MediMind API server — deployed on Railway.
  *
  * WHY THIS EXISTS
- * The Anthropic API key must never ship inside the app (Phase 18). This
- * service holds it as a Railway environment variable. The app sends a question
- * plus the user's saved medicine details; this service adds the system prompt,
- * calls Claude, and returns plain text.
+ * AI API keys must never ship inside the app (Phase 18). This service holds
+ * one as a Railway environment variable. The app sends a question plus the
+ * user's saved medicine details; this service adds the system prompt, calls
+ * the configured model, and returns plain text.
+ *
+ * WHICH MODEL
+ * See providers.ts. Set exactly one of:
+ *   GEMINI_API_KEY      Google Gemini — free tier, no card (recommended)
+ *   GROQ_API_KEY        Groq — free tier, open models
+ *   ANTHROPIC_API_KEY   Anthropic Claude — paid
  *
  * ENDPOINTS
- *   GET  /health      → { ok, service, version, assistant }
+ *   GET  /health      → { ok, service, version, assistant, provider, model }
  *   POST /assistant   → { reply: string, model: string }
  *
- * ENVIRONMENT (set in the Railway dashboard → Variables)
- *   ANTHROPIC_API_KEY   required
+ * OTHER ENVIRONMENT (Railway → Variables)
  *   APP_ACCESS_KEY      optional; if set, requests must carry it as `x-app-key`
  *                       (abuse mitigation, not authentication)
  *   ALLOWED_ORIGIN      optional; CORS origin, default "*"
  *   PORT                set by Railway automatically
  *
- * Deliberately dependency-light: Node's built-in http server plus the official
- * Anthropic SDK. Nothing here logs the user's medicines.
+ * Nothing here logs the user's medicines.
  */
 
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 
-import Anthropic from '@anthropic-ai/sdk';
+import { ProviderError, selectProvider, type Turn } from './providers.js';
 
 /** Bumped on every change so /health shows which code is live. */
-const VERSION = '1.1.0';
+const VERSION = '1.2.0';
 
-const MODEL = 'claude-opus-5';
 const MAX_QUESTION_LENGTH = 500;
 const MAX_HISTORY_TURNS = 10;
 const MAX_MEDICATIONS = 50;
@@ -39,32 +42,31 @@ const MAX_BODY_BYTES = 64 * 1024;
 const RATE_LIMIT = { windowMs: 10 * 60 * 1000, max: 40 };
 
 const PORT = Number(process.env.PORT ?? 8787);
-const API_KEY = process.env.ANTHROPIC_API_KEY ?? '';
 const APP_ACCESS_KEY = process.env.APP_ACCESS_KEY ?? '';
 const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN ?? '*';
 
+const provider = selectProvider(process.env);
+
 /**
- * Stable across every request, so it is cached (cache_control below). The
- * per-user medicine list goes in a SEPARATE system block after it, so varying
- * medicines do not invalidate the cached prefix.
+ * The rules every model must follow. Written for a general model, not a
+ * specific one, so it works unchanged across providers.
  */
 const SYSTEM_PROMPT = `You are the assistant inside MediMind, a medication reminder app. You help people understand the medicines they have saved in the app. You are not a doctor or a pharmacist, and you must never act as one.
 
 Rules you must follow on every reply:
-1. Answer only from the medicine details supplied in this conversation (which the user typed or scanned from their own labels) and from general, widely known information about how to read a medicine label. Do not draw on knowledge about specific drugs to make recommendations.
+1. Answer only from the medicine details supplied below (which the user typed or scanned from their own labels) and from general, widely known information about how to read a medicine label. Do not draw on knowledge about specific drugs to make recommendations.
 1a. Dose questions ("what do I take now", "how much do I take", "when is my next dose"): read back the recorded dosage, the recorded instructions, and the schedule and next-dose time the app has already computed for that medicine. Use those computed values as given; do not recompute or alter them. If the dosage is "not recorded", say the amount is not recorded and to check the label — never supply an amount yourself. If there is no computed schedule, say you cannot work out a time from what was recorded.
 2. Never diagnose. Never recommend starting, stopping, increasing, decreasing, doubling or skipping a dose. Never say whether medicines can be taken together or with alcohol. Never say a medicine is safe in pregnancy, while breastfeeding, or for children. For any of these, say plainly that you cannot advise and that a pharmacist or doctor can.
 3. If something sounds like an emergency (chest pain, difficulty breathing, an allergic reaction, an overdose, loss of consciousness), tell the user to contact emergency services immediately and say nothing else.
 4. If a detail was not recorded, say so. Do not guess it or fill it in from general knowledge.
 5. For a missed dose: say not to take a double dose, to follow the label or leaflet, and to ask a pharmacist if unsure.
-6. Use plain language and short sentences. Many users are older adults. Keep replies under 120 words unless you are listing medicines.
+6. Use plain language and short sentences. Many users are older adults. Keep replies under 120 words unless you are listing medicines. Do not use markdown, headings or bullet symbols — plain sentences only.
 7. End every reply with exactly this sentence on its own line: "Please check with your doctor or pharmacist before acting on this."`;
 
 const SAFE_DECLINE =
   'I am not able to help with that question. Please speak to your pharmacist or doctor.\n' +
   'Please check with your doctor or pharmacist before acting on this.';
 
-type Turn = { role: 'user' | 'assistant'; content: string };
 type MedicationContext = {
   name: string;
   dosage: string | null;
@@ -172,107 +174,16 @@ function isRateLimited(ip: string): boolean {
   return entry.count > RATE_LIMIT.max;
 }
 
-/** Text of a Claude reply, or the safe decline if it refused or said nothing. */
-function extractReply(response: Anthropic.Message | Anthropic.Beta.BetaMessage): string {
-  if (response.stop_reason === 'refusal') return SAFE_DECLINE;
-  const text = response.content
-    .filter((block): block is Anthropic.TextBlock | Anthropic.Beta.BetaTextBlock => block.type === 'text')
-    .map((block) => block.text)
-    .join('\n')
-    .trim();
-  return text.length > 0 ? text : SAFE_DECLINE;
-}
-
-// ---------------------------------------------------------------------------
-// Claude calls
-// ---------------------------------------------------------------------------
-
-const client = API_KEY ? new Anthropic({ apiKey: API_KEY }) : null;
-
-type ClaudeInput = {
-  system: string;
-  medicationsText: string;
-  history: Turn[];
-  question: string;
-};
-
-/**
- * Preferred request: refusal fallback + effort control. These are newer API
- * features; if the API rejects the request shape (HTTP 400), `askClaude`
- * retries with the plain request below rather than failing the user.
- */
-async function askFull(c: Anthropic, input: ClaudeInput) {
-  return c.beta.messages.create({
-    model: MODEL,
-    max_tokens: 2048,
-    betas: ['server-side-fallback-2026-06-01'],
-    fallbacks: [{ model: 'claude-opus-4-8' }],
-    output_config: { effort: 'medium' },
-    system: [
-      { type: 'text', text: input.system, cache_control: { type: 'ephemeral' } },
-      { type: 'text', text: input.medicationsText },
-    ],
-    messages: [...input.history, { role: 'user', content: input.question }],
-  });
-}
-
-/** Plain request: nothing beyond the standard Messages API. */
-async function askPlain(c: Anthropic, input: ClaudeInput) {
-  return c.messages.create({
-    model: MODEL,
-    max_tokens: 2048,
-    system: [
-      { type: 'text', text: input.system, cache_control: { type: 'ephemeral' } },
-      { type: 'text', text: input.medicationsText },
-    ],
-    messages: [...input.history, { role: 'user', content: input.question }],
-  });
-}
-
-async function askClaude(c: Anthropic, input: ClaudeInput) {
-  try {
-    return await askFull(c, input);
-  } catch (error) {
-    if (error instanceof Anthropic.BadRequestError) {
-      console.warn('Full request rejected (400) - retrying with the plain request:', error.message);
-      return askPlain(c, input);
-    }
-    throw error;
-  }
-}
-
-/**
- * Turn an Anthropic error into a response the app can show and a developer
- * can diagnose. `detail` carries the API's own status and message - these
- * never contain the key - so a failure is explainable without server access.
- */
-function anthropicErrorResponse(res: ServerResponse, error: unknown): void {
-  if (error instanceof Anthropic.RateLimitError) {
-    json(res, 429, { error: 'The assistant is busy. Please try again in a moment.' });
-    return;
-  }
-  if (error instanceof Anthropic.APIError) {
-    console.error('Anthropic API error', error.status, error.message);
-    json(res, 502, {
-      error: 'The assistant is unavailable right now.',
-      detail: `anthropic ${error.status ?? 'error'}: ${error.message}`,
-    });
-    return;
-  }
-  console.error('Unexpected error', error);
-  json(res, 500, {
-    error: 'Unexpected server error.',
-    detail: error instanceof Error ? error.message : String(error),
-  });
-}
-
 // ---------------------------------------------------------------------------
 // Handlers
 // ---------------------------------------------------------------------------
 
 async function handleAssistant(req: IncomingMessage, res: ServerResponse): Promise<void> {
-  if (!client) {
-    json(res, 500, { error: 'ANTHROPIC_API_KEY is not configured on the server' });
+  if (!provider) {
+    json(res, 500, {
+      error: 'No AI provider is configured on the server',
+      detail: 'Set GEMINI_API_KEY, GROQ_API_KEY or ANTHROPIC_API_KEY',
+    });
     return;
   }
 
@@ -312,15 +223,31 @@ async function handleAssistant(req: IncomingMessage, res: ServerResponse): Promi
     : [];
 
   try {
-    const response = await askClaude(client, {
+    const result = await provider.complete({
       system: SYSTEM_PROMPT,
       medicationsText: describeMedications(medications),
       history,
       question,
     });
-    json(res, 200, { reply: extractReply(response), model: response.model });
+    const reply = result.refused || result.text.length === 0 ? SAFE_DECLINE : result.text;
+    json(res, 200, { reply, model: result.model, provider: provider.name });
   } catch (error) {
-    anthropicErrorResponse(res, error);
+    if (error instanceof ProviderError) {
+      console.error('Provider error', error.provider, error.status, error.message);
+      if (error.status === 429) {
+        json(res, 429, { error: 'The assistant is busy. Please try again in a moment.' });
+        return;
+      }
+      // `detail` carries the provider's own status and message - never a key -
+      // so a failure is explainable without server access.
+      json(res, 502, { error: 'The assistant is unavailable right now.', detail: error.message });
+      return;
+    }
+    console.error('Unexpected error', error);
+    json(res, 500, {
+      error: 'Unexpected server error.',
+      detail: error instanceof Error ? error.message : String(error),
+    });
   }
 }
 
@@ -337,7 +264,9 @@ const server = createServer(async (req, res) => {
       ok: true,
       service: 'medimind-server',
       version: VERSION,
-      assistant: Boolean(client),
+      assistant: Boolean(provider),
+      provider: provider?.name ?? null,
+      model: provider?.model ?? null,
     });
     return;
   }
@@ -350,6 +279,7 @@ const server = createServer(async (req, res) => {
 
 server.listen(PORT, () => {
   console.log(
-    `medimind-server v${VERSION} listening on port ${PORT} (assistant ${client ? 'ready' : 'NOT configured'})`,
+    `medimind-server v${VERSION} listening on port ${PORT} ` +
+      `(assistant: ${provider ? `${provider.name} / ${provider.model}` : 'NOT configured'})`,
   );
 });

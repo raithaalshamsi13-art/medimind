@@ -37,7 +37,7 @@ straight into the graduation report.
 | Navigation | **Expo Router** (file-based, routes live in `src/app/`) |
 | Local database | **SQLite** (`expo-sqlite`) — local-first, the phone is the source of truth |
 | Cloud database + accounts | **Supabase** — PostgreSQL + Auth, with Row Level Security (`supabase/schema.sql`) |
-| API server | **Node on Railway** (`server/`) — holds the Anthropic key, answers assistant questions |
+| API server | **Node on Railway** (`server/`) — holds the AI key (Gemini free tier by default; Groq or Claude optional), answers assistant questions |
 | Web hosting | **Vercel** (`vercel.json`) — static export of the app |
 | Auth | Supabase Auth (email + password), session cached in `expo-secure-store` |
 | Notifications | `expo-notifications` — locally scheduled, works offline |
