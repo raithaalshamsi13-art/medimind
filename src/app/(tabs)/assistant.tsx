@@ -6,9 +6,9 @@
  *   2. a warning banner pinned above every conversation
  *   3. a footer on every single reply bubble
  *
- * Opened from the dashboard, or from a medicine's detail screen with
- * `?medicationId=…`, in which case the suggested questions are about that
- * medicine.
+ * Lives in the bottom tab bar as "Ask". A medicine's detail screen can also
+ * open it with `?medicationId=…`, in which case the suggested questions are
+ * about that medicine.
  */
 
 import { Ionicons } from '@expo/vector-icons';
@@ -129,7 +129,7 @@ export default function AssistantScreen() {
               onPress={() => setSetting('assistantDisclaimerAcknowledged', true)}
               accessibilityHint="Accepts the notice and opens the assistant"
             />
-            <Button label="Go back" variant="secondary" onPress={() => router.back()} />
+            <Button label="Not now" variant="secondary" onPress={() => router.replace('/')} />
           </View>
         </View>
       </Screen>
@@ -140,13 +140,14 @@ export default function AssistantScreen() {
   // Conversation
   // ---------------------------------------------------------------------------
   return (
-    <Screen padded={false} keyboardAvoiding edges={['left', 'right', 'bottom']}>
+    <Screen padded={false} keyboardAvoiding>
       <View
         style={{
           paddingHorizontal: theme.layout.screenPadding,
           paddingTop: theme.spacing.md,
           gap: theme.spacing.sm,
         }}>
+        <AppText variant="title">Ask MediMind</AppText>
         <InlineMessage tone="warning" title="Not medical advice" message={ASSISTANT_SAFETY_NOTE} />
         <View
           style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>

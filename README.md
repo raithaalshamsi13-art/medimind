@@ -323,8 +323,8 @@ in dark mode.
 
 ### Ask MediMind (the assistant)
 
-A chat screen, reached from the dashboard card or from a medicine's
-**Ask about this medicine** button, that answers questions about the user's
+A chat screen in the bottom tab bar (**Ask**), also reachable from a
+medicine's **Ask about this medicine** button, that answers questions about the user's
 saved medicines: when they expire, what dosage or instructions were recorded,
 what to do about a missed dose.
 

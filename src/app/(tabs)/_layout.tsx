@@ -1,5 +1,5 @@
 /**
- * Bottom tab navigator: Home · Medications · Schedule · History · Settings.
+ * Bottom tab navigator: Home · Medicines · Ask · Schedule · History · Settings.
  *
  * Accessibility notes:
  *   - labels are ALWAYS visible (never icon-only), so the meaning of each tab
@@ -53,6 +53,13 @@ export default function TabsLayout() {
       <Tabs.Screen
         name="medications"
         options={{ title: 'Medicines', tabBarIcon: tabIcon('medkit', 'medkit-outline') }}
+      />
+      <Tabs.Screen
+        name="assistant"
+        options={{
+          title: 'Ask',
+          tabBarIcon: tabIcon('chatbubble-ellipses', 'chatbubble-ellipses-outline'),
+        }}
       />
       <Tabs.Screen
         name="schedule"
