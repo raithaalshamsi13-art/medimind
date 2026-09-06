@@ -48,7 +48,7 @@ Do them in this order — each later step needs a value from an earlier one.
 
    | Variable | Value |
    |---|---|
-   | `GEMINI_API_KEY` | **Recommended — free, no card.** Get one at https://aistudio.google.com/apikey (sign in with a Google account → *Create API key*). The server picks Gemini automatically when this is set. |
+   | `GEMINI_API_KEY` | **Recommended — free, no card.** Get one at https://aistudio.google.com/apikey (sign in with a Google account → *Create API key*). The server picks Gemini automatically when this is set. Default model `gemini-3.6-flash`; override with a `GEMINI_MODEL` variable if Google retires it — their error message names the replacement. |
    | `GROQ_API_KEY` | Alternative free option: https://console.groq.com/keys. Used if no Gemini key is set. |
    | `ANTHROPIC_API_KEY` | Optional, paid: https://console.anthropic.com. Needs prepaid credit (Plans & Billing) or every request fails with "credit balance is too low". Used only if neither free key is set. |
    | `APP_ACCESS_KEY` | any long random string, e.g. 32 letters and digits |
