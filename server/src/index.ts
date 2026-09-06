@@ -8,7 +8,7 @@
  * calls Claude, and returns plain text.
  *
  * ENDPOINTS
- *   GET  /health      → { ok: true }
+ *   GET  /health      → { ok, service, version, assistant }
  *   POST /assistant   → { reply: string, model: string }
  *
  * ENVIRONMENT (set in the Railway dashboard → Variables)
@@ -25,6 +25,9 @@
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 
 import Anthropic from '@anthropic-ai/sdk';
+
+/** Bumped on every change so /health shows which code is live. */
+const VERSION = '1.1.0';
 
 const MODEL = 'claude-opus-5';
 const MAX_QUESTION_LENGTH = 500;
@@ -169,11 +172,103 @@ function isRateLimited(ip: string): boolean {
   return entry.count > RATE_LIMIT.max;
 }
 
+/** Text of a Claude reply, or the safe decline if it refused or said nothing. */
+function extractReply(response: Anthropic.Message | Anthropic.Beta.BetaMessage): string {
+  if (response.stop_reason === 'refusal') return SAFE_DECLINE;
+  const text = response.content
+    .filter((block): block is Anthropic.TextBlock | Anthropic.Beta.BetaTextBlock => block.type === 'text')
+    .map((block) => block.text)
+    .join('\n')
+    .trim();
+  return text.length > 0 ? text : SAFE_DECLINE;
+}
+
 // ---------------------------------------------------------------------------
-// Handlers
+// Claude calls
 // ---------------------------------------------------------------------------
 
 const client = API_KEY ? new Anthropic({ apiKey: API_KEY }) : null;
+
+type ClaudeInput = {
+  system: string;
+  medicationsText: string;
+  history: Turn[];
+  question: string;
+};
+
+/**
+ * Preferred request: refusal fallback + effort control. These are newer API
+ * features; if the API rejects the request shape (HTTP 400), `askClaude`
+ * retries with the plain request below rather than failing the user.
+ */
+async function askFull(c: Anthropic, input: ClaudeInput) {
+  return c.beta.messages.create({
+    model: MODEL,
+    max_tokens: 2048,
+    betas: ['server-side-fallback-2026-06-01'],
+    fallbacks: [{ model: 'claude-opus-4-8' }],
+    output_config: { effort: 'medium' },
+    system: [
+      { type: 'text', text: input.system, cache_control: { type: 'ephemeral' } },
+      { type: 'text', text: input.medicationsText },
+    ],
+    messages: [...input.history, { role: 'user', content: input.question }],
+  });
+}
+
+/** Plain request: nothing beyond the standard Messages API. */
+async function askPlain(c: Anthropic, input: ClaudeInput) {
+  return c.messages.create({
+    model: MODEL,
+    max_tokens: 2048,
+    system: [
+      { type: 'text', text: input.system, cache_control: { type: 'ephemeral' } },
+      { type: 'text', text: input.medicationsText },
+    ],
+    messages: [...input.history, { role: 'user', content: input.question }],
+  });
+}
+
+async function askClaude(c: Anthropic, input: ClaudeInput) {
+  try {
+    return await askFull(c, input);
+  } catch (error) {
+    if (error instanceof Anthropic.BadRequestError) {
+      console.warn('Full request rejected (400) - retrying with the plain request:', error.message);
+      return askPlain(c, input);
+    }
+    throw error;
+  }
+}
+
+/**
+ * Turn an Anthropic error into a response the app can show and a developer
+ * can diagnose. `detail` carries the API's own status and message - these
+ * never contain the key - so a failure is explainable without server access.
+ */
+function anthropicErrorResponse(res: ServerResponse, error: unknown): void {
+  if (error instanceof Anthropic.RateLimitError) {
+    json(res, 429, { error: 'The assistant is busy. Please try again in a moment.' });
+    return;
+  }
+  if (error instanceof Anthropic.APIError) {
+    console.error('Anthropic API error', error.status, error.message);
+    json(res, 502, {
+      error: 'The assistant is unavailable right now.',
+      detail: `anthropic ${error.status ?? 'error'}: ${error.message}`,
+    });
+    return;
+  }
+  console.error('Unexpected error', error);
+  json(res, 500, {
+    error: 'Unexpected server error.',
+    detail: error instanceof Error ? error.message : String(error),
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Handlers
+// ---------------------------------------------------------------------------
 
 async function handleAssistant(req: IncomingMessage, res: ServerResponse): Promise<void> {
   if (!client) {
@@ -217,47 +312,15 @@ async function handleAssistant(req: IncomingMessage, res: ServerResponse): Promi
     : [];
 
   try {
-    const response = await client.beta.messages.create({
-      model: MODEL,
-      max_tokens: 2048,
-      // Refusal fallback: if the primary model declines on a safety category,
-      // the API re-runs the request on the fallback model in the same call.
-      betas: ['server-side-fallback-2026-06-01'],
-      fallbacks: [{ model: 'claude-opus-4-8' }],
-      // Adaptive thinking is on by default for this model; medium effort is
-      // plenty for short conversational replies and keeps latency down.
-      output_config: { effort: 'medium' },
-      system: [
-        { type: 'text', text: SYSTEM_PROMPT, cache_control: { type: 'ephemeral' } },
-        { type: 'text', text: describeMedications(medications) },
-      ],
-      messages: [...history, { role: 'user', content: question }],
+    const response = await askClaude(client, {
+      system: SYSTEM_PROMPT,
+      medicationsText: describeMedications(medications),
+      history,
+      question,
     });
-
-    if (response.stop_reason === 'refusal') {
-      json(res, 200, { reply: SAFE_DECLINE, model: response.model });
-      return;
-    }
-
-    const text = response.content
-      .filter((block): block is Anthropic.Beta.BetaTextBlock => block.type === 'text')
-      .map((block) => block.text)
-      .join('\n')
-      .trim();
-
-    json(res, 200, { reply: text.length > 0 ? text : SAFE_DECLINE, model: response.model });
+    json(res, 200, { reply: extractReply(response), model: response.model });
   } catch (error) {
-    if (error instanceof Anthropic.RateLimitError) {
-      json(res, 429, { error: 'The assistant is busy. Please try again in a moment.' });
-      return;
-    }
-    if (error instanceof Anthropic.APIError) {
-      console.error('Anthropic API error', error.status, error.message);
-      json(res, 502, { error: 'The assistant is unavailable right now.' });
-      return;
-    }
-    console.error('Unexpected error', error);
-    json(res, 500, { error: 'Unexpected server error.' });
+    anthropicErrorResponse(res, error);
   }
 }
 
@@ -270,7 +333,12 @@ const server = createServer(async (req, res) => {
     return;
   }
   if (req.method === 'GET' && (url.pathname === '/' || url.pathname === '/health')) {
-    json(res, 200, { ok: true, service: 'medimind-server', assistant: Boolean(client) });
+    json(res, 200, {
+      ok: true,
+      service: 'medimind-server',
+      version: VERSION,
+      assistant: Boolean(client),
+    });
     return;
   }
   if (req.method === 'POST' && url.pathname === '/assistant') {
@@ -281,5 +349,7 @@ const server = createServer(async (req, res) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`medimind-server listening on port ${PORT} (assistant ${client ? 'ready' : 'NOT configured'})`);
+  console.log(
+    `medimind-server v${VERSION} listening on port ${PORT} (assistant ${client ? 'ready' : 'NOT configured'})`,
+  );
 });
