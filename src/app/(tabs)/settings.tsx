@@ -11,6 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import Constants from 'expo-constants';
 import { Alert, Switch, View } from 'react-native';
 
+import { isAssistantConfigured, isSupabaseConfigured } from '@/config/env';
 import { Logo } from '@/components/brand/Logo';
 import {
   AppText,
@@ -230,6 +231,15 @@ export default function SettingsScreen() {
               <View style={{ height: 1, backgroundColor: theme.colors.border }} />
               <AppText variant="caption" color="textSecondary">
                 {MEDICAL_DISCLAIMER}
+              </AppText>
+              <View style={{ height: 1, backgroundColor: theme.colors.border }} />
+              {/* Deployment readout - lets anyone confirm which backends this
+                  build was configured with, without reading the bundle. */}
+              <AppText variant="caption" color="textSecondary">
+                Cloud database: {isSupabaseConfigured ? 'configured' : 'not configured (accounts stay on this device)'}
+              </AppText>
+              <AppText variant="caption" color="textSecondary">
+                Assistant server: {isAssistantConfigured ? 'configured' : 'not configured (offline assistant only)'}
               </AppText>
               <AppText variant="caption" color="textMuted">
                 Version {Constants.expoConfig?.version ?? '1.0.0'}
