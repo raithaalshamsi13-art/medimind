@@ -507,7 +507,7 @@ auth suite.
 
 | Task | What it needs |
 |---|---|
-| Deploy to Vercel · Railway · Supabase | Click-through of each dashboard, step by step in `docs/DEPLOYMENT.md`; needs an Anthropic API key for the assistant |
+| Deploy to Vercel · Railway · Supabase | ✅ Live: web at medimind-medimind3.vercel.app, API on Railway, Postgres + Auth on Supabase (`docs/DEPLOYMENT.md`). The assistant needs prepaid Anthropic credit before it answers via Claude. |
 | Push to GitHub | ✅ Done — pushes are now automated from this environment |
 
 ---
