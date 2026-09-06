@@ -4,22 +4,26 @@
  * WHAT THE ASSISTANT IS
  * An informational helper that answers questions about the medicines the user
  * has saved: when they expire, what dosage or instructions were recorded, what
- * to do about a missed dose. It reads the user's own records back to them in
- * plain language.
+ * their next scheduled dose is, what to do about a missed dose. It reads the
+ * user's own records back to them in plain language and works out times from
+ * the recorded frequency.
  *
  * WHAT IT IS NOT
- * A doctor, a pharmacist, or a source of medical advice. Every reply is shown
- * with a note saying it may be wrong and that the user should check with a
- * professional, and the user must acknowledge that before first use.
+ * A doctor, a pharmacist, or a source of medical advice. It never decides HOW
+ * MUCH to take: the amount is whatever the user recorded from the label, or
+ * "not recorded". Every reply is shown with a note saying it may be wrong and
+ * that the user should check with a professional, and the user must
+ * acknowledge that before first use.
  *
  * THE SAFETY SCREEN
  * `screenQuestion` runs on the device BEFORE any assistant (offline or AI)
- * sees a question. Anything about changing doses, mixing medicines, pregnancy,
- * children, or an emergency is answered with a fixed, conservative message and
- * never reaches a model. This is a hard rule in code, not a hope that the
- * model behaves.
+ * sees a question. Anything about taking MORE than the label, stopping,
+ * mixing medicines, pregnancy, children, or an emergency is answered with a
+ * fixed, conservative message and never reaches a model. This is a hard rule
+ * in code, not a hope that the model behaves.
  */
 
+import { nextDose, parseFrequency, type DoseSchedule } from './dosing';
 import type { Medication } from './medication';
 
 export type AssistantRole = 'user' | 'assistant';
@@ -50,7 +54,7 @@ export type AssistantTurn = {
 /**
  * The ONLY medication facts ever shared with an assistant. No ids, no notes,
  * no photos, no account details — just what is needed to answer a question
- * about the label.
+ * about the label, plus the schedule the app derived from it.
  */
 export type MedicationContext = {
   name: string;
@@ -58,15 +62,49 @@ export type MedicationContext = {
   frequency: string | null;
   instructions: string | null;
   expirationDate: string | null;
+  /**
+   * Derived by `parseFrequency` from `frequency`; null when the wording was
+   * not understood. Computed by the app so the AI never does the arithmetic.
+   */
+  schedule: DoseSchedule | null;
+  /**
+   * Human-readable next scheduled dose, e.g. "8:00 PM today" or "8:00 AM
+   * tomorrow"; null when there is no fixed schedule.
+   */
+  nextDoseLabel: string | null;
 };
 
-export function toMedicationContext(medication: Medication): MedicationContext {
+function clockLabel(time: string): string {
+  const [h, m] = time.split(':').map(Number);
+  const hour12 = ((h ?? 0) + 11) % 12 + 1;
+  const suffix = (h ?? 0) < 12 ? 'AM' : 'PM';
+  return `${hour12}:${String(m ?? 0).padStart(2, '0')} ${suffix}`;
+}
+
+/** "8:00 PM" for "20:00". Exported for the offline assistant's wording. */
+export function formatDoseTime(time: string): string {
+  return clockLabel(time);
+}
+
+export function toMedicationContext(medication: Medication, now: Date = new Date()): MedicationContext {
+  const schedule = parseFrequency(medication.frequency);
+  const next = schedule ? nextDose(schedule, now) : null;
+
+  let nextDoseLabel: string | null = null;
+  if (next) {
+    nextDoseLabel = next.isDueNow
+      ? `${clockLabel(next.time)} — that is now`
+      : `${clockLabel(next.time)} ${next.isTomorrow ? 'tomorrow' : 'today'}`;
+  }
+
   return {
     name: medication.name,
     dosage: medication.dosage,
     frequency: medication.frequency,
     instructions: medication.instructions,
     expirationDate: medication.expirationDate,
+    schedule,
+    nextDoseLabel,
   };
 }
 
@@ -83,27 +121,30 @@ export const ASSISTANT_REPLY_FOOTER = 'May be wrong — check with your doctor o
 /** Read once, before first use. Deliberately plain and unhurried. */
 export const ASSISTANT_ACKNOWLEDGEMENT =
   'The MediMind assistant can answer questions about the medicines you have saved, such as ' +
-  'when they expire or what dosage you recorded.\n\n' +
-  'It is not a doctor or a pharmacist. It can misread your records or give a wrong answer, ' +
-  'and it does not know your medical history.\n\n' +
-  'Please do not depend on it. Never change how you take a medicine because of something the ' +
-  'assistant said — follow the label, and follow up with your doctor or pharmacist.';
+  'when they expire, what dosage you recorded, and when your next dose is due.\n\n' +
+  'It only repeats what you recorded from your labels. It is not a doctor or a pharmacist. ' +
+  'It can misread your records or give a wrong answer, and it does not know your medical ' +
+  'history.\n\n' +
+  'Please do not depend on it. Never change how much or how often you take a medicine ' +
+  'because of something the assistant said — follow the label, and follow up with your ' +
+  'doctor or pharmacist.';
 
 export const ASSISTANT_INTRO =
   'Hello! I can answer questions about the medicines you have saved in MediMind — for example ' +
-  'when they expire, or what dosage and instructions you recorded. What would you like to know?';
+  'when your next dose is due, what dosage and instructions you recorded, or when a medicine ' +
+  'expires. What would you like to know?';
 
 export const SUGGESTED_QUESTIONS: readonly string[] = [
+  'What is my next dose?',
   'Which of my medicines expires first?',
   'What should I do if I miss a dose?',
-  'What can you help me with?',
 ];
 
 /** Questions tailored to one medicine, used when opened from its detail screen. */
 export function suggestedQuestionsFor(name: string): readonly string[] {
   return [
-    `When does ${name} expire?`,
-    `What dosage did I record for ${name}?`,
+    `When is my next dose of ${name}?`,
+    `How much ${name} do I take?`,
     `How should I take ${name}?`,
   ];
 }
@@ -127,15 +168,22 @@ const EMERGENCY_PATTERNS = [
   /swallowed .* (whole (bottle|pack)|lots of)/i,
 ];
 
+/**
+ * Questions about taking MORE or LESS than the label, or stopping. Note that
+ * "how much do I take" / "what is my dose" are NOT here: those are answered
+ * by reading the recorded label back, which is allowed.
+ */
 const DOSING_PATTERNS = [
   /doubl(e|ing)/i,
-  /extra (dose|tablet|pill)/i,
+  /(extra|another|additional|second) (dose|tablet|pill|one)/i,
   /two doses/i,
-  /(increase|decrease|raise|lower|change|reduce) (the |my )?dos/i,
-  /how (many|much) (can|should|could) i take/i,
+  /(increase|decrease|raise|lower|change|reduce|adjust) (the |my )?dos/i,
+  /how (many|much) (can|could) i take/i,
+  /(maximum|max|most) (dose|amount|i can take|number)/i,
   /(can|should) i (stop|quit) taking/i,
   /stop taking/i,
   /take more/i,
+  /more than (the label|it says|recommended)/i,
 ];
 
 const INTERACTION_PATTERNS = [
@@ -146,7 +194,11 @@ const INTERACTION_PATTERNS = [
   /at the same time as/i,
 ];
 
-const POPULATION_PATTERNS = [/pregnan/i, /breastfeed|breast-feed|nursing/i, /\b(child|children|baby|infant|toddler|kid)s?\b/i];
+const POPULATION_PATTERNS = [
+  /pregnan/i,
+  /breastfeed|breast-feed|nursing/i,
+  /\b(child|children|baby|infant|toddler|kid)s?\b/i,
+];
 
 /**
  * Classify a question before answering it. Order matters: an emergency wins
@@ -168,9 +220,10 @@ export const HIGH_RISK_REPLIES: Record<RiskReason, string> = {
     'or go to the nearest emergency department right away. I am not able to help with urgent ' +
     'medical situations.',
   dosing:
-    'I cannot advise on how much of a medicine to take, or on stopping, increasing or doubling ' +
-    'a dose — getting that wrong can be harmful. Please follow the instructions on the label, ' +
-    'and speak to your pharmacist or doctor before making any change.',
+    'I cannot advise on taking more or less of a medicine than your label says, or on stopping ' +
+    'it — getting that wrong can be harmful. I can only tell you what you recorded from the ' +
+    'label. Please follow the label, and speak to your pharmacist or doctor before making any ' +
+    'change.',
   interaction:
     'I cannot tell you whether medicines are safe to take together, or with alcohol. That ' +
     'depends on your health and history, which I do not know. A pharmacist can check this for ' +

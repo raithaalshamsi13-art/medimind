@@ -4,34 +4,47 @@
  * invent a value that was not recorded, and it must never suggest taking more.
  */
 
-import type { MedicationContext } from '@/domain/assistant';
+import { toMedicationContext, type MedicationContext } from '@/domain/assistant';
+import type { Medication } from '@/domain/medication';
 import { OfflineAssistant } from '@/services/assistant/OfflineAssistant';
 
 const assistant = new OfflineAssistant();
 
-const PARACETAMOL: MedicationContext = {
+/** Build a context the way the store does, at a fixed "now" (10:00 local). */
+function ctx(partial: Partial<Medication> & { name: string }): MedicationContext {
+  const medication: Medication = {
+    id: 'm',
+    userId: 'u',
+    dosage: null,
+    instructions: null,
+    expirationDate: null,
+    frequency: null,
+    safetyStatus: 'UNKNOWN',
+    source: 'MANUAL',
+    scanConfidence: null,
+    notes: null,
+    imageUri: null,
+    archived: false,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+    ...partial,
+  };
+  return toMedicationContext(medication, new Date(2026, 8, 6, 10, 0, 0));
+}
+
+const PARACETAMOL = ctx({
   name: 'Paracetamol',
   dosage: '500 mg',
   frequency: 'Twice daily',
   instructions: 'Take with food',
   expirationDate: '2099-04-30',
-};
+});
 
-const MYSTERY: MedicationContext = {
-  name: 'Mystery tablets',
-  dosage: null,
-  frequency: null,
-  instructions: null,
-  expirationDate: null,
-};
+const MYSTERY = ctx({ name: 'Mystery tablets' });
 
-const EXPIRED: MedicationContext = {
-  name: 'Old ibuprofen',
-  dosage: '200 mg',
-  frequency: null,
-  instructions: null,
-  expirationDate: '2020-01-01',
-};
+const EXPIRED = ctx({ name: 'Old ibuprofen', dosage: '200 mg', expirationDate: '2020-01-01' });
+
+const PRN = ctx({ name: 'Antihistamine', dosage: '10 mg', frequency: 'as needed' });
 
 function answer(question: string, medications: MedicationContext[] = [PARACETAMOL]) {
   return assistant.answer({ question, history: [], medications });
@@ -44,6 +57,52 @@ describe('OfflineAssistant', () => {
     if (!result.ok) return;
     expect(result.value.source).toBe('offline');
     expect(assistant.kind).toBe('offline');
+  });
+
+  describe('next dose — the label read back, with a time worked out', () => {
+    it('tells the patient the next dose time, amount and instructions', () => {
+      const reply = answer('when is my next dose of paracetamol?');
+      expect(reply).toContain('next dose of Paracetamol is at 8:00 PM today');
+      expect(reply).toContain('500 mg');
+      expect(reply).toContain('Take with food');
+      expect(reply).toContain('twice daily');
+    });
+
+    it('answers "what do I take now" the same way', () => {
+      expect(answer('what do I take now?')).toContain('8:00 PM today');
+    });
+
+    it('says the amount is not recorded rather than inventing one', () => {
+      const reply = answer('when is my next dose', [ctx({ name: 'Vitamin D', frequency: 'once daily' })]);
+      expect(reply).toContain('8:00 AM tomorrow');
+      expect(reply).toContain('amount is not recorded');
+      expect(reply).not.toMatch(/\d+\s?mg/i);
+    });
+
+    it('refuses to work out a time when the frequency is not recorded', () => {
+      const reply = answer('when is my next dose of mystery tablets', [MYSTERY]);
+      expect(reply).toContain('how often to take it is not recorded');
+      expect(reply).not.toMatch(/\d{1,2}:\d{2}/);
+    });
+
+    it('refuses to guess when the frequency wording is not understood', () => {
+      const reply = answer('next dose?', [ctx({ name: 'Drops', frequency: 'as directed', dosage: '2 drops' })]);
+      expect(reply).toContain('could not turn that into fixed times');
+      expect(reply).toContain('will not guess');
+    });
+
+    it('explains an as-needed medicine has no fixed time and does not state a limit', () => {
+      const reply = answer('when do I take antihistamine', [PRN]);
+      expect(reply).toContain('as needed');
+      expect(reply).toContain('10 mg');
+      expect(reply).not.toMatch(/maximum|up to|no more than/i);
+    });
+
+    it('lists next doses across all medicines when none is named', () => {
+      const reply = answer("what are today's doses?", [PARACETAMOL, PRN, MYSTERY]);
+      expect(reply).toContain('Paracetamol at 8:00 PM today (500 mg)');
+      expect(reply).toContain('Antihistamine and Mystery tablets: no fixed time');
+    });
   });
 
   describe('expiry', () => {
@@ -73,8 +132,12 @@ describe('OfflineAssistant', () => {
   });
 
   describe('recorded fields', () => {
-    it('reads back the dosage', () => {
-      expect(answer('what is my paracetamol dose?')).toContain('500 mg');
+    it('reads back the dosage with its schedule and instructions', () => {
+      const reply = answer('how much paracetamol do I take?');
+      expect(reply).toContain('500 mg');
+      expect(reply).toContain('twice daily');
+      expect(reply).toContain('Take with food');
+      expect(reply).toContain('exactly as the label says');
     });
 
     it('reads back the frequency', () => {
@@ -116,7 +179,7 @@ describe('OfflineAssistant', () => {
 
     it('explains its limits when asked for help', () => {
       const reply = answer('what can you help me with?', []);
-      expect(reply).toContain('cannot tell you whether a medicine is right for you');
+      expect(reply).toContain('whether to take more or less than the label says');
     });
 
     it('handles having no medicines saved', () => {
@@ -125,7 +188,7 @@ describe('OfflineAssistant', () => {
 
     it('gives an example question when it does not understand', () => {
       const reply = answer('tell me a joke');
-      expect(reply).toContain('When does Paracetamol expire?');
+      expect(reply).toContain('When is my next dose of Paracetamol?');
     });
   });
 });

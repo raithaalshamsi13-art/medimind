@@ -5,8 +5,9 @@
  * Demo mode must work with no internet and no API key, and an assistant that
  * silently fails when offline would be a bad experience in a medication app.
  * This implementation answers the questions the app can answer *from its own
- * records* — expiry, dosage, frequency, instructions, missed doses — by reading
- * those records back in plain language. It never infers anything medical.
+ * records* — next dose, expiry, dosage, frequency, instructions, missed doses —
+ * by reading those records back in plain language. It never infers anything
+ * medical: the amount is always the recorded amount, or "not recorded".
  *
  * Because it is deterministic, every reply here is unit-tested, which is more
  * than can be said for a language model.
@@ -14,7 +15,7 @@
 
 import { differenceInCalendarDays, parseISO } from 'date-fns';
 
-import type { AssistantReply, MedicationContext } from '@/domain/assistant';
+import { formatDoseTime, type AssistantReply, type MedicationContext } from '@/domain/assistant';
 import { formatIsoDate, isoToday } from '@/lib/datetime';
 import { ok, type Result } from '@/lib/result';
 
@@ -23,6 +24,7 @@ import type { AssistantRequest, AssistantService } from './AssistantService';
 type Intent =
   | 'help'
   | 'list'
+  | 'next'
   | 'expiry'
   | 'dosage'
   | 'frequency'
@@ -32,11 +34,16 @@ type Intent =
 
 function detectIntent(q: string): Intent {
   if (/\b(miss(ed|ing)?|forgot|forgotten|skipped|late (dose|taking))\b/.test(q)) return 'missed';
+  if (
+    /\b(next dose|next (one|tablet|pill)|due|take now|take next|take today|right now|what (do|should) i take|today'?s doses?|doses? today|when (do|should) i take)\b/.test(
+      q,
+    )
+  ) {
+    return 'next';
+  }
   if (/expir|out of date|use.by|best before/.test(q)) return 'expiry';
   if (/\b(dose|dosage|dosing|strength|how much|how many mg|milligram)\b/.test(q)) return 'dosage';
-  if (/\b(how often|how many times|times a day|frequency|when (do|should) i take)\b/.test(q)) {
-    return 'frequency';
-  }
+  if (/\b(how often|how many times|times a day|frequency)\b/.test(q)) return 'frequency';
   if (
     /\b(instruction|direction|how (do|should) i take|with food|before (food|meal|eating)|after (food|meal|eating)|with water)\b/.test(
       q,
@@ -85,6 +92,50 @@ function listNames(medications: MedicationContext[]): string {
   return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
 }
 
+/** "500 mg" or an honest "not recorded". */
+function amountPhrase(m: MedicationContext): string {
+  return m.dosage
+    ? `The amount you recorded is ${m.dosage}.`
+    : `The amount is not recorded — check the label for how much to take, and add it by editing the medicine.`;
+}
+
+function instructionsPhrase(m: MedicationContext): string {
+  return m.instructions ? ` Your recorded instructions: "${m.instructions}".` : '';
+}
+
+function scheduleWords(m: MedicationContext): string {
+  if (!m.schedule || m.schedule.asNeeded) return '';
+  return `${m.schedule.description} (${m.schedule.times.map(formatDoseTime).join(', ')})`;
+}
+
+/** The core of "what is my next dose of X?". */
+function describeNextDose(m: MedicationContext): string {
+  if (!m.frequency) {
+    return (
+      `I cannot work out a dose time for ${m.name} because how often to take it is not ` +
+      `recorded. Check the label and add it by editing the medicine. ${amountPhrase(m)}`
+    );
+  }
+  if (!m.schedule) {
+    return (
+      `Your label for ${m.name} says "${m.frequency}", and I could not turn that into fixed ` +
+      `times, so I will not guess. Follow the label, and ask your pharmacist if it is unclear. ` +
+      `${amountPhrase(m)}`
+    );
+  }
+  if (m.schedule.asNeeded) {
+    return (
+      `Your label for ${m.name} says to take it as needed, so there is no fixed time. ` +
+      `${amountPhrase(m)} Follow the label for how often it may be taken.${instructionsPhrase(m)}`
+    );
+  }
+  const when = m.nextDoseLabel ?? formatDoseTime(m.schedule.times[0]);
+  return (
+    `Your next dose of ${m.name} is at ${when}. ${amountPhrase(m)}` +
+    `${instructionsPhrase(m)} Your recorded schedule is ${scheduleWords(m)}.`
+  );
+}
+
 function describeExpiry(m: MedicationContext): string {
   if (!m.expirationDate) {
     return (
@@ -118,28 +169,42 @@ function describeField(
   m: MedicationContext,
   field: 'dosage' | 'frequency' | 'instructions',
 ): string {
-  const labels = {
-    dosage: 'a dosage',
-    frequency: 'how often to take it',
-    instructions: 'instructions',
-  };
-  const value = m[field];
-
-  if (!value) {
+  if (field === 'dosage') {
+    if (!m.dosage) {
+      return (
+        `You have not recorded a dosage for ${m.name}, and I will not guess it. ` +
+        `Check the label or the leaflet in the box — or ask your pharmacist — and you can add it ` +
+        `by editing the medicine.`
+      );
+    }
+    const sched = scheduleWords(m);
     return (
-      `You have not recorded ${labels[field]} for ${m.name}, and I will not guess it. ` +
-      `Check the label or the leaflet in the box — or ask your pharmacist — and you can add it ` +
-      `by editing the medicine.`
+      `For ${m.name} you recorded a dosage of ${m.dosage}` +
+      (sched ? `, ${sched}` : m.frequency ? `, ${m.frequency.toLowerCase()}` : '') +
+      `.${instructionsPhrase(m)} Take it exactly as the label says.`
     );
   }
-  switch (field) {
-    case 'dosage':
-      return `For ${m.name} you recorded a dosage of ${value}.`;
-    case 'frequency':
-      return `For ${m.name} you recorded: ${value}.`;
-    case 'instructions':
-      return `The instructions you recorded for ${m.name} are: "${value}".`;
+  if (field === 'frequency') {
+    if (!m.frequency) {
+      return (
+        `You have not recorded how often to take ${m.name}, and I will not guess it. ` +
+        `Check the label or ask your pharmacist, and add it by editing the medicine.`
+      );
+    }
+    const sched = scheduleWords(m);
+    return (
+      `For ${m.name} you recorded: ${m.frequency}.` +
+      (sched ? ` That works out as ${sched}.` : '')
+    );
   }
+  if (!m.instructions) {
+    return (
+      `You have not recorded instructions for ${m.name}, and I will not guess them. ` +
+      `Check the label or the leaflet in the box — or ask your pharmacist — and you can add ` +
+      `them by editing the medicine.`
+    );
+  }
+  return `The instructions you recorded for ${m.name} are: "${m.instructions}".`;
 }
 
 const MISSED_DOSE_REPLY =
@@ -149,10 +214,12 @@ const MISSED_DOSE_REPLY =
   'can tell you what to do for that specific medicine.';
 
 const HELP_REPLY =
-  'I can answer questions about the medicines you have saved in MediMind: when they expire, ' +
-  'what dosage, frequency and instructions you recorded, and what to do if you miss a dose. ' +
-  'I cannot tell you whether a medicine is right for you, how much to take, or whether medicines ' +
-  'can be taken together — a pharmacist or doctor is the right person for those questions.';
+  'I can answer questions about the medicines you have saved in MediMind: when your next dose ' +
+  'is due, what dosage, frequency and instructions you recorded, when they expire, and what to ' +
+  'do if you miss a dose. I only repeat what you recorded from the label. I cannot tell you ' +
+  'whether a medicine is right for you, whether to take more or less than the label says, or ' +
+  'whether medicines can be taken together — a pharmacist or doctor is the right person for ' +
+  'those questions.';
 
 export class OfflineAssistant implements AssistantService {
   readonly kind = 'offline' as const;
@@ -180,6 +247,32 @@ export class OfflineAssistant implements AssistantService {
     if (intent === 'list') {
       const count = medications.length;
       return `You have ${count} medicine${count === 1 ? '' : 's'} saved: ${listNames(medications)}.`;
+    }
+
+    if (intent === 'next') {
+      if (mentioned) return describeNextDose(mentioned);
+      if (medications.length === 1) return describeNextDose(medications[0]);
+
+      const scheduled = medications.filter((m) => m.schedule && !m.schedule.asNeeded);
+      const unscheduled = medications.filter((m) => !m.schedule || m.schedule.asNeeded);
+
+      if (scheduled.length === 0) {
+        return (
+          `I cannot work out dose times for your medicines (${listNames(medications)}) because ` +
+          `none of them has a schedule I can read. Check each label for how often to take it and ` +
+          `add it by editing the medicine.`
+        );
+      }
+      const lines = scheduled.map(
+        (m) =>
+          `${m.name} at ${m.nextDoseLabel ?? formatDoseTime(m.schedule?.times[0] ?? '08:00')}` +
+          (m.dosage ? ` (${m.dosage})` : ' (amount not recorded)'),
+      );
+      let reply = `Your next doses: ${lines.join('; ')}.`;
+      if (unscheduled.length > 0) {
+        reply += ` ${listNames(unscheduled)}: no fixed time — follow the label.`;
+      }
+      return reply + ' Ask me about one medicine by name for its instructions.';
     }
 
     if (intent === 'expiry') {
@@ -224,20 +317,21 @@ export class OfflineAssistant implements AssistantService {
       const parts = [
         mentioned.dosage ? `dosage ${mentioned.dosage}` : null,
         mentioned.frequency ? `taken ${mentioned.frequency.toLowerCase()}` : null,
+        mentioned.nextDoseLabel ? `next dose ${mentioned.nextDoseLabel}` : null,
         mentioned.expirationDate
           ? `expires ${formatIsoDate(mentioned.expirationDate)}`
           : 'no expiry date recorded',
       ].filter(Boolean);
       return (
         `Here is what you recorded for ${mentioned.name}: ${parts.join(', ')}. ` +
-        `You can ask me about its expiry, dosage, or instructions.`
+        `You can ask me about its next dose, dosage, instructions, or expiry.`
       );
     }
 
     return (
       'I am not sure how to help with that. I can answer questions about your saved medicines — ' +
-      `for example "When does ${medications[0].name} expire?" or ` +
-      `"What dosage did I record for ${medications[0].name}?"`
+      `for example "When is my next dose of ${medications[0].name}?" or ` +
+      `"How much ${medications[0].name} do I take?"`
     );
   }
 }

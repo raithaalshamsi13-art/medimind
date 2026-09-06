@@ -93,7 +93,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => ({
     const result = await service.ask({
       question,
       history,
-      medications: medications.filter((m) => !m.archived).map(toMedicationContext),
+      medications: medications.filter((m) => !m.archived).map((m) => toMedicationContext(m)),
     });
 
     if (!result.ok) {

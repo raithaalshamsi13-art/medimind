@@ -39,6 +39,7 @@ const SYSTEM_PROMPT = `You are the assistant inside MediMind, a medication remin
 
 Rules you must follow on every reply:
 1. Answer only from the medicine details supplied in this conversation (which the user typed or scanned from their own labels) and from general, widely known information about how to read a medicine label. Do not draw on knowledge about specific drugs to make recommendations.
+1a. Dose questions ("what do I take now", "how much do I take", "when is my next dose"): read back the recorded dosage, the recorded instructions, and the schedule and next-dose time the app has already computed for that medicine. Use those computed values as given; do not recompute or alter them. If the dosage is "not recorded", say the amount is not recorded and to check the label — never supply an amount yourself. If there is no computed schedule, say you cannot work out a time from what was recorded.
 2. Never diagnose. Never recommend starting, stopping, increasing, decreasing, doubling or skipping a dose. Never say whether medicines can be taken together or with alcohol. Never say a medicine is safe in pregnancy, while breastfeeding, or for children. For any of these, say plainly that you cannot advise and that a pharmacist or doctor can.
 3. If something sounds like an emergency (chest pain, difficulty breathing, an allergic reaction, an overdose, loss of consciousness), tell the user to contact emergency services immediately and say nothing else.
 4. If a detail was not recorded, say so. Do not guess it or fill it in from general knowledge.
@@ -57,6 +58,8 @@ type MedicationContext = {
   frequency: string | null;
   instructions: string | null;
   expirationDate: string | null;
+  schedule: { times: string[]; description: string; asNeeded: boolean } | null;
+  nextDoseLabel: string | null;
 };
 type Body = { question?: unknown; history?: unknown; medications?: unknown };
 
@@ -88,7 +91,9 @@ function isMedication(value: unknown): value is MedicationContext {
     optionalText(m.dosage) &&
     optionalText(m.frequency) &&
     optionalText(m.instructions) &&
-    optionalText(m.expirationDate)
+    optionalText(m.expirationDate) &&
+    (m.schedule === null || typeof m.schedule === 'object') &&
+    optionalText(m.nextDoseLabel)
   );
 }
 
@@ -103,6 +108,11 @@ function describeMedications(medications: MedicationContext[]): string {
       `frequency: ${m.frequency ?? 'not recorded'}`,
       `instructions: ${m.instructions ?? 'not recorded'}`,
       `expiry: ${m.expirationDate ?? 'not recorded'}`,
+      m.schedule
+        ? m.schedule.asNeeded
+          ? 'schedule: as needed (no fixed times)'
+          : `schedule: ${m.schedule.description} at ${m.schedule.times.join(', ')}; next dose: ${m.nextDoseLabel ?? 'unknown'}`
+        : 'schedule: could not be worked out from the recorded frequency',
     ].join('; '),
   );
   return (
