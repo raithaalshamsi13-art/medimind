@@ -4,7 +4,7 @@
   "description": "Check the medicine first. Then remind the user.",
   "start_url": "/",
   "display": "standalone",
-  "orientation": "portrait",
+  "orientation": "any",
   "background_color": "#DFEDF8",
   "theme_color": "#DFEDF8",
   "icons": [

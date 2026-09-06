@@ -4,7 +4,7 @@
     "slug": "medimind",
     "description": "Check the medicine first. Then remind the user.",
     "version": "1.0.0",
-    "orientation": "portrait",
+    "orientation": "default",
     "icon": "./assets/images/icon.png",
     "scheme": "medimind",
     "userInterfaceStyle": "automatic",
