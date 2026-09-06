@@ -34,7 +34,7 @@ export const BRAND = {
   nodeBlue: '#2E7FD4',
   pillRed: '#D32F27',
   /** Exact panel colour sampled from the supplied logo artwork. */
-  paleBlue: '#DDEDF9',
+  paleBlue: '#DFEDF8',
   white: '#FFFFFF',
 } as const;
 

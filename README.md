@@ -299,6 +299,11 @@ master artwork) by [scripts/generate-icons.ps1](scripts/generate-icons.ps1):
 powershell -ExecutionPolicy Bypass -File .\scripts\generate-icons.ps1
 ```
 
+The **app icon** itself comes from the square artwork
+`assets/images/app-icon-source.png.jpg` via
+[scripts/generate-app-icon.ps1](scripts/generate-app-icon.ps1), which also
+writes the favicon and the web home-screen icons in `public/`.
+
 It crops the capsule mark out of the banner, colour-keys the pale-blue panel to
 transparency with a graded alpha ramp, and renders the app icon, Android
 adaptive icon (foreground/background/monochrome), splash image, favicon, and

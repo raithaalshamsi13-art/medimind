@@ -9,14 +9,14 @@
     "scheme": "medimind",
     "userInterfaceStyle": "automatic",
     "ios": {
-      "icon": "./assets/expo.icon",
+      "icon": "./assets/images/icon.png",
       "bundleIdentifier": "com.medimind.app",
       "supportsTablet": true
     },
     "android": {
       "package": "com.medimind.app",
       "adaptiveIcon": {
-        "backgroundColor": "#DDEDF9",
+        "backgroundColor": "#DFEDF8",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
@@ -32,7 +32,7 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#DDEDF9",
+          "backgroundColor": "#DFEDF8",
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 180
         }
