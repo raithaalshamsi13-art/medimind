@@ -67,8 +67,10 @@ their label says.
   actions). Components never hardcode a colour or font size.
 - **UI kit** in `src/components/ui/`: `Screen`, `AppText`, `Button`, `Card`,
   `Badge`, `TextField`, `TextLink`, `InlineMessage`, `OptionGroup`.
-- Five-tab navigation shell: Home · Medicines · Ask · Schedule · History · Settings
-  (Schedule and History are placeholders until M5/M6).
+- Six-tab navigation shell: Home · Medicines · Ask · Schedule · History · Settings
+  (Schedule and History are placeholders until M5/M6). Icon-only in portrait,
+  labels beside the icons in landscape; the bar is sized explicitly to clear
+  the iPhone home indicator, including when saved to the home screen from Safari.
 - Jest configured (`jest-expo/ios` preset); a `babel.config.js` was added because
   the SDK 57 template ships without one and Jest cannot parse React Native's
   Flow-typed files without it.
