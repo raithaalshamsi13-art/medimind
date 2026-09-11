@@ -140,6 +140,33 @@ describe.each(backends)('$name', ({ make }) => {
     });
   });
 
+  describe('structured fields (schema v2)', () => {
+    it('stores kind and form, and leaves them null when not chosen', async () => {
+      const chosen = await repository.create(ALICE, {
+        ...BASE_INPUT,
+        kind: 'OTC',
+        form: 'TABLET',
+      });
+      expect(chosen.ok && chosen.value).toMatchObject({ kind: 'OTC', form: 'TABLET', conditionIds: [] });
+
+      const unchosen = await repository.create(ALICE, BASE_INPUT);
+      expect(unchosen.ok && unchosen.value).toMatchObject({ kind: null, form: null, conditionIds: [] });
+
+      if (!chosen.ok) return;
+      const updated = await repository.update(ALICE, chosen.value.id, {
+        ...BASE_INPUT,
+        kind: 'PRESCRIPTION',
+        form: null,
+      });
+      expect(updated.ok && updated.value).toMatchObject({ kind: 'PRESCRIPTION', form: null });
+
+      const listed = await repository.listForUser(ALICE);
+      expect(listed.ok && listed.value.find((m) => m.id === chosen.value.id)?.kind).toBe(
+        'PRESCRIPTION',
+      );
+    });
+  });
+
   describe('listForUser', () => {
     it('returns only the requesting user’s medicines', async () => {
       await repository.create(ALICE, { ...BASE_INPUT, name: 'Alice medicine' });

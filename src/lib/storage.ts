@@ -47,6 +47,8 @@ export const STORAGE_KEYS = {
    * data lives in SQLite, not here.
    */
   medications: 'medimind.medications',
+  /** Health conditions, JSON fallback repository only (web). */
+  healthConditions: 'medimind.health-conditions',
 } as const;
 
 const VALID_KEY = /^[A-Za-z0-9._-]+$/;

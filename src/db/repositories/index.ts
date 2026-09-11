@@ -13,11 +13,31 @@
 
 import { getDatabase, isSqliteSupported } from '../database';
 
+import type { HealthConditionRepository } from './HealthConditionRepository';
+import { JsonHealthConditionRepository } from './JsonHealthConditionRepository';
 import { JsonMedicationRepository } from './JsonMedicationRepository';
 import type { MedicationRepository } from './MedicationRepository';
+import { SqliteHealthConditionRepository } from './SqliteHealthConditionRepository';
 import { SqliteMedicationRepository } from './SqliteMedicationRepository';
 
 let cached: MedicationRepository | null = null;
+let cachedConditions: HealthConditionRepository | null = null;
+
+/**
+ * Same backend decision as medicines, so a medicine and the conditions it
+ * links to are always in the same store.
+ */
+export async function getHealthConditionRepository(): Promise<HealthConditionRepository> {
+  if (cachedConditions) return cachedConditions;
+
+  const medications = await getMedicationRepository();
+  if (medications.kind === 'sqlite') {
+    cachedConditions = new SqliteHealthConditionRepository(await getDatabase());
+  } else {
+    cachedConditions = new JsonHealthConditionRepository();
+  }
+  return cachedConditions;
+}
 
 export async function getMedicationRepository(): Promise<MedicationRepository> {
   if (cached) return cached;
@@ -44,11 +64,15 @@ export async function getMedicationRepository(): Promise<MedicationRepository> {
 /** Drop the cached repository. Used by tests. */
 export function resetMedicationRepository(): void {
   cached = null;
+  cachedConditions = null;
 }
 
 export type {
   MedicationRepository,
   MedicationRepositoryKind,
 } from './MedicationRepository';
+export type { HealthConditionRepository } from './HealthConditionRepository';
 export { JsonMedicationRepository } from './JsonMedicationRepository';
 export { SqliteMedicationRepository } from './SqliteMedicationRepository';
+export { JsonHealthConditionRepository } from './JsonHealthConditionRepository';
+export { SqliteHealthConditionRepository } from './SqliteHealthConditionRepository';

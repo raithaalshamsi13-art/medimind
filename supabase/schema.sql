@@ -70,8 +70,20 @@ create table if not exists public.medications (
   image_uri       text,
   archived        boolean not null default false,
   created_at      timestamptz not null default now(),
-  updated_at      timestamptz not null default now()
+  updated_at      timestamptz not null default now(),
+
+  -- Schema v2: chosen-from-a-list fields (nullable — a label may not say).
+  kind            text check (kind is null or kind in ('PRESCRIPTION','OTC','SUPPLEMENT')),
+  form            text check (form is null or form in
+                    ('TABLET','CAPSULE','LIQUID','INHALER','INJECTION','CREAM','DROPS','PATCH','SPRAY','OTHER'))
 );
+
+-- Re-running on a project created before v2: add the columns if missing.
+alter table public.medications add column if not exists kind text
+  check (kind is null or kind in ('PRESCRIPTION','OTC','SUPPLEMENT'));
+alter table public.medications add column if not exists form text
+  check (form is null or form in
+    ('TABLET','CAPSULE','LIQUID','INHALER','INJECTION','CREAM','DROPS','PATCH','SPRAY','OTHER'));
 
 create index if not exists idx_medications_user   on public.medications (user_id, archived);
 create index if not exists idx_medications_name   on public.medications (user_id, name);
@@ -81,6 +93,51 @@ alter table public.medications enable row level security;
 
 create policy "medications: own rows"
   on public.medications for all
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+-- ---------------------------------------------------------------------------
+-- health_conditions (schema v2)
+--
+-- The user's own notes on long-term conditions. Stored as typed, never
+-- interpreted — see src/domain/healthCondition.ts.
+-- ---------------------------------------------------------------------------
+create table if not exists public.health_conditions (
+  id          uuid primary key,
+  user_id     uuid not null references auth.users (id) on delete cascade,
+  type        text not null
+              check (type in ('HIGH_BLOOD_PRESSURE','DIABETES','LOW_BLOOD_SUGAR','ASTHMA',
+                'HIGH_CHOLESTEROL','HEART','THYROID','KIDNEY','ARTHRITIS','OTHER')),
+  custom_name text,
+  reading     text,
+  notes       text,
+  created_at  timestamptz not null default now(),
+  updated_at  timestamptz not null default now()
+);
+
+create index if not exists idx_health_conditions_user on public.health_conditions (user_id, created_at);
+
+alter table public.health_conditions enable row level security;
+
+create policy "health_conditions: own rows"
+  on public.health_conditions for all
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+-- Which medicines the user linked to which conditions.
+create table if not exists public.medication_conditions (
+  medication_id uuid not null references public.medications (id) on delete cascade,
+  condition_id  uuid not null references public.health_conditions (id) on delete cascade,
+  user_id       uuid not null references auth.users (id) on delete cascade,
+  primary key (medication_id, condition_id)
+);
+
+create index if not exists idx_medication_conditions_user on public.medication_conditions (user_id, condition_id);
+
+alter table public.medication_conditions enable row level security;
+
+create policy "medication_conditions: own rows"
+  on public.medication_conditions for all
   using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
 
@@ -155,6 +212,10 @@ $$;
 
 drop trigger if exists medications_touch on public.medications;
 create trigger medications_touch before update on public.medications
+  for each row execute procedure public.touch_updated_at();
+
+drop trigger if exists health_conditions_touch on public.health_conditions;
+create trigger health_conditions_touch before update on public.health_conditions
   for each row execute procedure public.touch_updated_at();
 
 drop trigger if exists reminders_touch on public.reminders;

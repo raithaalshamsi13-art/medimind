@@ -9,6 +9,7 @@
 
 import { Ionicons } from '@expo/vector-icons';
 import Constants from 'expo-constants';
+import { useRouter } from 'expo-router';
 import { Alert, Switch, View } from 'react-native';
 
 import { isAssistantConfigured, isSupabaseConfigured } from '@/config/env';
@@ -59,6 +60,7 @@ const UPCOMING_SETTINGS = [
 
 export default function SettingsScreen() {
   const theme = useTheme();
+  const router = useRouter();
 
   const user = useAuthStore(selectUser);
   const isLocalOnly = useAuthStore((state) => state.isLocalOnly);
@@ -190,6 +192,26 @@ export default function SettingsScreen() {
             These take effect immediately and are remembered next time you open MediMind. High
             contrast replaces the colour theme with maximum-contrast black and white.
           </AppText>
+        </View>
+
+        {/* ---------- My health ---------- */}
+        <View style={{ gap: theme.spacing.md }}>
+          <AppText variant="heading">My health</AppText>
+          <Card>
+            <View style={{ gap: theme.spacing.md }}>
+              <AppText variant="body" color="textSecondary">
+                Long-term conditions and readings you want to keep a note of. Stored as you type
+                them, never interpreted.
+              </AppText>
+              <Button
+                label="My health conditions"
+                icon="heart-outline"
+                variant="secondary"
+                onPress={() => router.push('/health/conditions')}
+                accessibilityHint="Opens the list of your health conditions"
+              />
+            </View>
+          </Card>
         </View>
 
         {/* ---------- Not built yet ---------- */}

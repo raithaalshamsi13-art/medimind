@@ -11,8 +11,10 @@ import { View } from 'react-native';
 
 import { MedicationForm } from '@/components/medication/MedicationForm';
 import { InlineMessage, Screen } from '@/components/ui';
+import type { HealthConditionInput } from '@/domain/healthCondition';
 import { EMPTY_MEDICATION_FORM, type MedicationInput } from '@/domain/medication';
 import { selectUser, useAuthStore } from '@/stores/useAuthStore';
+import { selectConditions, useHealthConditionStore } from '@/stores/useHealthConditionStore';
 import { useMedicationStore } from '@/stores/useMedicationStore';
 
 export default function AddMedicationScreen() {
@@ -22,6 +24,11 @@ export default function AddMedicationScreen() {
   const createMedication = useMedicationStore((state) => state.createMedication);
   const isSaving = useMedicationStore((state) => state.isSaving);
   const error = useMedicationStore((state) => state.error);
+
+  const conditions = useHealthConditionStore(selectConditions);
+  const createCondition = useHealthConditionStore((state) => state.createCondition);
+  const isSavingCondition = useHealthConditionStore((state) => state.isSaving);
+  const conditionError = useHealthConditionStore((state) => state.error);
 
   const handleSubmit = async (input: MedicationInput) => {
     if (!user) return;
@@ -34,6 +41,9 @@ export default function AddMedicationScreen() {
       router.replace({ pathname: '/medication/[id]', params: { id: created.id } });
     }
   };
+
+  const handleCreateCondition = (input: HealthConditionInput) =>
+    user ? createCondition(user.id, input) : Promise.resolve(null);
 
   if (!user) {
     return (
@@ -56,6 +66,11 @@ export default function AddMedicationScreen() {
           onSubmit={handleSubmit}
           onCancel={() => router.back()}
           error={error}
+          conditions={conditions}
+          onCreateCondition={handleCreateCondition}
+          isSavingCondition={isSavingCondition}
+          conditionError={conditionError}
+          onManageConditions={() => router.push('/health/conditions')}
         />
       </View>
     </Screen>

@@ -142,4 +142,76 @@ describe('migrations', () => {
       await expect(insertMedication(db, { id: 'dupe' })).rejects.toThrow();
     });
   });
+
+  describe('version 2 — structured fields and health conditions', () => {
+    beforeEach(async () => {
+      await runMigrations(db);
+    });
+
+    it('adds nullable kind and form columns with CHECK constraints', async () => {
+      await insertMedication(db, { id: 'plain' });
+      const row = await db.getFirstAsync<{ kind: string | null; form: string | null }>(
+        `SELECT kind, form FROM medications WHERE id = 'plain'`,
+        [],
+      );
+      expect(row).toEqual({ kind: null, form: null });
+
+      await expect(
+        db.runAsync(`UPDATE medications SET kind = 'TABLET' WHERE id = 'plain'`, []),
+      ).rejects.toThrow();
+      await expect(
+        db.runAsync(`UPDATE medications SET form = 'PILL' WHERE id = 'plain'`, []),
+      ).rejects.toThrow();
+      await expect(
+        db.runAsync(`UPDATE medications SET kind = 'OTC', form = 'TABLET' WHERE id = 'plain'`, []),
+      ).resolves.toBeDefined();
+    });
+
+    it('creates the health_conditions and medication_conditions tables', async () => {
+      const tables = await db.getAllAsync<{ name: string }>(
+        `SELECT name FROM sqlite_master WHERE type = 'table'`,
+        [],
+      );
+      expect(tables.map((t) => t.name)).toEqual(
+        expect.arrayContaining(['health_conditions', 'medication_conditions']),
+      );
+    });
+
+    it('rejects a condition type outside the list', async () => {
+      await expect(
+        db.runAsync(
+          `INSERT INTO health_conditions (id, user_id, type, created_at, updated_at)
+           VALUES ('c1', 'user-1', 'MADE_UP', '2026-01-01', '2026-01-01')`,
+          [],
+        ),
+      ).rejects.toThrow();
+    });
+
+    it('cascades link rows when either side is deleted', async () => {
+      await insertMedication(db, { id: 'med-1' });
+      await db.runAsync(
+        `INSERT INTO health_conditions (id, user_id, type, created_at, updated_at)
+         VALUES ('c1', 'user-1', 'ASTHMA', '2026-01-01', '2026-01-01')`,
+        [],
+      );
+      await db.runAsync(
+        `INSERT INTO medication_conditions (medication_id, condition_id, user_id)
+         VALUES ('med-1', 'c1', 'user-1')`,
+        [],
+      );
+
+      // A link to a condition that does not exist is refused outright.
+      await expect(
+        db.runAsync(
+          `INSERT INTO medication_conditions (medication_id, condition_id, user_id)
+           VALUES ('med-1', 'ghost', 'user-1')`,
+          [],
+        ),
+      ).rejects.toThrow();
+
+      await db.runAsync(`DELETE FROM health_conditions WHERE id = 'c1'`, []);
+      const links = await db.getAllAsync(`SELECT * FROM medication_conditions`, []);
+      expect(links).toEqual([]);
+    });
+  });
 });

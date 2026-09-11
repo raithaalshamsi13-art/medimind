@@ -27,10 +27,63 @@ export type SafetyStatus = (typeof SAFETY_STATUSES)[number];
 export const MEDICATION_SOURCES = ['SCAN', 'MANUAL'] as const;
 export type MedicationSource = (typeof MEDICATION_SOURCES)[number];
 
+/**
+ * What kind of product it is. Chosen from a list rather than typed, so it can
+ * be filtered on later. Null when the user did not say.
+ */
+export const MEDICATION_KINDS = ['PRESCRIPTION', 'OTC', 'SUPPLEMENT'] as const;
+export type MedicationKind = (typeof MEDICATION_KINDS)[number];
+
+export const MEDICATION_KIND_LABELS: Record<MedicationKind, string> = {
+  PRESCRIPTION: 'Prescription',
+  OTC: 'Over the counter',
+  SUPPLEMENT: 'Supplement / vitamin',
+};
+
+/** Physical form of the medicine — tablet, syrup, cream and so on. */
+export const MEDICATION_FORMS = [
+  'TABLET',
+  'CAPSULE',
+  'LIQUID',
+  'INHALER',
+  'INJECTION',
+  'CREAM',
+  'DROPS',
+  'PATCH',
+  'SPRAY',
+  'OTHER',
+] as const;
+export type MedicationForm = (typeof MEDICATION_FORMS)[number];
+
+export const MEDICATION_FORM_LABELS: Record<MedicationForm, string> = {
+  TABLET: 'Tablet',
+  CAPSULE: 'Capsule',
+  LIQUID: 'Liquid / syrup',
+  INHALER: 'Inhaler',
+  INJECTION: 'Injection',
+  CREAM: 'Cream / ointment',
+  DROPS: 'Drops',
+  PATCH: 'Patch',
+  SPRAY: 'Spray',
+  OTHER: 'Other',
+};
+
+/** How many health conditions one medicine can be linked to. */
+export const MAX_CONDITIONS_PER_MEDICATION = 20;
+
 export type Medication = {
   id: string;
   userId: string;
   name: string;
+  /** Prescription / over-the-counter / supplement. Null when not chosen. */
+  kind: MedicationKind | null;
+  /** Tablet, capsule, liquid… Null when not chosen. */
+  form: MedicationForm | null;
+  /**
+   * Ids of the user's HealthConditions this medicine relates to, as chosen by
+   * the user. Purely organisational — never used to make any suggestion.
+   */
+  conditionIds: string[];
   /** e.g. "500 mg". Null when it could not be determined. */
   dosage: string | null;
   /** Free text copied from the label, e.g. "Take with food". */
@@ -136,13 +189,30 @@ export const expirationDateSchema = z.preprocess(
     .nullable(),
 );
 
+/** A chosen-from-a-list value: "" or undefined means "not chosen" → null. */
+function optionalChoice<const T extends readonly [string, ...string[]]>(values: T, label: string) {
+  return z.preprocess(
+    emptyToNull,
+    z.enum(values, { message: `Please choose ${label} from the list.` }).nullable(),
+  );
+}
+
 export const medicationInputSchema = z.object({
   name: medicationNameSchema,
+  kind: optionalChoice(MEDICATION_KINDS, 'the medicine type'),
+  form: optionalChoice(MEDICATION_FORMS, 'the medicine form'),
   dosage: optionalText(60, 'The dosage'),
   instructions: optionalText(300, 'The instructions'),
   expirationDate: expirationDateSchema,
   frequency: optionalText(60, 'The frequency'),
   notes: optionalText(500, 'The notes'),
+  conditionIds: z
+    .array(z.string().min(1).max(64))
+    .max(
+      MAX_CONDITIONS_PER_MEDICATION,
+      `Please link ${MAX_CONDITIONS_PER_MEDICATION} conditions or fewer.`,
+    )
+    .default([]),
 });
 
 /** A validated, normalised medicine, ready to be stored. */
@@ -153,6 +223,10 @@ export type MedicationInput = {
   expirationDate: string | null;
   frequency: string | null;
   notes: string | null;
+  /** Optional so callers that predate these fields (and the scanner) still compile. */
+  kind?: MedicationKind | null;
+  form?: MedicationForm | null;
+  conditionIds?: string[];
 };
 
 /** Extra provenance fields, set by the scanner rather than typed by the user. */
@@ -168,30 +242,40 @@ export type MedicationCreateInput = MedicationInput & {
  */
 export type MedicationFormValues = {
   name: string;
+  /** "" when not chosen. */
+  kind: MedicationKind | '';
+  form: MedicationForm | '';
   dosage: string;
   instructions: string;
   expirationDate: string;
   frequency: string;
   notes: string;
+  conditionIds: string[];
 };
 
 export const EMPTY_MEDICATION_FORM: MedicationFormValues = {
   name: '',
+  kind: '',
+  form: '',
   dosage: '',
   instructions: '',
   expirationDate: '',
   frequency: '',
   notes: '',
+  conditionIds: [],
 };
 
 /** Turn a stored medicine back into editable form values. */
 export function toFormValues(medication: Medication): MedicationFormValues {
   return {
     name: medication.name,
+    kind: medication.kind ?? '',
+    form: medication.form ?? '',
     dosage: medication.dosage ?? '',
     instructions: medication.instructions ?? '',
     expirationDate: medication.expirationDate ?? '',
     frequency: medication.frequency ?? '',
     notes: medication.notes ?? '',
+    conditionIds: [...medication.conditionIds],
   };
 }

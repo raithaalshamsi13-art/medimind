@@ -147,6 +147,38 @@ their label says.
 - `safety_status` is deliberately left `UNKNOWN` until M4's safety engine
   exists — one place decides safety, not two.
 
+**Structured manual entry (schema v2).** The add/edit form is now five short
+numbered sections instead of six free-text boxes:
+
+1. *About the medicine* — name (the only required field), **type** chips
+   (Prescription / Over the counter / Supplement) and **form** chips (tablet,
+   capsule, liquid, inhaler, injection, cream, drops, patch, spray, other),
+   stored in the new nullable `kind` and `form` columns.
+2. *Dose and how often* — amount + unit chips (mg, g, mcg, ml, IU, tablet(s),
+   puff(s), drop(s)) and frequency chips (once/twice/3×/4× a day, every N
+   hours, only when needed, something else). These still **compose to the
+   existing text columns** (`"500 mg"`, `"Twice daily"`) so the assistant and
+   `parseFrequency` keep working; `domain/medicationOptions.ts` also parses
+   stored text back into chips for editing, and keeps anything it does not
+   recognise verbatim as "custom" — nothing is ever rewritten.
+3. *Expiry date* — a real calendar (`DateField`: native picker on the phone,
+   `<input type="date">` on web via a `.web.tsx` split) with a live badge from
+   `domain/expiry.ts`: **Expired** / **Expires in N days** (30-day window) /
+   **In date**. The same function will feed the M4 safety engine.
+4. *Instructions* — multi-select chips (with food, before food, at bedtime,
+   do not crush…) plus a folded "Other instructions" box.
+5. *Health conditions* — see below. Notes are folded away until needed.
+
+**Health conditions.** `health_conditions` (per user) and
+`medication_conditions` (links, `ON DELETE CASCADE`) tables; a preset list
+(high blood pressure, diabetes, low blood sugar, asthma, high cholesterol,
+heart, thyroid, kidney, arthritis, other + custom name), an optional *latest
+reading* stored as typed, and notes. The **My health conditions** screen
+(Settings → My health) adds / edits / removes them; the medicine form links a
+medicine to any of them and can add one inline. This is strictly a notebook:
+readings are never interpreted, and conditions are **not sent to the
+assistant**.
+
 ### 4.5 Ask MediMind — the assistant
 
 Reached from the **Ask** tab or a medicine's **Ask about this medicine** button.
@@ -226,8 +258,9 @@ Reached from the **Ask** tab or a medicine's **Ask about this medicine** button.
 | History | `src/app/(tabs)/history.tsx` | placeholder (M6) |
 | Settings | `src/app/(tabs)/settings.tsx` | ✅ |
 | Medicine detail | `src/app/medication/[id].tsx` | ✅ |
-| Add medicine (manual) | `src/app/medication/add.tsx` | ✅ |
-| Edit medicine | `src/app/medication/edit/[id].tsx` | ✅ |
+| Add medicine (manual) | `src/app/medication/add.tsx` | ✅ sectioned, chips + date picker |
+| Edit medicine | `src/app/medication/edit/[id].tsx` | ✅ same form |
+| My health conditions | `src/app/health/conditions.tsx` | ✅ |
 
 ---
 
@@ -349,11 +382,11 @@ This is where each one stands.
 | 1 Project setup | ✅ Done | Expo SDK 57, TypeScript, Expo Router, theme, structure, env config |
 | 2 UI foundation — splash, onboarding, auth, dashboard | ✅ Done | Splash uses the real logo; demo account added on top |
 | 3 Medication management — add/view/edit/delete/search/details | ✅ Done | |
-| 4 Database | ✅ Done for medications | `reminders` and `doses` tables arrive with Phase 9–11 as schema v2 |
+| 4 Database | ✅ Done for medications + health conditions (schema v2) | `reminders` and `doses` tables arrive with Phase 9–11 as schema v3 |
 | 5 Medication scanner (camera → OCR/AI → data) | ⬜ Not started | **Next.** `MedicationScannerService` interface + mock + Claude vision |
 | 6 Scan result confirmation (Confirm / Edit, never auto-save) | ⬜ Not started | Reuses `MedicationForm` for the Edit path |
 | 7 Safety engine (expiry, missing info, unclear label) | ⬜ Not started | `safety_status` column and labels already exist; only the service is missing |
-| 8 Manual entry | ✅ Done | Validated form, blank → `null`, calendar-date checks |
+| 8 Manual entry | ✅ Done | Five-section form: type/form chips, amount + unit, frequency presets, calendar date picker with expired / expiring-soon feedback, instruction chips, health conditions; blank → `null`, calendar-date checks |
 | 9 Smart reminders (suggested schedule, editable) | ◐ Foundations | `domain/dosing.ts` already derives times from the label; the reminder screens and table are not built |
 | 10 Notifications (local, Taken / Missed, permissions) | ⬜ Not started | Confirmed to work inside Expo Go on iOS — no native build needed |
 | 11 Dose tracking (today + history) | ⬜ Not started | Schedule and History tabs are placeholders |

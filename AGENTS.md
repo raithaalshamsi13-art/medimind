@@ -32,6 +32,9 @@ Version facts for this project:
   picks the `.web` variant automatically. Registering `wasm` in a metro config
   makes a production export succeed but does **not** fix the dev server — the
   platform split fixes both, so prefer it.
+- The same split applies to `@react-native-community/datetimepicker`:
+  `src/components/ui/DateField.tsx` (native) is paired with
+  `DateField.web.tsx`, which renders the browser's `<input type="date">`.
 - **Zustand v5 selectors must return a stable snapshot.** A selector that
   builds a new array (`state.medications.filter(...)`) makes React think the
   store changed on every render. Select the stored array or a primitive, and
@@ -85,6 +88,15 @@ It reads a medicine label, verifies it, and only then schedules reminders.
   credentials are the demo account in `src/config/demo.ts`, which is created
   via the normal sign-up path, shown openly on screen, and rendered only while
   `demoMode` is on.
+- **Health conditions are a notebook, not a clinical record.** Readings in
+  `src/domain/healthCondition.ts` are stored and displayed as typed — never
+  parsed, compared with a range, or coloured good/bad — and conditions are
+  never included in the assistant context. Reading hints are format examples
+  ("e.g. 130/85"), never targets.
+- **Structured form choices compose to the existing text columns.** Chips in
+  `MedicationForm` produce `dosage` / `frequency` / `instructions` strings via
+  `src/domain/medicationOptions.ts`, which must stay round-trippable and must
+  keep unrecognised (scanned) text verbatim.
 - **The assistant must never give medical advice.** `screenQuestion` in
   `src/domain/assistant.ts` runs before either assistant implementation and
   must stay in the store, not in a service, so it cannot be bypassed by

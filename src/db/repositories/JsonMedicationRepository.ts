@@ -17,6 +17,7 @@
  * preview holding a handful of medicines, and it is never used on the phone.
  */
 
+import type { HealthCondition } from '@/domain/healthCondition';
 import type {
   Medication,
   MedicationCreateInput,
@@ -41,7 +42,30 @@ export class JsonMedicationRepository implements MedicationRepository {
   private async readAll(): Promise<Result<Medication[]>> {
     const stored = await readJson<Medication[]>(STORAGE_KEYS.medications);
     if (!stored.ok) return fail(stored.error);
-    return ok(Array.isArray(stored.value) ? stored.value : []);
+    const list = Array.isArray(stored.value) ? stored.value : [];
+    // Rows written before schema v2 have no kind/form/conditionIds. Fill the
+    // same nulls the SQLite migration gives existing rows.
+    return ok(
+      list.map((medication) => ({
+        ...medication,
+        kind: medication.kind ?? null,
+        form: medication.form ?? null,
+        conditionIds: Array.isArray(medication.conditionIds) ? medication.conditionIds : [],
+      })),
+    );
+  }
+
+  /**
+   * Keep only ids of conditions that belong to this user — the JSON
+   * equivalent of the SQLite insert that joins on health_conditions.
+   */
+  private async validConditionIds(userId: string, ids: string[] | undefined): Promise<string[]> {
+    const wanted = Array.from(new Set((ids ?? []).filter((id) => id.length > 0)));
+    if (wanted.length === 0) return [];
+    const stored = await readJson<HealthCondition[]>(STORAGE_KEYS.healthConditions);
+    const conditions = stored.ok && Array.isArray(stored.value) ? stored.value : [];
+    const mine = new Set(conditions.filter((c) => c.userId === userId).map((c) => c.id));
+    return wanted.filter((id) => mine.has(id));
   }
 
   private async writeAll(medications: Medication[]): Promise<Result<void>> {
@@ -79,6 +103,9 @@ export class JsonMedicationRepository implements MedicationRepository {
       id: newId(),
       userId,
       name: input.name,
+      kind: input.kind ?? null,
+      form: input.form ?? null,
+      conditionIds: await this.validConditionIds(userId, input.conditionIds),
       dosage: input.dosage,
       instructions: input.instructions,
       expirationDate: input.expirationDate,
@@ -112,9 +139,16 @@ export class JsonMedicationRepository implements MedicationRepository {
     );
     if (index === -1) return fail(appError('NOT_FOUND'));
 
+    const existing = all.value[index];
     const updated: Medication = {
-      ...all.value[index],
+      ...existing,
       name: input.name,
+      kind: input.kind ?? null,
+      form: input.form ?? null,
+      conditionIds:
+        input.conditionIds === undefined
+          ? (existing.conditionIds ?? [])
+          : await this.validConditionIds(userId, input.conditionIds),
       dosage: input.dosage,
       instructions: input.instructions,
       expirationDate: input.expirationDate,

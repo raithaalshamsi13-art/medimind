@@ -338,7 +338,7 @@ in dark mode.
 |---|---|---|
 | **M1** | Project setup, design system, navigation | ✅ Complete |
 | **M2** | Splash, onboarding, auth, home dashboard, accessibility settings | ✅ Complete |
-| **M3** | SQLite schema + migrations, repositories, medication CRUD, manual entry | ✅ Complete |
+| **M3** | SQLite schema + migrations, repositories, medication CRUD, structured manual entry (chips, date picker), health conditions | ✅ Complete |
 | **M4** | Camera, scanner abstraction + mock, scan confirmation, safety engine, demo mode | ⬜ Next |
 | **M5** | Suggested reminders, local notifications, dose tracking | ⬜ |
 | **M6** | Voice alerts, offline sync, settings, accessibility, error handling, tests | ⬜ |

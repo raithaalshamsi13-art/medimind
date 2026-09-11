@@ -41,11 +41,14 @@ describe('medicationInputSchema', () => {
   it('converts blank optional fields to null, not empty strings', () => {
     const result = medicationInputSchema.safeParse({
       name: 'Mystery tablets',
+      kind: '',
+      form: '',
       dosage: '',
       instructions: '   ',
       expirationDate: '',
       frequency: '',
       notes: '',
+      conditionIds: [],
     });
 
     expect(result.success).toBe(true);
@@ -148,6 +151,9 @@ describe('toFormValues', () => {
       id: 'm1',
       userId: 'u1',
       name: 'Mystery tablets',
+      kind: null,
+      form: null,
+      conditionIds: [],
       dosage: null,
       instructions: null,
       expirationDate: null,
@@ -164,11 +170,14 @@ describe('toFormValues', () => {
 
     expect(toFormValues(medication)).toEqual({
       name: 'Mystery tablets',
+      kind: '',
+      form: '',
       dosage: '',
       instructions: '',
       expirationDate: '',
       frequency: '',
       notes: '',
+      conditionIds: [],
     });
   });
 });

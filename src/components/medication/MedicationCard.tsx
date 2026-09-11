@@ -20,6 +20,8 @@ import {
 import { formatIsoDate } from '@/lib/datetime';
 import { useTheme } from '@/theme/ThemeContext';
 
+import { medicationIcon } from './formIcons';
+
 import type { BadgeTone } from '@/components/ui';
 
 const SAFETY_TONES: Record<SafetyStatus, BadgeTone> = {
@@ -56,7 +58,7 @@ export function MedicationCard({ medication, onPress }: MedicationCardProps) {
             alignItems: 'center',
             justifyContent: 'center',
           }}>
-          <Ionicons name="medkit-outline" size={22} color={theme.colors.primary} />
+          <Ionicons name={medicationIcon(medication.form)} size={22} color={theme.colors.primary} />
         </View>
 
         <View style={{ flex: 1, gap: theme.spacing.xs }}>

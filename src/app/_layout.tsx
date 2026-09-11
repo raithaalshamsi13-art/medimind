@@ -15,6 +15,7 @@ import { useEffect } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { useAuthStore } from '@/stores/useAuthStore';
+import { useHealthConditionStore } from '@/stores/useHealthConditionStore';
 import { useMedicationStore } from '@/stores/useMedicationStore';
 import { useSettingsStore } from '@/stores/useSettingsStore';
 import { AppThemeProvider, useTheme } from '@/theme/ThemeContext';
@@ -49,6 +50,8 @@ function RootNavigator() {
   const userId = useAuthStore((state) => state.session?.user.id ?? null);
   const loadMedications = useMedicationStore((state) => state.load);
   const clearMedications = useMedicationStore((state) => state.clear);
+  const loadConditions = useHealthConditionStore((state) => state.load);
+  const clearConditions = useHealthConditionStore((state) => state.clear);
 
   const isSettingsHydrated = useSettingsStore((state) => state.isHydrated);
   const hasCompletedOnboarding = useSettingsStore((state) => state.hasCompletedOnboarding);
@@ -74,10 +77,12 @@ function RootNavigator() {
   useEffect(() => {
     if (userId) {
       void loadMedications(userId);
+      void loadConditions(userId);
     } else {
       clearMedications();
+      clearConditions();
     }
-  }, [userId, loadMedications, clearMedications]);
+  }, [userId, loadMedications, clearMedications, loadConditions, clearConditions]);
 
   useAuthGate({ isReady, isSignedIn, hasCompletedOnboarding });
 
