@@ -869,6 +869,16 @@ Newest first. Every commit that changes the app adds an entry here **in the
 same commit**, and updates the sections above that it touches (rule in
 `AGENTS.md`, "Verify before claiming done").
 
+### 2026-09-13 — Decision: sign-in stays email + password
+- A redesign offering **email OR phone number OR Emirates ID** for sign-in and
+  sign-up was inspected and proposed (identifier chips, +971-first country
+  picker, Emirates ID auto-formatting with check digit, hashed storage, an
+  explicit Settings → sign-in methods card for linking). Omar decided **not to
+  build it**: authentication stays email + password exactly as it is, and the
+  personal-health-profile step remains step 2 after the existing sign-up.
+  Recorded here so it is not treated as pending work. (Also noted: a real
+  SMS one-time-code flow was not possible without an SMS provider.)
+
 ### 2026-09-13 — Personal health profile (per family member) and AI context
 - **Schema v4** on `family_members`: `gender`, `height_cm`, `weight_kg`,
   `blood_type` (all nullable, CHECK-constrained lists and ranges) and
