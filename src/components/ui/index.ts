@@ -18,4 +18,5 @@ export { InlineMessage, type InlineMessageProps, type InlineMessageTone } from '
 export { OptionGroup, type Option, type OptionGroupProps } from './OptionGroup';
 export { Screen, type ScreenProps } from './Screen';
 export { TextField, type TextFieldProps } from './TextField';
+export { TimeField, type TimeFieldProps } from './TimeField';
 export { TextLink, type TextLinkProps } from './TextLink';

@@ -14,6 +14,8 @@ import type { AppError } from '@/lib/errors';
 import { toAppError } from '@/lib/errors';
 import { getNotificationService } from '@/services/notifications';
 
+import { useDoseStore } from './useDoseStore';
+
 type ReminderState = {
   reminders: Reminder[];
   isLoading: boolean;
@@ -47,6 +49,11 @@ export const useReminderStore = create<ReminderState>((set, get) => {
     const result = await repository.listForUser(userId);
     if (result.ok) set({ reminders: result.value });
     else set({ error: result.error });
+  };
+
+  /** Reminders changed, so today's dose rows may need creating or dropping. */
+  const refreshDoses = async (userId: string): Promise<void> => {
+    await useDoseStore.getState().load(userId, get().reminders);
   };
 
   /** Cancel old notifications, schedule new ones, store the ids. */
@@ -89,6 +96,7 @@ export const useReminderStore = create<ReminderState>((set, get) => {
         }
         await syncNotifications(userId, result.value, medicationName);
         await refresh(userId);
+        await refreshDoses(userId);
         set({ isSaving: false });
         return get().reminders.find((r) => r.id === result.value.id) ?? result.value;
       } catch (error) {
@@ -108,6 +116,7 @@ export const useReminderStore = create<ReminderState>((set, get) => {
         }
         await syncNotifications(userId, result.value, medicationName);
         await refresh(userId);
+        await refreshDoses(userId);
         set({ isSaving: false });
         return true;
       } catch (error) {
@@ -128,6 +137,7 @@ export const useReminderStore = create<ReminderState>((set, get) => {
           return false;
         }
         await refresh(userId);
+        await refreshDoses(userId);
         set({ isSaving: false });
         return true;
       } catch (error) {

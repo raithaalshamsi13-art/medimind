@@ -62,10 +62,16 @@ export default function AddMedicationScreen() {
 
     const created = await createMedication(user.id, { ...input, memberId: member.id });
     if (created) {
+      // CONFIRM → REMIND: a medicine that can be reminded about goes straight
+      // to the reminder screen, pre-filled from its label, with "Not now" as
+      // a way out. An expired medicine (blocked) or one whose wording gave no
+      // suggestion still opens the reminder screen so the reason is explained.
       // Replace rather than push, so the back button does not return the user
-      // to a form they have already submitted. The object form is required by
-      // typed routes — a template literal is not assignable to the route union.
-      router.replace({ pathname: '/medication/[id]', params: { id: created.id } });
+      // to a form they have already submitted.
+      router.replace({
+        pathname: '/reminder/[medicationId]',
+        params: { medicationId: created.id, new: '1' },
+      });
     }
   };
 

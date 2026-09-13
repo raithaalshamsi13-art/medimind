@@ -900,6 +900,23 @@ Newest first. Every commit that changes the app adds an entry here **in the
 same commit**, and updates the sections above that it touches (rule in
 `AGENTS.md`, "Verify before claiming done").
 
+### 2026-09-13 — Milestone 5, step 2: the reminder screen
+- **`/reminder/[medicationId]`** — set or edit the one reminder for a
+  medicine. Opened automatically after **Add medicine** saves (`?new=1`,
+  with **Not now**) and from the detail screen's new **Reminder** card.
+  Pre-filled from the label: times from `parseFrequency` ("twice daily" →
+  8:00 AM and 8:00 PM), dose wording from the recorded dosage. Three
+  sections: times (add / remove, `TimeField` with a clock picker — native
+  spinner, browser time input on web), what the notification says, which
+  days (every day / certain days, optional start and end dates). Editing
+  adds a pause switch and **Remove reminder** with confirmation.
+- **Expired medicine** → the screen refuses with the Phase 7 explanation and
+  offers **Edit the medicine**. Wording not understood → empty form with a
+  clear "no suggestion, MediMind will not guess" note; "as needed" →
+  explained, times optional.
+- Deleting a medicine cancels its OS notifications before the row (and its
+  reminder / doses) cascades away. Root layout loads reminders, then doses.
+
 ### 2026-09-13 — Milestone 5, step 1: reminders and doses data layer
 - **Schema v5**: `reminders` (one per medicine: times JSON, dose label,
   DAILY / SPECIFIC_DAYS + days, start/end dates, enabled, OS notification

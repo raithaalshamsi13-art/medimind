@@ -16,6 +16,7 @@ import { medicationIcon } from '@/components/medication/formIcons';
 import { AppText, Badge, Button, Card, InlineMessage, Screen, type BadgeTone } from '@/components/ui';
 import { expiryStatus, type ExpiryState } from '@/domain/expiry';
 import { conditionDisplayName } from '@/domain/healthCondition';
+import { describeDays, describeTimes } from '@/domain/reminder';
 import {
   MEDICATION_FORM_LABELS,
   MEDICATION_KIND_LABELS,
@@ -29,6 +30,7 @@ import { selectUser, useAuthStore } from '@/stores/useAuthStore';
 import { memberById, selectMembers, useFamilyStore } from '@/stores/useFamilyStore';
 import { selectConditions, useHealthConditionStore } from '@/stores/useHealthConditionStore';
 import { useMedicationStore } from '@/stores/useMedicationStore';
+import { reminderForMedication, selectReminders, useReminderStore } from '@/stores/useReminderStore';
 import { useTheme } from '@/theme/ThemeContext';
 
 const EXPIRY_TONES: Record<ExpiryState, BadgeTone> = {
@@ -49,6 +51,13 @@ export default function MedicationDetailScreen() {
   const removeMedication = useMedicationStore((state) => state.removeMedication);
   const isSaving = useMedicationStore((state) => state.isSaving);
   const conditions = useHealthConditionStore(selectConditions);
+  const reminders = useReminderStore(selectReminders);
+  const reminder = useMemo(
+    () => (medication ? reminderForMedication(reminders, medication.id) : null),
+    [reminders, medication],
+  );
+  const cancelForMedication = useReminderStore((state) => state.cancelForMedication);
+  const reloadReminders = useReminderStore((state) => state.load);
   const members = useFamilyStore(selectMembers);
   const owner = useMemo(() => memberById(members, medication?.memberId), [members, medication]);
 
@@ -73,8 +82,14 @@ export default function MedicationDetailScreen() {
     });
     if (!confirmed) return;
 
+    // The database cascades the reminder and doses; the OS notifications
+    // must be cancelled by hand before the ids disappear with the row.
+    await cancelForMedication(user.id, medication.id);
     const removed = await removeMedication(user.id, medication.id);
-    if (removed) router.back();
+    if (removed) {
+      void reloadReminders(user.id);
+      router.back();
+    }
   };
 
   if (!medication) {
@@ -203,6 +218,54 @@ export default function MedicationDetailScreen() {
                   />
                 ))}
               </View>
+            )}
+          </View>
+        </Card>
+
+        {/* ---------- Reminder ---------- */}
+        <Card>
+          <View style={{ gap: theme.spacing.md }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
+              <Ionicons
+                name={reminder?.enabled ? 'notifications' : 'notifications-outline'}
+                size={24}
+                color={reminder?.enabled ? theme.colors.primary : theme.colors.textMuted}
+              />
+              <View style={{ flex: 1, gap: theme.spacing.xxs }}>
+                <AppText variant="label" color="textMuted">
+                  REMINDER
+                </AppText>
+                {reminder ? (
+                  <>
+                    <AppText variant="bodyLarge">
+                      {describeTimes(reminder.times)}
+                    </AppText>
+                    <AppText variant="caption" color="textSecondary">
+                      {describeDays(reminder)}
+                      {reminder.doseLabel ? ` · ${reminder.doseLabel}` : ''}
+                      {reminder.enabled ? '' : ' · paused'}
+                    </AppText>
+                  </>
+                ) : expiry?.state === 'EXPIRED' ? (
+                  <AppText variant="body" color="textMuted" style={{ fontStyle: 'italic' }}>
+                    Not available for an expired medicine
+                  </AppText>
+                ) : (
+                  <AppText variant="body" color="textMuted" style={{ fontStyle: 'italic' }}>
+                    No reminder set
+                  </AppText>
+                )}
+              </View>
+            </View>
+            {expiry?.state === 'EXPIRED' && !reminder ? null : (
+              <Button
+                label={reminder ? 'Edit reminder' : 'Set a reminder'}
+                icon={reminder ? 'create-outline' : 'alarm-outline'}
+                variant="secondary"
+                onPress={() =>
+                  router.push({ pathname: '/reminder/[medicationId]', params: { medicationId: medication.id } })
+                }
+              />
             )}
           </View>
         </Card>

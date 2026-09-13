@@ -15,7 +15,9 @@ import { useEffect } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { useAuthStore } from '@/stores/useAuthStore';
+import { useDoseStore } from '@/stores/useDoseStore';
 import { selectProfileSetupNeeded, useFamilyStore } from '@/stores/useFamilyStore';
+import { useReminderStore } from '@/stores/useReminderStore';
 import { useHealthConditionStore } from '@/stores/useHealthConditionStore';
 import { useMedicationStore } from '@/stores/useMedicationStore';
 import { useSettingsStore } from '@/stores/useSettingsStore';
@@ -56,6 +58,10 @@ function RootNavigator() {
   const clearConditions = useHealthConditionStore((state) => state.clear);
   const loadFamily = useFamilyStore((state) => state.load);
   const clearFamily = useFamilyStore((state) => state.clear);
+  const loadReminders = useReminderStore((state) => state.load);
+  const clearReminders = useReminderStore((state) => state.clear);
+  const loadDoses = useDoseStore((state) => state.load);
+  const clearDoses = useDoseStore((state) => state.clear);
 
   const isSettingsHydrated = useSettingsStore((state) => state.isHydrated);
   const hasCompletedOnboarding = useSettingsStore((state) => state.hasCompletedOnboarding);
@@ -82,14 +88,19 @@ function RootNavigator() {
     if (userId) {
       // Family first: ensureSelf() assigns any pre-v3 rows to "Me" before the
       // medicine and condition lists are read.
-      void loadFamily(userId, userDisplayName ?? 'Me').then(() => {
+      void loadFamily(userId, userDisplayName ?? 'Me').then(async () => {
         void loadMedications(userId);
         void loadConditions(userId);
+        // Doses are generated from the reminders, so those load first.
+        await loadReminders(userId);
+        void loadDoses(userId, useReminderStore.getState().reminders);
       });
     } else {
       clearMedications();
       clearConditions();
       clearFamily();
+      clearReminders();
+      clearDoses();
     }
   }, [
     userId,
@@ -100,6 +111,10 @@ function RootNavigator() {
     clearConditions,
     loadFamily,
     clearFamily,
+    loadReminders,
+    clearReminders,
+    loadDoses,
+    clearDoses,
   ]);
 
   const profileSetupNeeded = useFamilyStore(selectProfileSetupNeeded);
