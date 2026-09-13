@@ -108,6 +108,13 @@ It reads a medicine label, verifies it, and only then schedules reminders.
 
 ## Verify before claiming done
 
+**Every step must update `docs/PROJECT_SUMMARY.md` in the same commit.** That
+file is the graduation-project write-up and viva reference. For each change:
+add a dated entry to §18 *Change log*, and update whichever sections it
+touches (§1 counts, §4 what has been built, §5 safety decisions, §6 screens,
+§7 data model, §9 tests, §10 bugs, §12 phase table, §13 remaining work). A
+change that is not in the summary is not done.
+
 ```powershell
 npm run typecheck
 npm test

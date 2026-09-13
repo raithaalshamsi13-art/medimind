@@ -6,8 +6,9 @@ A complete record of what has been built so far, why it was built that way, and
 what remains. Written to be lifted straight into a graduation report or used as
 speaker notes for the demonstration.
 
-_Snapshot taken 6 September 2026. Every number below was read from the
-repository, not estimated._
+_Last updated 13 September 2026. Every number below was read from the
+repository, not estimated. This file is kept current with every commit: each
+step adds an entry to §18 (change log) and updates the sections it touches._
 
 ---
 
@@ -18,10 +19,11 @@ repository, not estimated._
 | Concept | **SCAN → CHECK → CONFIRM → REMIND → TRACK** — verify the medicine before scheduling anything |
 | Platform | iPhone via Expo Go (primary); web browser (UI work only) |
 | Stack | Expo SDK 57 · React Native 0.86 · React 19.2 · TypeScript 6 · Expo Router · SQLite · Zustand · Zod |
-| Source | 115 tracked files · ~9,700 lines across `src/`, tests, server function and scripts |
-| Tests | **171 passing** in 10 suites — including real-SQLite tests and a WCAG contrast checker |
-| Commits | 9, all verified (typecheck + tests + iOS and web bundles) before committing |
-| Milestones | M1 Foundation ✅ · M2 UI & Auth ✅ · M3 Database & CRUD ✅ · Assistant ✅ · M4 Scanner ⬜ · M5 Reminders ⬜ · M6 Polish ⬜ |
+| Source | 154 tracked files · ~14,000 lines across `src/`, tests, the API server, scripts and SQL |
+| Tests | **223 passing** in 14 suites — including real-SQLite tests and a WCAG contrast checker |
+| Commits | 27, all verified (typecheck + tests + iOS and web bundles) before committing |
+| Milestones | M1 Foundation ✅ · M2 UI & Auth ✅ · M3 Database & CRUD ✅ · Assistant ✅ · Deployment ✅ · Structured entry + health conditions ✅ · M4 Scanner ⬜ · M5 Reminders ⬜ · M6 Polish ⬜ |
+| Live | Web: https://medimind-medimind3.vercel.app · API: Railway (`/health` shows version + model) · Accounts/DB: Supabase |
 | Native build needed | **None.** Everything runs in Expo Go — no Xcode, no Mac, no Android Studio, no Apple developer account |
 
 ---
@@ -66,7 +68,9 @@ their label says.
   radii and touch-target sizes (48 pt minimum, 56 default, 64 for primary
   actions). Components never hardcode a colour or font size.
 - **UI kit** in `src/components/ui/`: `Screen`, `AppText`, `Button`, `Card`,
-  `Badge`, `TextField`, `TextLink`, `InlineMessage`, `OptionGroup`.
+  `Badge`, `TextField`, `TextLink`, `InlineMessage`, `OptionGroup`, and (added
+  with the structured form) `ChoiceChips` / `MultiChoiceChips`, `DateField`
+  (native picker, browser date input on web), `Collapsible`, `FormSection`.
 - Six-tab navigation shell: Home · Medicines · Ask · Schedule · History · Settings
   (Schedule and History are placeholders until M5/M6). Icon-only in portrait,
   labels beside the icons in landscape; the bar is sized explicitly to clear
@@ -187,11 +191,16 @@ Reached from the **Ask** tab or a medicine's **Ask about this medicine** button.
   - `OfflineAssistant` — deterministic rules that read the user's own records
     back in plain language. Runs on the phone with no network. Active in Demo
     Mode. Every reply it can produce is unit-tested.
-  - `ProxyAssistant` — posts to the MediMind API server in `server/` (deployed
-    on Railway), which holds the Anthropic key server-side
-    and calls Claude with a system prompt forbidding diagnosis, dose changes and
-    interaction claims. Includes the API's refusal-fallback. Written and ready;
-    not yet deployed (needs a Supabase project and an API key).
+  - `ProxyAssistant` — posts to the MediMind API server in `server/`
+    (deployed on Railway), which holds the AI key server-side and calls the
+    model with a system prompt forbidding diagnosis, dose changes and
+    interaction claims. The server is **provider-agnostic**
+    (`server/src/providers.ts`): Google Gemini (free tier, the live default,
+    `gemini-3.6-flash`), Groq (free) or Anthropic Claude (paid) — chosen by
+    which key is set in Railway, `AI_PROVIDER` to force one. Includes the
+    refusal fallback, per-IP rate limiting, an app access key and a `/health`
+    endpoint reporting version, provider and model. **Live and verified**: it
+    answers next-dose questions correctly and refuses double-dose questions.
 - **What it answers**: next dose ("what do I take now?"), recorded dosage,
   frequency and instructions, expiry (soonest first), missed-dose guidance
   ("do not take a double dose"), and a list of saved medicines.
@@ -241,6 +250,10 @@ Reached from the **Ask** tab or a medicine's **Ask about this medicine** button.
 | Amount never inferred; schedule never defaulted | `domain/dosing.ts`, `OfflineAssistant.ts` | The one thing a dose helper must not do is make up a dose. |
 | Minimal personal data | signup collects name, email, password only; assistant context is five label fields | Least data kept is least data leaked. |
 | Honest limitations documented in code | `LocalAuthService.ts` header | SHA-256 is not a password KDF; saying so is stronger than hiding it. |
+| Health conditions are a notebook, not a clinical record | `domain/healthCondition.ts`, `AGENTS.md` rule | Readings are stored and shown as typed — never parsed, ranged or coloured good/bad — and are never sent to the assistant. Anything more would be diagnosis. |
+| Expiry decided in one place | `domain/expiry.ts` | The form's live "Expired / Expires in N days" badge and the M4 safety engine share one function, so they can never disagree. Calendar days only, no time-of-day edge cases. |
+| Structured choices never rewrite label text | `domain/medicationOptions.ts` | Chips compose to the stored text; anything unrecognised (e.g. scanned wording) is kept verbatim as "custom". Round-tripping is unit-tested. |
+| AI key lives only in Railway variables | `docs/DEPLOYMENT.md` | Never in the app, never in Vercel, never in git. Supabase `service_role` key is used nowhere; the anon key is public by design and every table has Row Level Security. |
 
 ---
 
@@ -267,19 +280,42 @@ Reached from the **Ask** tab or a medicine's **Ask about this medicine** button.
 ## 7. Data model
 
 ```
-medications (SQLite, schema v1)
+medications (SQLite, schema v1 + v2 columns)
   id TEXT PK · user_id · name · dosage · instructions · expiration_date
   frequency · safety_status CHECK(SAFE|EXPIRING_SOON|EXPIRED|NEEDS_REVIEW|UNKNOWN)
   source CHECK(SCAN|MANUAL) · scan_confidence · notes · image_uri
   archived CHECK(0|1) · created_at · updated_at
+  kind CHECK(NULL|PRESCRIPTION|OTC|SUPPLEMENT)                       ← v2
+  form CHECK(NULL|TABLET|CAPSULE|LIQUID|INHALER|INJECTION|CREAM|
+             DROPS|PATCH|SPRAY|OTHER)                                 ← v2
   indexes: (user_id, archived) · (user_id, name) · (user_id, expiration_date)
 
-Schema v2 (Milestone 5) adds reminders and doses with
+health_conditions (schema v2)
+  id TEXT PK · user_id · type CHECK(HIGH_BLOOD_PRESSURE|DIABETES|LOW_BLOOD_SUGAR|
+    ASTHMA|HIGH_CHOLESTEROL|HEART|THYROID|KIDNEY|ARTHRITIS|OTHER)
+  custom_name (required by the app when type = OTHER) · reading (text, as typed)
+  notes · created_at · updated_at
+  index: (user_id, created_at)
+
+medication_conditions (schema v2)  — which medicines relate to which conditions
+  medication_id → medications(id) ON DELETE CASCADE
+  condition_id  → health_conditions(id) ON DELETE CASCADE
+  user_id · PRIMARY KEY (medication_id, condition_id)
+
+Schema v3 (Milestone 5) adds reminders and doses with
 FOREIGN KEY (medication_id) REFERENCES medications(id) ON DELETE CASCADE.
 ```
 
+The same tables exist in Postgres (`supabase/schema.sql`) with Row Level
+Security so each user can only reach their own rows. `dosage`, `frequency`
+and `instructions` stay **text** on purpose: the structured chips in the form
+compose to text (`"500 mg"`, `"Twice daily"`, `"With food. At bedtime"`) so
+labels, the scanner, the assistant and the dose parser all share one
+representation.
+
 Sessions, local accounts and preferences live in encrypted key-value storage,
-not in SQLite.
+not in SQLite. In the browser, medicines and conditions fall back to JSON in
+`localStorage` (`JsonMedicationRepository`, `JsonHealthConditionRepository`).
 
 ---
 
@@ -291,7 +327,8 @@ Screen (src/app)  →  Store (zustand)  →  Service / Repository interface  →
 
 AuthService            → LocalAuthService        | SupabaseAuthService (planned)
 MedicationRepository   → SqliteMedicationRepository | JsonMedicationRepository (web)
-AssistantService       → OfflineAssistant        | ProxyAssistant → Claude
+HealthConditionRepository → SqliteHealthConditionRepository | JsonHealthConditionRepository (web)
+AssistantService       → OfflineAssistant        | ProxyAssistant → Railway server → Gemini / Groq / Claude
 MedicationScannerService (M4) → MockMedicationScanner | ClaudeVisionScanner
 ```
 
@@ -303,13 +340,17 @@ demo cannot be broken by a missing key or a dead network.
 
 ## 9. Testing and verification
 
-**171 tests in 10 suites**, all passing:
+**223 tests in 14 suites**, all passing:
 
 | Suite | Covers |
 |---|---|
-| `db/migrations` | schema version, idempotence, indexes, every CHECK constraint |
-| `db/MedicationRepository` | CRUD + per-user isolation, run against **both** implementations |
+| `db/migrations` | schema version, idempotence, indexes, every CHECK constraint; v2 columns, condition-type CHECK, link cascade |
+| `db/MedicationRepository` | CRUD + per-user isolation + kind/form round trip, run against **both** implementations |
+| `db/HealthConditionRepository` | CRUD, ordering, per-user isolation, medicine links (foreign ids dropped, links replaced/kept/cleared, cascade on delete) — **both** backends |
 | `domain/medication` | validation rules, null normalisation, calendar-date rejection |
+| `domain/medicationOptions` | dosage amount + unit compose/parse, frequency presets understood by `parseFrequency`, instruction chips round trip, unrecognised text kept verbatim |
+| `domain/expiry` | expired / expiring-soon / in-date boundaries, calendar-day arithmetic, malformed dates |
+| `domain/healthCondition` | schema (Other needs a name, custom name dropped otherwise, lengths), presets, display name |
 | `domain/user` | email/password schemas |
 | `domain/assistant` | safety screen (blocked and allowed questions), context privacy, schedule derivation |
 | `domain/dosing` | frequency parsing incl. refusals, next-dose arithmetic |
@@ -347,6 +388,15 @@ exists" assumptions.
 | Divider invisible on the pale-blue background | Contrast 2.7:1 | Contrast checker found it; `borderStrong` retuned to 3.2:1 |
 | Would have passed the array index as the clock time | `.map(toMedicationContext)` after adding a second parameter | Explicit arrow function; caught by tests |
 | "every morning" parsed as unknown | Guard rejected any wording containing "every" | Guard narrowed to hour-based wording |
+| Railway: 404 "Application not found", then 502 "failed to respond" | No deployment had been built; then the app listened on 8080 while the domain targeted 8787 | Root-level Dockerfile so the build works whatever the Root Directory setting; `PORT` and the domain both set to 8080; `/health` reports the running version |
+| Railway kept serving an old build | GitHub repo connection had dropped ("Auto deploy unavailable") | Repo reconnected + manual redeploy; Railway GitHub App recommended for auto-deploy |
+| Vercel: "public framework prefix cannot use `visibility: secret`" | `EXPO_PUBLIC_*` variables were marked Sensitive | Sensitive toggle off — they are publishable by definition; redeploy so they reach the build |
+| Assistant: "credit balance is too low" | Anthropic account had no prepaid credit | Provider-agnostic server; Gemini free tier as default — the demo no longer depends on a paid balance |
+| Gemini 404 for `gemini-2.5-flash` | Model retired for new accounts | Default moved to `gemini-3.6-flash`; `GEMINI_MODEL` variable overrides without a code change |
+| Tab bar cut off when the web app is added to the iPhone home screen | Body sized to `100vh` in standalone Safari, which is taller than the visible area | `100dvh` root sizing + `viewport-fit=cover`, explicit tab-bar height with safe-area inset |
+| Tab labels clipped at large text sizes | Five labels do not fit an iPhone width | Icon-only tabs in portrait, labels beside icons in landscape (user's choice) |
+| App showed the template icon | `app.json` pointed at the template icon bundle | `ios.icon` → the supplied square artwork; favicon, manifest and apple-touch icons generated from it |
+| Two conditions added in the same millisecond listed in random order in the browser | JSON list sorted by `created_at`, then by random id | Insertion order kept (matches SQLite's `ORDER BY created_at, rowid`); caught by the shared repository suite |
 
 ---
 
@@ -362,13 +412,22 @@ Scan the QR code with the iPhone Camera app (opens Expo Go). Then:
 
 1. Onboarding → **Get started**
 2. Login → **Use demo account** (or create one)
-3. **Medicines → Add medicine**: try an empty name, `2026-02-30`, then a real
-   entry — Paracetamol, 500 mg, twice daily, expiry 2027-04-30, "Take with food"
-4. Open it → **Ask about this medicine** → "When is my next dose?"
-5. **Ask** tab → "can I take two together?" to show the safety screen
-6. **Settings** → switch colour theme, large text, high contrast; log out; log in
+3. **Medicines → Add medicine**: try an empty name (blocked), then pick
+   *Over the counter* + *Tablet*, amount 500 + *mg*, *Twice a day*, tick
+   *With food*, and choose an expiry date from the calendar — pick last month
+   to see the red **Expired** badge and banner, then a real date (2027-04-30).
+4. In section 5, **Add a condition** → *High blood pressure*, reading `130/85`
+   → it is linked to the medicine immediately. Save.
+5. Open it → **Ask about this medicine** → "When is my next dose?"
+6. **Ask** tab → "can I take two together?" to show the safety screen
+7. **Settings → My health conditions** → edit the reading, remove a condition
+   (the medicine stays, the link goes)
+8. **Settings** → switch colour theme, large text, high contrast; log out; log in
 
-Everything above works with the phone in Airplane Mode.
+Everything above works with the phone in Airplane Mode. The same app is live
+in a browser at https://medimind-medimind3.vercel.app (add to the iPhone home
+screen from Safari for the full-screen version); with **Demo Mode off** the
+Ask tab uses the Railway server and Gemini.
 
 ---
 
@@ -603,13 +662,35 @@ will work with no internet and no API key — exactly as the brief requires.
 
 ## 16. Commit history
 
-e3  2026-09-06  Add docs/PROJECT_SUMMARY.md — full record of features, decisions, tests and next steps
-4395d7a  2026-09-06  Assistant: answer next-dose questions from the recorded label schedule
-3c5bbb0  2026-09-06  Move the assistant into the tab bar as 'Ask' and remove the dashboard card
-0891d31  2026-09-06  Add one-click push helper script
-8871c7c  2026-09-06  Document typed-routes generation quirk in AGENTS.md
-a478570  2026-09-06  Add Ask MediMind assistant with offline and Claude-backed implementations
-9bef2f8  2026-09-03  Initial commit: MediMind Milestones 1-3
+```
+2026-09-13  PROJECT_SUMMARY: full audit; change log section; summary-per-step rule in AGENTS.md
+2026-09-11  Structured manual entry form, date picker and health conditions
+2026-09-06  PROJECT_SUMMARY: assistant live on Gemini free tier
+2026-09-06  server: actually apply the gemini-3.6-flash default and bump to v1.2.1
+2026-09-06  server: default Gemini model gemini-3.6-flash (2.5-flash retired for new accounts)
+2026-09-06  Assistant server: free providers (Gemini, Groq) alongside Claude
+2026-09-06  PROJECT_SUMMARY: tab bar behaviour
+2026-09-06  Tab bar: icon-only in portrait, labels beside icons in landscape; explicit height with safe-area inset; allow rotation
+2026-09-06  PROJECT_SUMMARY: deployment is live
+2026-09-06  docs: note that the Anthropic account needs prepaid credit
+2026-09-06  Web: size the app to the dynamic viewport (100dvh) so the tab bar is not cut off on iPhone
+2026-09-06  App icon from the supplied square artwork; iPhone home-screen (PWA) fixes
+2026-09-06  server: report the Anthropic error reason safely, retry on 400, expose version on /health
+2026-09-06  Web: document title and meta via +html.tsx; Settings shows which backends this build is configured with
+2026-09-06  Railway: root-level Dockerfile builds server/ regardless of the Root Directory setting
+2026-09-06  server: build with an explicit Dockerfile on Railway; pin TypeScript 5 and @types/node 22
+2026-09-06  server: pin Node 22 for Railway and declare a /health healthcheck
+2026-09-06  env template: assistant endpoint now points at the Railway server
+2026-09-06  Deployment: Vercel (web), Railway (API server), Supabase (database + accounts)
+2026-09-06  PROJECT_SUMMARY: refresh commit count
+2026-09-06  PROJECT_SUMMARY: phase-by-phase status, detailed remaining milestones, success criteria and demo story
+2026-09-06  Add docs/PROJECT_SUMMARY.md — full record of features, decisions, tests and next steps
+2026-09-06  Assistant: answer next-dose questions from the recorded label schedule
+2026-09-06  Move the assistant into the tab bar as 'Ask' and remove the dashboard card
+2026-09-06  Add one-click push helper script
+2026-09-06  Document typed-routes generation quirk in AGENTS.md
+2026-09-06  Add Ask MediMind assistant with offline and Claude-backed implementations
+2026-09-03  Initial commit: MediMind Milestones 1-3
 ```
 
 ---
@@ -627,12 +708,106 @@ a478570  2026-09-06  Add Ask MediMind assistant with offline and Claude-backed i
 | Schema and migrations | `src/db/migrations.ts` |
 | Repositories | `src/db/repositories/` |
 | Medicine validation | `src/domain/medication.ts` |
+| Form chips → stored text (dose, frequency, instructions) | `src/domain/medicationOptions.ts` |
+| Expiry status (expired / expiring soon) | `src/domain/expiry.ts` |
+| Health conditions (types, presets, validation) | `src/domain/healthCondition.ts` |
+| Health-condition store and repositories | `src/stores/useHealthConditionStore.ts`, `src/db/repositories/*HealthConditionRepository.ts` |
+| The medicine form | `src/components/medication/MedicationForm.tsx` |
+| Chips, date picker, collapsible, form section | `src/components/ui/ChoiceChips.tsx`, `DateField.tsx` + `DateField.web.tsx`, `Collapsible.tsx`, `FormSection.tsx` |
 | Assistant safety screen and wording | `src/domain/assistant.ts` |
 | Dose scheduling | `src/domain/dosing.ts` |
 | Offline assistant | `src/services/assistant/OfflineAssistant.ts` |
 | API server (Railway) | `server/src/index.ts` |
+| AI providers (Gemini / Groq / Claude) | `server/src/providers.ts` |
+| Web page shell, PWA metas, home-screen sizing | `src/app/+html.tsx`, `public/manifest.json` |
+| Tab bar (icon-only portrait / labels landscape) | `src/app/(tabs)/_layout.tsx` |
 | Cloud schema + RLS (Supabase) | `supabase/schema.sql` |
 | Deployment guide | `docs/DEPLOYMENT.md` |
 | Contrast checker | `scripts/check-contrast.js` |
 | Icon generation | `scripts/generate-icons.ps1` |
 | Real-SQLite test adapter | `__tests__/helpers/testDatabase.ts` |
+
+---
+
+## 18. Change log — one entry per step
+
+Newest first. Every commit that changes the app adds an entry here **in the
+same commit**, and updates the sections above that it touches (rule in
+`AGENTS.md`, "Verify before claiming done").
+
+### 2026-09-13 — Summary audit and the summary-per-step rule
+- Audited this document against every commit since 6 September and filled the
+  gaps: provider-agnostic assistant server, deployment fixes, PWA / home-screen
+  work, tab-bar behaviour, app icon, schema v2 data model, new test suites, new
+  safety decisions, demo script steps for the new form and health conditions.
+- Added this change-log section and the rule that every step updates the
+  summary (`AGENTS.md`).
+
+### 2026-09-11 — Structured manual entry, date picker, health conditions
+- **Form** (`MedicationForm.tsx`) rebuilt as five numbered sections: about the
+  medicine (name, type chips, form chips) · dose and how often (amount + unit
+  chips, frequency chips incl. "every N hours" and custom) · expiry (calendar
+  picker + live Expired / Expires in N days / In date badge and banners) ·
+  instructions (multi-select chips + folded free text) · health conditions
+  (link existing, add inline). Notes folded. Same form for Add and Edit;
+  existing text is parsed back into chips and anything unrecognised is kept
+  verbatim.
+- **Domain**: `medicationOptions.ts` (compose / parse for dose, frequency,
+  instructions), `expiry.ts` (30-day window, calendar days), `healthCondition.ts`
+  (10 preset types + Other, reading as typed, Zod schema).
+- **Schema v2**: `kind` and `form` columns; `health_conditions` and
+  `medication_conditions` tables with cascade deletes; Supabase mirror with RLS.
+- **Repositories / store**: `HealthConditionRepository` (SQLite + JSON),
+  medicine repositories read/write `kind`, `form` and `conditionIds`
+  (foreign or unknown ids are dropped, never stored); `useHealthConditionStore`.
+- **Screens**: new **My health conditions** (`/health/conditions`, add / edit /
+  remove, cross-platform confirm dialog); Settings → *My health* entry; detail
+  screen shows Type, Form, expiry badge/banner and linked conditions; cards show
+  a per-form icon.
+- **UI kit**: `ChoiceChips` / `MultiChoiceChips`, `DateField` (native picker +
+  `<input type="date">` web split), `Collapsible`, `FormSection`.
+- **Dependency**: `@react-native-community/datetimepicker` (works in Expo Go).
+- **Tests**: +52 (4 new suites) → 223. Both bundles export.
+
+### 2026-09-06 (evening) — Free AI provider
+- Assistant server made provider-agnostic (`server/src/providers.ts`): Gemini
+  (free tier, default), Groq (free), Anthropic (paid), chosen by which key is
+  set; `AI_PROVIDER` and `*_MODEL` overrides. Default model `gemini-3.6-flash`
+  after `gemini-2.5-flash` was retired. `/health` shows provider + model.
+  Verified live: correct next-dose answer, correct refusal of a double-dose
+  question. Docs updated (README, DEPLOYMENT, AGENTS).
+
+### 2026-09-06 (afternoon) — iPhone home-screen (PWA) and app icon
+- App icon, favicon, manifest and apple-touch icons generated from the supplied
+  square artwork; `app.json` `ios.icon` fixed.
+- `+html.tsx`: document title, `viewport-fit=cover`, apple-mobile-web-app metas,
+  `100dvh` root sizing so the tab bar is not cut off when added to the home
+  screen; `orientation: default` to allow rotation.
+- Tab bar: explicit height + safe-area inset; icon-only in portrait, labels
+  beside icons in landscape.
+- Settings "About" shows which backends the build was configured with.
+
+### 2026-09-06 (midday) — Deployment: Vercel · Railway · Supabase
+- `vercel.json` (static `expo export -p web`, auto-deploys on push);
+  `server/` Dockerfile + root Dockerfile, Node 22, `/health` healthcheck,
+  `PORT` 8080; `supabase/schema.sql` run (profiles, medications, reminders,
+  doses with RLS). `docs/DEPLOYMENT.md` written; `.env.local` template points
+  at the Railway endpoint. Secrets policy: AI key only in Railway variables.
+- GitHub push automated from this environment (device-code sign-in, token in
+  Windows Credential Manager).
+
+### 2026-09-06 (morning) — Ask MediMind assistant
+- `AssistantService` with `OfflineAssistant` (deterministic, tested) and
+  `ProxyAssistant` (Railway server). Client-side safety screen
+  (`screenQuestion`) before any model; acknowledgement gate; footer on every
+  reply. `domain/dosing.ts` parses label frequency into clock times and the
+  next dose. Assistant moved into the tab bar as **Ask**. First version of this
+  summary written.
+
+### 2026-09-03 — Milestones 1–3
+- Foundation (Expo SDK 57, TypeScript strict, Expo Router, theme with selectable
+  WCAG-checked palettes, large text, high contrast, contrast checker script).
+- Onboarding, local auth with demo account, dashboard, settings.
+- SQLite schema v1 with `PRAGMA user_version` migrations, `MedicationRepository`
+  (SQLite + JSON web fallback, same test suite), medication list / search /
+  detail / add / edit / delete, Zod validation with blank → `null`.
