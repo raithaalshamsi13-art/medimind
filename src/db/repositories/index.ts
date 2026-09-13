@@ -19,13 +19,38 @@ import { JsonFamilyRepository } from './JsonFamilyRepository';
 import { JsonHealthConditionRepository } from './JsonHealthConditionRepository';
 import { JsonMedicationRepository } from './JsonMedicationRepository';
 import type { MedicationRepository } from './MedicationRepository';
+import { JsonDoseRepository, JsonReminderRepository } from './JsonReminderRepository';
+import type { DoseRepository, ReminderRepository } from './ReminderRepository';
 import { SqliteFamilyRepository } from './SqliteFamilyRepository';
 import { SqliteHealthConditionRepository } from './SqliteHealthConditionRepository';
 import { SqliteMedicationRepository } from './SqliteMedicationRepository';
+import { SqliteDoseRepository, SqliteReminderRepository } from './SqliteReminderRepository';
 
 let cached: MedicationRepository | null = null;
 let cachedConditions: HealthConditionRepository | null = null;
 let cachedFamily: FamilyRepository | null = null;
+let cachedReminders: ReminderRepository | null = null;
+let cachedDoses: DoseRepository | null = null;
+
+export async function getReminderRepository(): Promise<ReminderRepository> {
+  if (cachedReminders) return cachedReminders;
+  const medications = await getMedicationRepository();
+  cachedReminders =
+    medications.kind === 'sqlite'
+      ? new SqliteReminderRepository(await getDatabase())
+      : new JsonReminderRepository();
+  return cachedReminders;
+}
+
+export async function getDoseRepository(): Promise<DoseRepository> {
+  if (cachedDoses) return cachedDoses;
+  const medications = await getMedicationRepository();
+  cachedDoses =
+    medications.kind === 'sqlite'
+      ? new SqliteDoseRepository(await getDatabase())
+      : new JsonDoseRepository();
+  return cachedDoses;
+}
 
 /** Same backend as medicines, so members and their data share one store. */
 export async function getFamilyRepository(): Promise<FamilyRepository> {
@@ -83,6 +108,8 @@ export function resetMedicationRepository(): void {
   cached = null;
   cachedConditions = null;
   cachedFamily = null;
+  cachedReminders = null;
+  cachedDoses = null;
 }
 
 export type {
@@ -91,6 +118,9 @@ export type {
 } from './MedicationRepository';
 export type { HealthConditionRepository } from './HealthConditionRepository';
 export type { FamilyRepository } from './FamilyRepository';
+export type { DoseRepository, DoseSeed, ReminderRepository } from './ReminderRepository';
+export { JsonDoseRepository, JsonReminderRepository } from './JsonReminderRepository';
+export { SqliteDoseRepository, SqliteReminderRepository } from './SqliteReminderRepository';
 export { JsonFamilyRepository } from './JsonFamilyRepository';
 export { SqliteFamilyRepository } from './SqliteFamilyRepository';
 export { JsonMedicationRepository } from './JsonMedicationRepository';

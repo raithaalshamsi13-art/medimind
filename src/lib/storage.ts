@@ -53,6 +53,9 @@ export const STORAGE_KEYS = {
   familyMembers: 'medimind.family-members',
   /** Which family member each account was last managing: { [userId]: memberId }. */
   activeFamilyMember: 'medimind.family.active',
+  /** Reminders and doses, JSON fallback repositories only (web). */
+  reminders: 'medimind.reminders',
+  doses: 'medimind.doses',
 } as const;
 
 const VALID_KEY = /^[A-Za-z0-9._-]+$/;

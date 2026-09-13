@@ -900,6 +900,27 @@ Newest first. Every commit that changes the app adds an entry here **in the
 same commit**, and updates the sections above that it touches (rule in
 `AGENTS.md`, "Verify before claiming done").
 
+### 2026-09-13 — Milestone 5, step 1: reminders and doses data layer
+- **Schema v5**: `reminders` (one per medicine: times JSON, dose label,
+  DAILY / SPECIFIC_DAYS + days, start/end dates, enabled, OS notification
+  ids) and `doses` (one row per occurrence, UNIQUE (reminder, scheduled
+  time), status UPCOMING / TAKEN / MISSED / SKIPPED, acted-at, follow-up
+  notification id), both cascading from medicine and family member. Supabase
+  mirror rewritten to match.
+- **Domain** `src/domain/reminder.ts`: `suggestReminder()` (times from the
+  recorded frequency; `blocked` for an expired medicine; `none` when the
+  wording is not understood — never a guess), occurrence generation, grace
+  window (120 min), Zod schema.
+- **Repositories** `ReminderRepository` / `DoseRepository` (SQLite + JSON,
+  shared suite incl. cascades); **stores** `useReminderStore` (schedules and
+  cancels notifications through `NotificationService`) and `useDoseStore`
+  (materialise the last 7 days, sweep missed, mark Taken / Skipped).
+- **Notifications**: `NotificationService` interface with
+  `ExpoNotificationService` (daily / weekly triggers, Taken / Skip actions,
+  one-off missed follow-up) and a no-op for web (`index.web.ts` split).
+  `expo-notifications` installed.
+- Tests +34 → 315.
+
 ### 2026-09-13 — Decision: dose history lives inside the Schedule tab
 - Confirmed with Omar: the History tab stays out of the bottom bar (Family
   took its slot). Milestone 5 builds the Schedule tab as "Schedule and

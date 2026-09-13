@@ -18,6 +18,7 @@ import { fail, ok, type Result } from '@/lib/result';
 import { readJson, STORAGE_KEYS, writeJson } from '@/lib/storage';
 
 import type { FamilyRepository } from './FamilyRepository';
+import { cascadeRemove } from './JsonMedicationRepository';
 import { ONLY_ONE_SELF, SELF_CANNOT_BE_REMOVED } from './SqliteFamilyRepository';
 
 async function readList<T>(key: string): Promise<Result<T[]>> {
@@ -194,9 +195,10 @@ export class JsonFamilyRepository implements FamilyRepository {
       (c) => !(c.userId === userId && c.memberId === id),
     );
     if (keptConditions.length !== conditions.value.length) {
-      return writeJson(STORAGE_KEYS.healthConditions, keptConditions);
+      const written = await writeJson(STORAGE_KEYS.healthConditions, keptConditions);
+      if (!written.ok) return written;
     }
-    return ok(undefined);
+    return cascadeRemove(STORAGE_KEYS.reminders, STORAGE_KEYS.doses, (row) => row.memberId === id);
   }
 
   async markProfileSetupDone(userId: string, id: string): Promise<Result<FamilyMember>> {

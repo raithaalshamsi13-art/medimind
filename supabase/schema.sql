@@ -202,56 +202,72 @@ create policy "medication_conditions: own rows"
   with check (auth.uid() = user_id);
 
 -- ---------------------------------------------------------------------------
--- reminders (Milestone 5)
+-- reminders (schema v5) — one per medicine: times, days, dates
 -- ---------------------------------------------------------------------------
 create table if not exists public.reminders (
-  id            uuid primary key,
-  medication_id uuid not null references public.medications (id) on delete cascade,
-  user_id       uuid not null references auth.users (id) on delete cascade,
-  dose          text,
-  time          text not null,                 -- "HH:mm"
-  frequency     text not null default 'DAILY'
-                check (frequency in ('DAILY','SPECIFIC_DAYS','INTERVAL_HOURS','AS_NEEDED')),
-  days          jsonb,                         -- e.g. [1,3,5] (0 = Sunday)
-  start_date    date,
-  end_date      date,
-  enabled       boolean not null default true,
-  created_at    timestamptz not null default now(),
-  updated_at    timestamptz not null default now()
+  id               uuid primary key,
+  user_id          uuid not null references auth.users (id) on delete cascade,
+  member_id        uuid not null references public.family_members (id) on delete cascade,
+  medication_id    uuid not null references public.medications (id) on delete cascade,
+  times            jsonb not null default '[]'::jsonb,   -- ["08:00","20:00"]
+  dose_label       text,
+  frequency        text not null default 'DAILY'
+                   check (frequency in ('DAILY','SPECIFIC_DAYS')),
+  days             jsonb not null default '[]'::jsonb,   -- [1,3,5] (0 = Sunday)
+  start_date       date,
+  end_date         date,
+  enabled          boolean not null default true,
+  notification_ids jsonb not null default '[]'::jsonb,
+  created_at       timestamptz not null default now(),
+  updated_at       timestamptz not null default now(),
+  unique (medication_id)
 );
 
-create index if not exists idx_reminders_user on public.reminders (user_id, enabled);
-create index if not exists idx_reminders_medication on public.reminders (medication_id);
+-- Re-running on a project created with the earlier draft of this table.
+alter table public.reminders add column if not exists member_id uuid references public.family_members (id) on delete cascade;
+alter table public.reminders add column if not exists times jsonb not null default '[]'::jsonb;
+alter table public.reminders add column if not exists dose_label text;
+alter table public.reminders add column if not exists notification_ids jsonb not null default '[]'::jsonb;
+
+create index if not exists idx_reminders_user on public.reminders (user_id, member_id, enabled);
 
 alter table public.reminders enable row level security;
 
+drop policy if exists "reminders: own rows" on public.reminders;
 create policy "reminders: own rows"
   on public.reminders for all
   using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
 
 -- ---------------------------------------------------------------------------
--- doses (Milestone 5)
+-- doses (schema v5) — one row per scheduled occurrence, created lazily
 -- ---------------------------------------------------------------------------
 create table if not exists public.doses (
-  id              uuid primary key,
-  medication_id   uuid not null references public.medications (id) on delete cascade,
-  reminder_id     uuid references public.reminders (id) on delete cascade,
-  user_id         uuid not null references auth.users (id) on delete cascade,
-  scheduled_time  timestamptz not null,
-  status          text not null default 'UPCOMING'
-                  check (status in ('UPCOMING','TAKEN','MISSED','SKIPPED')),
-  taken_at        timestamptz,
-  notification_id text,
-  created_at      timestamptz not null default now(),
-  updated_at      timestamptz not null default now(),
-  unique (reminder_id, scheduled_time)
+  id                        uuid primary key,
+  user_id                   uuid not null references auth.users (id) on delete cascade,
+  member_id                 uuid not null references public.family_members (id) on delete cascade,
+  medication_id             uuid not null references public.medications (id) on delete cascade,
+  reminder_id               uuid not null references public.reminders (id) on delete cascade,
+  scheduled_at              text not null,              -- local "yyyy-MM-ddTHH:mm"
+  status                    text not null default 'UPCOMING'
+                            check (status in ('UPCOMING','TAKEN','MISSED','SKIPPED')),
+  acted_at                  timestamptz,
+  follow_up_notification_id text,
+  created_at                timestamptz not null default now(),
+  updated_at                timestamptz not null default now(),
+  unique (reminder_id, scheduled_at)
 );
 
-create index if not exists idx_doses_user_time on public.doses (user_id, scheduled_time);
+alter table public.doses add column if not exists member_id uuid references public.family_members (id) on delete cascade;
+alter table public.doses add column if not exists scheduled_at text;
+alter table public.doses add column if not exists acted_at timestamptz;
+alter table public.doses add column if not exists follow_up_notification_id text;
+
+create index if not exists idx_doses_user_scheduled on public.doses (user_id, member_id, scheduled_at);
 
 alter table public.doses enable row level security;
 
+drop policy if exists "doses: own rows" on public.doses;
 create policy "doses: own rows"
   on public.doses for all
   using (auth.uid() = user_id)

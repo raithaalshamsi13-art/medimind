@@ -31,6 +31,31 @@ import { isStoragePersistent, readJson, STORAGE_KEYS, writeJson } from '@/lib/st
 
 import type { MedicationRepository } from './MedicationRepository';
 
+/**
+ * Drop every reminder and dose matching `gone`. Shared with the family
+ * repository, which cascades by member instead of by medicine.
+ */
+export async function cascadeRemove(
+  remindersKey: string,
+  dosesKey: string,
+  gone: (row: { medicationId: string; memberId: string }) => boolean,
+): Promise<Result<void>> {
+  const reminders = await readJson<{ medicationId: string; memberId: string }[]>(remindersKey);
+  if (!reminders.ok) return fail(reminders.error);
+  const reminderList = Array.isArray(reminders.value) ? reminders.value : [];
+  const keptReminders = reminderList.filter((r) => !gone(r));
+  if (keptReminders.length !== reminderList.length) {
+    const written = await writeJson(remindersKey, keptReminders);
+    if (!written.ok) return written;
+  }
+
+  const doses = await readJson<{ medicationId: string; memberId: string }[]>(dosesKey);
+  if (!doses.ok) return fail(doses.error);
+  const doseList = Array.isArray(doses.value) ? doses.value : [];
+  const keptDoses = doseList.filter((d) => !gone(d));
+  return keptDoses.length === doseList.length ? ok(undefined) : writeJson(dosesKey, keptDoses);
+}
+
 export class JsonMedicationRepository implements MedicationRepository {
   readonly kind = 'json' as const;
 
@@ -176,6 +201,10 @@ export class JsonMedicationRepository implements MedicationRepository {
     );
     if (next.length === all.value.length) return fail(appError('NOT_FOUND'));
 
-    return this.writeAll(next);
+    const saved = await this.writeAll(next);
+    if (!saved.ok) return saved;
+    // Cascade by hand (SQLite does this through foreign keys): the medicine's
+    // reminder and doses go with it.
+    return cascadeRemove(STORAGE_KEYS.reminders, STORAGE_KEYS.doses, (row) => row.medicationId === id);
   }
 }

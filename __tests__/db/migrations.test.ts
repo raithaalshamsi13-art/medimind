@@ -265,6 +265,59 @@ describe('migrations', () => {
     });
   });
 
+  describe('version 5 — reminders and doses', () => {
+    beforeEach(async () => {
+      await runMigrations(db);
+      await db.runAsync(
+        `INSERT INTO family_members (id, user_id, name, relationship, is_self, created_at, updated_at)
+         VALUES ('self', 'user-1', 'Alice', 'ME', 1, '2026-01-01', '2026-01-01')`,
+        [],
+      );
+      await insertMedication(db, { id: 'med-1' });
+      await db.runAsync(`UPDATE medications SET member_id = 'self' WHERE id = 'med-1'`, []);
+      await db.runAsync(
+        `INSERT INTO reminders (id, user_id, member_id, medication_id, times, created_at, updated_at)
+         VALUES ('r1', 'user-1', 'self', 'med-1', '["08:00"]', '2026-01-01', '2026-01-01')`,
+        [],
+      );
+    });
+
+    it('allows one reminder per medicine and enforces the enums', async () => {
+      await expect(
+        db.runAsync(
+          `INSERT INTO reminders (id, user_id, member_id, medication_id, times, created_at, updated_at)
+           VALUES ('r2', 'user-1', 'self', 'med-1', '["09:00"]', '2026-01-01', '2026-01-01')`,
+          [],
+        ),
+      ).rejects.toThrow();
+      await expect(db.runAsync(`UPDATE reminders SET frequency = 'HOURLY' WHERE id = 'r1'`, [])).rejects.toThrow();
+      await expect(db.runAsync(`UPDATE reminders SET enabled = 2 WHERE id = 'r1'`, [])).rejects.toThrow();
+    });
+
+    it('keeps one dose per reminder occurrence and enforces the status list', async () => {
+      const insertDose = (id: string, at: string) =>
+        db.runAsync(
+          `INSERT INTO doses (id, user_id, member_id, medication_id, reminder_id, scheduled_at, created_at, updated_at)
+           VALUES (?, 'user-1', 'self', 'med-1', 'r1', ?, '2026-01-01', '2026-01-01')`,
+          [id, at],
+        );
+      await insertDose('d1', '2026-09-14T08:00');
+      await expect(insertDose('d2', '2026-09-14T08:00')).rejects.toThrow();
+      await expect(db.runAsync(`UPDATE doses SET status = 'LATE' WHERE id = 'd1'`, [])).rejects.toThrow();
+    });
+
+    it('cascades reminder and doses when the medicine or the member is deleted', async () => {
+      await db.runAsync(
+        `INSERT INTO doses (id, user_id, member_id, medication_id, reminder_id, scheduled_at, created_at, updated_at)
+         VALUES ('d1', 'user-1', 'self', 'med-1', 'r1', '2026-09-14T08:00', '2026-01-01', '2026-01-01')`,
+        [],
+      );
+      await db.runAsync(`DELETE FROM medications WHERE id = 'med-1'`, []);
+      expect(await db.getAllAsync(`SELECT id FROM reminders`, [])).toEqual([]);
+      expect(await db.getAllAsync(`SELECT id FROM doses`, [])).toEqual([]);
+    });
+  });
+
   describe('version 4 — health profile fields', () => {
     beforeEach(async () => {
       await runMigrations(db);

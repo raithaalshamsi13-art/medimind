@@ -163,8 +163,55 @@ export const MIGRATIONS: Migration[] = [
         CHECK (profile_setup_done IN (0,1));
     `,
   },
-  // Milestone 5 adds version 5: the `reminders` and `doses` tables, with
-  // FOREIGN KEY (medication_id) REFERENCES medications(id) ON DELETE CASCADE.
+  {
+    version: 5,
+    name: 'reminders_and_doses',
+    up: `
+      -- One reminder per medicine (times, days, dates). Deleting the medicine
+      -- or the family member removes it and its doses.
+      CREATE TABLE IF NOT EXISTS reminders (
+        id               TEXT PRIMARY KEY NOT NULL,
+        user_id          TEXT NOT NULL,
+        member_id        TEXT NOT NULL REFERENCES family_members (id) ON DELETE CASCADE,
+        medication_id    TEXT NOT NULL REFERENCES medications (id) ON DELETE CASCADE,
+        times            TEXT NOT NULL,            -- JSON array of "HH:mm"
+        dose_label       TEXT,
+        frequency        TEXT NOT NULL DEFAULT 'DAILY'
+                         CHECK (frequency IN ('DAILY','SPECIFIC_DAYS')),
+        days             TEXT NOT NULL DEFAULT '[]', -- JSON array of 0..6
+        start_date       TEXT,
+        end_date         TEXT,
+        enabled          INTEGER NOT NULL DEFAULT 1 CHECK (enabled IN (0,1)),
+        notification_ids TEXT NOT NULL DEFAULT '[]', -- JSON array of OS ids
+        created_at       TEXT NOT NULL,
+        updated_at       TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_reminders_user
+        ON reminders (user_id, member_id, enabled);
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_reminders_medication
+        ON reminders (medication_id);
+
+      -- One row per scheduled occurrence, created lazily for the days the
+      -- app looks at. The status is the TRACK part of the workflow.
+      CREATE TABLE IF NOT EXISTS doses (
+        id                          TEXT PRIMARY KEY NOT NULL,
+        user_id                     TEXT NOT NULL,
+        member_id                   TEXT NOT NULL REFERENCES family_members (id) ON DELETE CASCADE,
+        medication_id               TEXT NOT NULL REFERENCES medications (id) ON DELETE CASCADE,
+        reminder_id                 TEXT NOT NULL REFERENCES reminders (id) ON DELETE CASCADE,
+        scheduled_at                TEXT NOT NULL,   -- local "yyyy-MM-ddTHH:mm"
+        status                      TEXT NOT NULL DEFAULT 'UPCOMING'
+                                    CHECK (status IN ('UPCOMING','TAKEN','MISSED','SKIPPED')),
+        acted_at                    TEXT,
+        follow_up_notification_id   TEXT,
+        created_at                  TEXT NOT NULL,
+        updated_at                  TEXT NOT NULL,
+        UNIQUE (reminder_id, scheduled_at)
+      );
+      CREATE INDEX IF NOT EXISTS idx_doses_user_time
+        ON doses (user_id, member_id, scheduled_at);
+    `,
+  },
 ];
 
 export const LATEST_SCHEMA_VERSION =
