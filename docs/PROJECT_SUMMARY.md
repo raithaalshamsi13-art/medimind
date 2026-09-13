@@ -736,6 +736,12 @@ Newest first. Every commit that changes the app adds an entry here **in the
 same commit**, and updates the sections above that it touches (rule in
 `AGENTS.md`, "Verify before claiming done").
 
+### 2026-09-13 — Process: every step is pushed to GitHub straight away
+- Rule added to `AGENTS.md`: each change is committed and pushed immediately,
+  because the Vercel web build (the version used on the iPhone home screen)
+  redeploys only from `main`. Together with the summary-per-step rule this is
+  the definition of done: typecheck · tests · bundles · summary · pushed.
+
 ### 2026-09-13 — Fix: log out (and delete medicine) did nothing on the web
 - Settings → Log out and the medicine Delete button called `Alert.alert`,
   which the browser build silently ignores, so neither worked on the web or

@@ -115,6 +115,12 @@ touches (§1 counts, §4 what has been built, §5 safety decisions, §6 screens,
 §7 data model, §9 tests, §10 bugs, §12 phase table, §13 remaining work). A
 change that is not in the summary is not done.
 
+**Every step is committed and pushed to GitHub immediately** (`git push origin
+HEAD`, then confirm `git status -sb` shows `main...origin/main` with nothing
+ahead). The live web build on Vercel — the version Omar opens on his iPhone
+from the home screen — redeploys only from `main`, so an unpushed change is
+invisible to him. Never leave work uncommitted between steps.
+
 ```powershell
 npm run typecheck
 npm test
