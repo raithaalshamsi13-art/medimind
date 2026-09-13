@@ -71,8 +71,9 @@ their label says.
   `Badge`, `TextField`, `TextLink`, `InlineMessage`, `OptionGroup`, and (added
   with the structured form) `ChoiceChips` / `MultiChoiceChips`, `DateField`
   (native picker, browser date input on web), `Collapsible`, `FormSection`.
-- Six-tab navigation shell: Home · Medicines · Ask · Schedule · History · Settings
-  (Schedule and History are placeholders until M5/M6). Icon-only in portrait,
+- Six-tab navigation shell: Home · Medicines · Ask · Schedule · Family · Settings
+  (Schedule is a placeholder until M5; the History placeholder is kept as a
+  route but hidden from the bar since Family took its slot). Icon-only in portrait,
   labels beside the icons in landscape; the bar is sized explicitly to clear
   the iPhone home indicator, including when saved to the home screen from Safari.
 - Jest configured (`jest-expo/ios` preset); a `babel.config.js` was added because
