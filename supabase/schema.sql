@@ -115,8 +115,27 @@ create table if not exists public.family_members (
                       check (avatar_color in ('primary','info','success','warning','danger')),
   is_self             boolean not null default false,
   created_at          timestamptz not null default now(),
-  updated_at          timestamptz not null default now()
+  updated_at          timestamptz not null default now(),
+
+  -- Schema v4: personal health profile (context only, never a dose or verdict).
+  gender              text check (gender is null or gender in ('FEMALE','MALE','UNSPECIFIED')),
+  height_cm           real check (height_cm is null or (height_cm >= 30 and height_cm <= 250)),
+  weight_kg           real check (weight_kg is null or (weight_kg >= 1 and weight_kg <= 400)),
+  blood_type          text check (blood_type is null or blood_type in
+                        ('A+','A-','B+','B-','AB+','AB-','O+','O-','UNKNOWN')),
+  profile_setup_done  boolean not null default false
 );
+
+-- Re-running on a project created before v4: add the columns if missing.
+alter table public.family_members add column if not exists gender text
+  check (gender is null or gender in ('FEMALE','MALE','UNSPECIFIED'));
+alter table public.family_members add column if not exists height_cm real
+  check (height_cm is null or (height_cm >= 30 and height_cm <= 250));
+alter table public.family_members add column if not exists weight_kg real
+  check (weight_kg is null or (weight_kg >= 1 and weight_kg <= 400));
+alter table public.family_members add column if not exists blood_type text
+  check (blood_type is null or blood_type in ('A+','A-','B+','B-','AB+','AB-','O+','O-','UNKNOWN'));
+alter table public.family_members add column if not exists profile_setup_done boolean not null default false;
 
 create index if not exists idx_family_members_user on public.family_members (user_id, is_self);
 create unique index if not exists idx_family_members_self on public.family_members (user_id) where is_self;

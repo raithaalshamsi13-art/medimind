@@ -264,4 +264,41 @@ describe('migrations', () => {
       expect(conditions).toEqual([]);
     });
   });
+
+  describe('version 4 — health profile fields', () => {
+    beforeEach(async () => {
+      await runMigrations(db);
+      await db.runAsync(
+        `INSERT INTO family_members (id, user_id, name, relationship, is_self, created_at, updated_at)
+         VALUES ('m', 'user-1', 'Fatima', 'MOTHER', 0, '2026-01-01', '2026-01-01')`,
+        [],
+      );
+    });
+
+    it('defaults the new columns to null and the setup flag to 0', async () => {
+      const row = await db.getFirstAsync<Record<string, unknown>>(
+        `SELECT gender, height_cm, weight_kg, blood_type, profile_setup_done FROM family_members WHERE id = 'm'`,
+        [],
+      );
+      expect(row).toEqual({
+        gender: null,
+        height_cm: null,
+        weight_kg: null,
+        blood_type: null,
+        profile_setup_done: 0,
+      });
+    });
+
+    it('enforces the value lists and plausible ranges in the database', async () => {
+      const set = (sql: string) => db.runAsync(`UPDATE family_members SET ${sql} WHERE id = 'm'`, []);
+      await expect(set(`gender = 'X'`)).rejects.toThrow();
+      await expect(set(`blood_type = 'C+'`)).rejects.toThrow();
+      await expect(set(`height_cm = 5`)).rejects.toThrow();
+      await expect(set(`weight_kg = 500`)).rejects.toThrow();
+      await expect(set(`profile_setup_done = 2`)).rejects.toThrow();
+      await expect(
+        set(`gender = 'FEMALE', blood_type = 'AB-', height_cm = 160.5, weight_kg = 68, profile_setup_done = 1`),
+      ).resolves.toBeDefined();
+    });
+  });
 });

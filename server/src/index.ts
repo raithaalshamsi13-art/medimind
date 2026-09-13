@@ -16,6 +16,11 @@
  * ENDPOINTS
  *   GET  /health      → { ok, service, version, assistant, provider, model }
  *   POST /assistant   → { reply: string, model: string }
+ *                       body: { question, history?, medications?, person? }
+ *                       `person` is one family member's health profile (age in
+ *                       years, gender, height, weight, blood type, recorded
+ *                       conditions) — context only; the prompt forbids using
+ *                       it for a verdict or a dose.
  *
  * OTHER ENVIRONMENT (Railway → Variables)
  *   APP_ACCESS_KEY      optional; if set, requests must carry it as `x-app-key`
@@ -31,7 +36,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { ProviderError, selectProvider, type Turn } from './providers.js';
 
 /** Bumped on every change so /health shows which code is live. */
-const VERSION = '1.2.1';
+const VERSION = '1.3.0';
 
 const MAX_QUESTION_LENGTH = 500;
 const MAX_HISTORY_TURNS = 10;
@@ -61,7 +66,13 @@ Rules you must follow on every reply:
 4. If a detail was not recorded, say so. Do not guess it or fill it in from general knowledge.
 5. For a missed dose: say not to take a double dose, to follow the label or leaflet, and to ask a pharmacist if unsure.
 6. Use plain language and short sentences. Many users are older adults. Keep replies under 120 words unless you are listing medicines. Do not use markdown, headings or bullet symbols — plain sentences only.
-7. End every reply with exactly this sentence on its own line: "Please check with your doctor or pharmacist before acting on this."`;
+7. End every reply with exactly this sentence on its own line: "Please check with your doctor or pharmacist before acting on this."
+
+About the person (when a profile is supplied below):
+8. The medicines and the profile belong to ONE person — the account holder ("you") or a relative they care for (e.g. "your mother"). Address that person consistently; never mix them up with anyone else.
+9. You may use the profile (age, gender, height, weight, blood type, recorded conditions and readings) ONLY to say that a factor MAY BE RELEVANT and why, in general terms — for example that age, weight or a recorded condition is something a pharmacist would want to know about before this kind of medicine. Frame it as "may be relevant" or "worth confirming", never as a conclusion.
+10. Never say a medicine is safe, unsafe, suitable, unsuitable, too strong or too weak for the person. Never calculate, adjust or suggest a dose from weight, height, age or anything else. Never interpret a reading (do not say a blood pressure or sugar reading is high, low or normal). Never diagnose. If asked any of these, say you cannot judge that and a pharmacist or doctor can.
+11. If a profile detail is missing, say it is not recorded rather than assuming it.`;
 
 const SAFE_DECLINE =
   'I am not able to help with that question. Please speak to your pharmacist or doctor.\n' +
@@ -76,7 +87,18 @@ type MedicationContext = {
   schedule: { times: string[]; description: string; asNeeded: boolean } | null;
   nextDoseLabel: string | null;
 };
-type Body = { question?: unknown; history?: unknown; medications?: unknown };
+type PersonContext = {
+  label: string;
+  ageYears: number | null;
+  gender: string | null;
+  heightCm: number | null;
+  weightKg: number | null;
+  bloodType: string | null;
+  conditions: { name: string; reading: string | null }[];
+};
+type Body = { question?: unknown; history?: unknown; medications?: unknown; person?: unknown };
+
+const MAX_CONDITIONS = 30;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -135,6 +157,56 @@ function isMedication(value: unknown): value is MedicationContext {
     optionalText(m.expirationDate) &&
     (m.schedule === null || typeof m.schedule === 'object') &&
     optionalText(m.nextDoseLabel)
+  );
+}
+
+function isPerson(value: unknown): value is PersonContext {
+  if (typeof value !== 'object' || value === null) return false;
+  const p = value as Record<string, unknown>;
+  const optionalText = (v: unknown, max: number) =>
+    v === null || (typeof v === 'string' && v.length <= max);
+  const optionalNumber = (v: unknown, min: number, max: number) =>
+    v === null || (typeof v === 'number' && Number.isFinite(v) && v >= min && v <= max);
+  return (
+    typeof p.label === 'string' &&
+    p.label.length > 0 &&
+    p.label.length <= 60 &&
+    optionalNumber(p.ageYears, 0, 130) &&
+    optionalText(p.gender, 30) &&
+    optionalNumber(p.heightCm, 30, 250) &&
+    optionalNumber(p.weightKg, 1, 400) &&
+    optionalText(p.bloodType, 10) &&
+    Array.isArray(p.conditions) &&
+    p.conditions.length <= MAX_CONDITIONS &&
+    p.conditions.every(
+      (c) =>
+        typeof c === 'object' &&
+        c !== null &&
+        typeof (c as { name?: unknown }).name === 'string' &&
+        (c as { name: string }).name.length <= 80 &&
+        optionalText((c as { reading?: unknown }).reading, 40),
+    )
+  );
+}
+
+/**
+ * The person block of the system prompt. Only what was recorded, with
+ * "not recorded" for gaps so the model has nothing to fill in.
+ */
+function describePerson(person: PersonContext | null): string {
+  if (!person) return 'No health profile was supplied for this person.';
+  const nr = 'not recorded';
+  const conditions =
+    person.conditions.length === 0
+      ? 'none recorded'
+      : person.conditions
+          .map((c) => (c.reading ? `${c.name} (latest reading as typed: ${c.reading})` : c.name))
+          .join('; ');
+  return (
+    `The person these medicines belong to is ${person.label}. Their saved health profile, exactly as recorded and possibly incomplete: ` +
+    `age ${person.ageYears ?? nr}; gender ${person.gender ?? nr}; height ${person.heightCm !== null ? `${person.heightCm} cm` : nr}; ` +
+    `weight ${person.weightKg !== null ? `${person.weightKg} kg` : nr}; blood type ${person.bloodType ?? nr}; ` +
+    `recorded conditions: ${conditions}.`
   );
 }
 
@@ -221,11 +293,13 @@ async function handleAssistant(req: IncomingMessage, res: ServerResponse): Promi
   const medications = Array.isArray(body.medications)
     ? body.medications.filter(isMedication).slice(0, MAX_MEDICATIONS)
     : [];
+  // A malformed profile is dropped, not rejected: the medicines still answer.
+  const person = isPerson(body.person) ? body.person : null;
 
   try {
     const result = await provider.complete({
       system: SYSTEM_PROMPT,
-      medicationsText: describeMedications(medications),
+      medicationsText: `${describePerson(person)}\n\n${describeMedications(medications)}`,
       history,
       question,
     });

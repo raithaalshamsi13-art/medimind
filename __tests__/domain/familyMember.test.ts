@@ -17,14 +17,29 @@ const MOTHER: FamilyMember = {
   relationship: 'MOTHER',
   customRelationship: null,
   dateOfBirth: '1960-03-15',
+  gender: 'FEMALE',
+  heightCm: 160,
+  weightKg: 68.5,
+  bloodType: 'O+',
   avatarColor: 'info',
   isSelf: false,
+  profileSetupDone: true,
   createdAt: '2026-01-01T00:00:00.000Z',
   updatedAt: '2026-01-01T00:00:00.000Z',
 };
 
 describe('familyMemberInputSchema', () => {
-  const base = { name: ' Fatima ', relationship: 'MOTHER', customRelationship: '', dateOfBirth: '', avatarColor: 'info' };
+  const base = {
+    name: ' Fatima ',
+    relationship: 'MOTHER',
+    customRelationship: '',
+    dateOfBirth: '',
+    gender: '',
+    heightCm: '',
+    weightKg: '',
+    bloodType: '',
+    avatarColor: 'info',
+  };
 
   it('accepts a preset relationship and trims the name', () => {
     const parsed = familyMemberInputSchema.safeParse(base);
@@ -35,6 +50,10 @@ describe('familyMemberInputSchema', () => {
         relationship: 'MOTHER',
         customRelationship: null,
         dateOfBirth: null,
+        gender: null,
+        heightCm: null,
+        weightKg: null,
+        bloodType: null,
         avatarColor: 'info',
       });
     }
@@ -115,7 +134,50 @@ describe('helpers', () => {
       relationship: 'MOTHER',
       customRelationship: '',
       dateOfBirth: '1960-03-15',
+      gender: 'FEMALE',
+      heightCm: '160',
+      weightKg: '68.5',
+      bloodType: 'O+',
       avatarColor: 'info',
     });
+  });
+});
+
+describe('health profile fields', () => {
+  const base = {
+    name: 'Fatima',
+    relationship: 'MOTHER',
+    customRelationship: '',
+    dateOfBirth: '',
+    gender: 'FEMALE',
+    heightCm: '160',
+    weightKg: '68,5',
+    bloodType: 'O+',
+    avatarColor: 'info',
+  };
+
+  it('parses height and weight as numbers, accepting a comma decimal', () => {
+    const parsed = familyMemberInputSchema.safeParse(base);
+    expect(parsed.success && parsed.data).toMatchObject({
+      gender: 'FEMALE',
+      heightCm: 160,
+      weightKg: 68.5,
+      bloodType: 'O+',
+    });
+  });
+
+  it('rejects implausible or non-numeric measurements, with a field-level message', () => {
+    for (const bad of [{ heightCm: '5' }, { heightCm: '300' }, { weightKg: '0' }, { weightKg: 'seventy' }]) {
+      const parsed = familyMemberInputSchema.safeParse({ ...base, ...bad });
+      expect(parsed.success).toBe(false);
+      if (!parsed.success) expect(parsed.error.issues[0]?.path[0]).toBe(Object.keys(bad)[0]);
+    }
+  });
+
+  it('rejects an unknown gender or blood type, and allows "unknown" blood type', () => {
+    expect(familyMemberInputSchema.safeParse({ ...base, gender: 'X' }).success).toBe(false);
+    expect(familyMemberInputSchema.safeParse({ ...base, bloodType: 'C+' }).success).toBe(false);
+    expect(familyMemberInputSchema.safeParse({ ...base, bloodType: 'UNKNOWN' }).success).toBe(true);
+    expect(familyMemberInputSchema.safeParse({ ...base, gender: '', bloodType: '' }).success).toBe(true);
   });
 });

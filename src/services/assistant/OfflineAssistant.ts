@@ -15,7 +15,12 @@
 
 import { differenceInCalendarDays, parseISO } from 'date-fns';
 
-import { formatDoseTime, type AssistantReply, type MedicationContext } from '@/domain/assistant';
+import {
+  formatDoseTime,
+  type AssistantReply,
+  type MedicationContext,
+  type PersonContext,
+} from '@/domain/assistant';
 import { formatIsoDate, isoToday } from '@/lib/datetime';
 import { ok, type Result } from '@/lib/result';
 
@@ -23,6 +28,7 @@ import type { AssistantRequest, AssistantService } from './AssistantService';
 
 type Intent =
   | 'help'
+  | 'profile'
   | 'list'
   | 'next'
   | 'expiry'
@@ -34,6 +40,13 @@ type Intent =
 
 function detectIntent(q: string): Intent {
   if (/\b(miss(ed|ing)?|forgot|forgotten|skipped|late (dose|taking))\b/.test(q)) return 'missed';
+  if (
+    /\b(my|her|his|their) (profile|health profile|details|information|info)\b|\bwhat do you know about (me|her|him|them)\b|\b(my|her|his|their) (age|weight|height|blood type|conditions?)\b|\bhow (old|tall|heavy)\b/.test(
+      q,
+    )
+  ) {
+    return 'profile';
+  }
   if (
     /\b(next dose|next (one|tablet|pill)|due|take now|take next|take today|right now|what (do|should) i take|today'?s doses?|doses? today|when (do|should) i take)\b/.test(
       q,
@@ -216,10 +229,37 @@ const MISSED_DOSE_REPLY =
 const HELP_REPLY =
   'I can answer questions about the medicines you have saved in MediMind: when your next dose ' +
   'is due, what dosage, frequency and instructions you recorded, when they expire, and what to ' +
-  'do if you miss a dose. I only repeat what you recorded from the label. I cannot tell you ' +
+  'do if you miss a dose. I can also read back the health profile you saved (age, height, weight, ' +
+  'blood type, conditions). I only repeat what you recorded. I cannot tell you ' +
   'whether a medicine is right for you, whether to take more or less than the label says, or ' +
   'whether medicines can be taken together — a pharmacist or doctor is the right person for ' +
   'those questions.';
+
+/** Reads the saved profile back — never interprets it. */
+function describeProfile(person: PersonContext | null): string {
+  if (!person) {
+    return 'I do not have a health profile to look at. You can add one from the Family tab.';
+  }
+  const who = person.isSelf ? 'you' : person.name;
+  const facts = [
+    person.ageYears !== null ? `age ${person.ageYears}` : null,
+    person.gender ? person.gender.toLowerCase() : null,
+    person.heightCm !== null ? `height ${person.heightCm} cm` : null,
+    person.weightKg !== null ? `weight ${person.weightKg} kg` : null,
+    person.bloodType ? `blood type ${person.bloodType}` : null,
+  ].filter(Boolean);
+  const conditions = person.conditions.map((c) => (c.reading ? `${c.name} (${c.reading})` : c.name));
+
+  const missing = `Nothing is recorded yet — you can add it by editing ${person.isSelf ? 'your' : `${person.name}’s`} profile in the Family tab.`;
+  const factLine = facts.length > 0 ? `Here is the profile saved for ${who}: ${facts.join(', ')}.` : `There are no profile details saved for ${who} yet.`;
+  const conditionLine =
+    conditions.length > 0
+      ? ` Recorded conditions: ${conditions.join('; ')}.`
+      : ' No health conditions are recorded.';
+  const note =
+    ' I only repeat what was saved. I cannot say what any of it means for a medicine — a pharmacist or doctor can.';
+  return facts.length === 0 && conditions.length === 0 ? `${missing}${note}` : `${factLine}${conditionLine}${note}`;
+}
 
 export class OfflineAssistant implements AssistantService {
   readonly kind = 'offline' as const;
@@ -229,13 +269,14 @@ export class OfflineAssistant implements AssistantService {
   }
 
   /** Exposed for tests: a pure function from request to reply text. */
-  answer({ question, medications }: AssistantRequest): string {
+  answer({ question, medications, person }: AssistantRequest): string {
     const q = question.trim().toLowerCase();
     const intent = detectIntent(q);
     const mentioned = findMentioned(q, medications);
 
     if (intent === 'help') return HELP_REPLY;
     if (intent === 'missed') return MISSED_DOSE_REPLY;
+    if (intent === 'profile') return describeProfile(person ?? null);
 
     if (medications.length === 0) {
       return (

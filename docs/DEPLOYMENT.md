@@ -57,7 +57,10 @@ Do them in this order — each later step needs a value from an earlier one.
 4. **Settings → Networking → Generate Domain**. Copy it, e.g.
    `https://medimind-server-production.up.railway.app`.
 5. Check it works: open `<that domain>/health` in a browser. You should see
-   `{"ok":true,"service":"medimind-server","assistant":true}`.
+   `{"ok":true,"service":"medimind-server","version":"1.3.0","assistant":true,...}`.
+   If `version` is older than the one in `server/src/index.ts`, Railway has
+   not picked up the latest push: open the service → **Deployments →
+   Redeploy**, or connect the Railway GitHub App so pushes deploy automatically.
 
 The app will talk to `<that domain>/assistant`.
 

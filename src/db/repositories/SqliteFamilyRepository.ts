@@ -9,10 +9,14 @@
 
 import {
   AVATAR_COLORS,
+  BLOOD_TYPES,
+  GENDERS,
   RELATIONSHIPS,
   type AvatarColor,
+  type BloodType,
   type FamilyMember,
   type FamilyMemberInput,
+  type Gender,
   type Relationship,
 } from '@/domain/familyMember';
 import { isoNow } from '@/lib/datetime';
@@ -34,10 +38,25 @@ type MemberRow = {
   is_self: number;
   created_at: string;
   updated_at: string;
+  gender: string | null;
+  height_cm: number | null;
+  weight_kg: number | null;
+  blood_type: string | null;
+  profile_setup_done: number;
 };
 
 function toRelationship(value: string): Relationship {
   return (RELATIONSHIPS as readonly string[]).includes(value) ? (value as Relationship) : 'OTHER';
+}
+
+function toGender(value: string | null): Gender | null {
+  return value !== null && (GENDERS as readonly string[]).includes(value) ? (value as Gender) : null;
+}
+
+function toBloodType(value: string | null): BloodType | null {
+  return value !== null && (BLOOD_TYPES as readonly string[]).includes(value)
+    ? (value as BloodType)
+    : null;
 }
 
 function toAvatarColor(value: string): AvatarColor {
@@ -53,7 +72,12 @@ function mapRow(row: MemberRow): FamilyMember {
     customRelationship: row.custom_relationship,
     dateOfBirth: row.date_of_birth,
     avatarColor: toAvatarColor(row.avatar_color),
+    gender: toGender(row.gender),
+    heightCm: row.height_cm,
+    weightKg: row.weight_kg,
+    bloodType: toBloodType(row.blood_type),
     isSelf: row.is_self === 1,
+    profileSetupDone: row.profile_setup_done === 1,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
   };
@@ -61,7 +85,8 @@ function mapRow(row: MemberRow): FamilyMember {
 
 const SELECT_COLUMNS = `
   id, user_id, name, relationship, custom_relationship, date_of_birth,
-  avatar_color, is_self, created_at, updated_at
+  avatar_color, is_self, created_at, updated_at,
+  gender, height_cm, weight_kg, blood_type, profile_setup_done
 `;
 
 export const SELF_CANNOT_BE_REMOVED = 'Your own profile cannot be removed. You can edit it instead.';
@@ -114,8 +139,13 @@ export class SqliteFamilyRepository implements FamilyRepository {
         relationship: 'ME',
         customRelationship: null,
         dateOfBirth: null,
+        gender: null,
+        heightCm: null,
+        weightKg: null,
+        bloodType: null,
         avatarColor: 'primary',
         isSelf: true,
+        profileSetupDone: false,
         createdAt: now,
         updatedAt: now,
       };
@@ -149,8 +179,14 @@ export class SqliteFamilyRepository implements FamilyRepository {
       relationship: input.relationship,
       customRelationship: input.customRelationship,
       dateOfBirth: input.dateOfBirth,
+      gender: input.gender,
+      heightCm: input.heightCm,
+      weightKg: input.weightKg,
+      bloodType: input.bloodType,
       avatarColor: input.avatarColor,
       isSelf: false,
+      // Only the self profile is ever asked the sign-up step.
+      profileSetupDone: true,
       createdAt: now,
       updatedAt: now,
     };
@@ -178,7 +214,8 @@ export class SqliteFamilyRepository implements FamilyRepository {
       const result = await this.db.runAsync(
         `UPDATE family_members
             SET name = ?, relationship = ?, custom_relationship = ?, date_of_birth = ?,
-                avatar_color = ?, updated_at = ?
+                avatar_color = ?, gender = ?, height_cm = ?, weight_kg = ?, blood_type = ?,
+                updated_at = ?
           WHERE id = ? AND user_id = ?`,
         [
           input.name,
@@ -186,6 +223,10 @@ export class SqliteFamilyRepository implements FamilyRepository {
           customRelationship,
           input.dateOfBirth,
           input.avatarColor,
+          input.gender,
+          input.heightCm,
+          input.weightKg,
+          input.bloodType,
           isoNow(),
           id,
           userId,
@@ -224,8 +265,9 @@ export class SqliteFamilyRepository implements FamilyRepository {
     await this.db.runAsync(
       `INSERT INTO family_members (
          id, user_id, name, relationship, custom_relationship, date_of_birth,
-         avatar_color, is_self, created_at, updated_at
-       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         avatar_color, is_self, created_at, updated_at,
+         gender, height_cm, weight_kg, blood_type, profile_setup_done
+       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         member.id,
         member.userId,
@@ -237,7 +279,28 @@ export class SqliteFamilyRepository implements FamilyRepository {
         member.isSelf ? 1 : 0,
         member.createdAt,
         member.updatedAt,
+        member.gender,
+        member.heightCm,
+        member.weightKg,
+        member.bloodType,
+        member.profileSetupDone ? 1 : 0,
       ],
     );
+  }
+
+  async markProfileSetupDone(userId: string, id: string): Promise<Result<FamilyMember>> {
+    try {
+      const result = await this.db.runAsync(
+        `UPDATE family_members SET profile_setup_done = 1, updated_at = ? WHERE id = ? AND user_id = ?`,
+        [isoNow(), id, userId],
+      );
+      if (result.changes === 0) return fail(appError('NOT_FOUND'));
+      const updated = await this.getById(userId, id);
+      if (!updated.ok) return updated;
+      if (!updated.value) return fail(appError('NOT_FOUND'));
+      return ok(updated.value);
+    } catch (error) {
+      return fail(toAppError(error, 'DATABASE_ERROR'));
+    }
   }
 }

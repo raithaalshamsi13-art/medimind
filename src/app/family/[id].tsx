@@ -16,7 +16,15 @@ import { MemberAvatar } from '@/components/family/MemberAvatar';
 import { MedicationCard } from '@/components/medication/MedicationCard';
 import { AppText, Badge, Button, Card, InlineMessage, Screen, TextLink } from '@/components/ui';
 import { expiryStatus } from '@/domain/expiry';
-import { ageOf, possessive, relationshipLabel } from '@/domain/familyMember';
+import {
+  ageOf,
+  bloodTypeLabel,
+  formatHeight,
+  formatWeight,
+  GENDER_LABELS,
+  possessive,
+  relationshipLabel,
+} from '@/domain/familyMember';
 import { conditionDisplayName } from '@/domain/healthCondition';
 import { confirmAction } from '@/lib/confirm';
 import { selectUser, useAuthStore } from '@/stores/useAuthStore';
@@ -143,6 +151,26 @@ export default function FamilyMemberScreen() {
         </View>
 
         {error ? <InlineMessage tone="danger" message={error.message} /> : null}
+
+        {/* ---------- Health profile ---------- */}
+        <View style={{ gap: theme.spacing.md }}>
+          <AppText variant="heading">{possessive(member, 'health profile')}</AppText>
+          <Card>
+            <View style={{ gap: theme.spacing.md }}>
+              <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.lg }}>
+                <ProfileFact label="Age" value={age !== null ? `${age} years` : null} />
+                <ProfileFact label="Gender" value={member.gender ? GENDER_LABELS[member.gender] : null} />
+                <ProfileFact label="Height" value={formatHeight(member.heightCm)} />
+                <ProfileFact label="Weight" value={formatWeight(member.weightKg)} />
+                <ProfileFact label="Blood type" value={member.bloodType ? bloodTypeLabel(member.bloodType) : null} />
+              </View>
+              <AppText variant="caption" color="textMuted">
+                Shared with the assistant as context only. MediMind never works out a dose or
+                decides whether a medicine is suitable from these.
+              </AppText>
+            </View>
+          </Card>
+        </View>
 
         {/* ---------- Overview ---------- */}
         <View style={{ flexDirection: 'row', gap: theme.spacing.md }}>
@@ -279,6 +307,20 @@ export default function FamilyMemberScreen() {
         </View>
       </View>
     </Screen>
+  );
+}
+
+function ProfileFact({ label, value }: { label: string; value: string | null }) {
+  const theme = useTheme();
+  return (
+    <View style={{ gap: theme.spacing.xxs, minWidth: 96 }}>
+      <AppText variant="label" color="textMuted">
+        {label.toUpperCase()}
+      </AppText>
+      <AppText variant="body" color={value ? 'text' : 'textMuted'} style={value ? undefined : { fontStyle: 'italic' }}>
+        {value ?? 'Not recorded'}
+      </AppText>
+    </View>
   );
 }
 

@@ -10,6 +10,7 @@ import {
   screenQuestion,
   suggestedQuestionsFor,
   toMedicationContext,
+  toPersonContext,
 } from '@/domain/assistant';
 import type { Medication } from '@/domain/medication';
 
@@ -114,5 +115,60 @@ describe('toMedicationContext', () => {
 describe('suggestedQuestionsFor', () => {
   it('names the medicine in each suggestion', () => {
     for (const q of suggestedQuestionsFor('Aspirin')) expect(q).toContain('Aspirin');
+  });
+});
+
+describe('toPersonContext', () => {
+  const NOW = new Date(2026, 8, 13);
+  const member = {
+    id: 'f1',
+    userId: 'u1',
+    name: 'Fatima',
+    relationship: 'MOTHER' as const,
+    customRelationship: null,
+    dateOfBirth: '1960-03-15',
+    gender: 'FEMALE' as const,
+    heightCm: 160,
+    weightKg: 68.5,
+    bloodType: 'O+' as const,
+    avatarColor: 'info' as const,
+    isSelf: false,
+    profileSetupDone: true,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+  };
+  const conditions = [
+    { id: 'c1', userId: 'u1', memberId: 'f1', type: 'HIGH_BLOOD_PRESSURE' as const, customName: null, reading: '130/85', notes: 'private', createdAt: '', updatedAt: '' },
+    { id: 'c2', userId: 'u1', memberId: 'other', type: 'ASTHMA' as const, customName: null, reading: null, notes: null, createdAt: '', updatedAt: '' },
+  ];
+
+  it('describes a relative with age in years — never the date of birth, name or notes', () => {
+    const person = toPersonContext(member, conditions, NOW);
+    expect(person).toEqual({
+      label: 'your mother',
+      name: 'Fatima',
+      isSelf: false,
+      ageYears: 66,
+      gender: 'Female',
+      heightCm: 160,
+      weightKg: 68.5,
+      bloodType: 'O+',
+      conditions: [{ name: 'High blood pressure', reading: '130/85' }],
+    });
+    expect(JSON.stringify(person)).not.toContain('1960');
+    expect(JSON.stringify(person)).not.toContain('private');
+  });
+
+  it('only includes that member’s conditions, and hides "unspecified"/"unknown" choices', () => {
+    const person = toPersonContext(
+      { ...member, isSelf: true, relationship: 'ME', gender: 'UNSPECIFIED', bloodType: 'UNKNOWN', dateOfBirth: null },
+      conditions,
+      NOW,
+    );
+    expect(person.label).toBe('you');
+    expect(person.gender).toBeNull();
+    expect(person.bloodType).toBeNull();
+    expect(person.ageYears).toBeNull();
+    expect(person.conditions).toHaveLength(1);
   });
 });

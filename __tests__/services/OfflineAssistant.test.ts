@@ -51,12 +51,12 @@ const EXPIRED = ctx({ name: 'Old ibuprofen', dosage: '200 mg', expirationDate: '
 const PRN = ctx({ name: 'Antihistamine', dosage: '10 mg', frequency: 'as needed' });
 
 function answer(question: string, medications: MedicationContext[] = [PARACETAMOL]) {
-  return assistant.answer({ question, history: [], medications });
+  return assistant.answer({ question, history: [], medications, person: null });
 }
 
 describe('OfflineAssistant', () => {
   it('reports its kind as offline', async () => {
-    const result = await assistant.ask({ question: 'help', history: [], medications: [] });
+    const result = await assistant.ask({ question: 'help', history: [], medications: [], person: null });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value.source).toBe('offline');
@@ -194,5 +194,55 @@ describe('OfflineAssistant', () => {
       const reply = answer('tell me a joke');
       expect(reply).toContain('When is my next dose of Paracetamol?');
     });
+  });
+});
+
+describe('health profile (read back only)', () => {
+  const person = {
+    label: 'your mother',
+    name: 'Fatima',
+    isSelf: false,
+    ageYears: 66,
+    gender: 'Female',
+    heightCm: 160,
+    weightKg: 68.5,
+    bloodType: 'O+',
+    conditions: [{ name: 'High blood pressure', reading: '130/85' }],
+  };
+
+  it('reads the saved profile back without interpreting it', () => {
+    const reply = assistant.answer({
+      question: 'what is her weight and blood type?',
+      history: [],
+      medications: [PARACETAMOL],
+      person,
+    });
+    expect(reply).toContain('Fatima');
+    expect(reply).toContain('weight 68.5 kg');
+    expect(reply).toContain('blood type O+');
+    expect(reply).toContain('High blood pressure (130/85)');
+    expect(reply).toMatch(/cannot say what any of it means/);
+    // The condition NAME may contain "high"; an interpretation may not.
+    expect(reply).not.toMatch(/\b(too high|too low|is high|is low|normal|healthy|overweight|underweight|safe|unsafe)\b/i);
+  });
+
+  it('says so when there is no profile', () => {
+    const reply = assistant.answer({
+      question: 'what do you know about me?',
+      history: [],
+      medications: [],
+      person: null,
+    });
+    expect(reply).toContain('do not have a health profile');
+  });
+
+  it('never invents missing details', () => {
+    const reply = assistant.answer({
+      question: 'how old am I?',
+      history: [],
+      medications: [],
+      person: { ...person, isSelf: true, label: 'you', name: 'you', ageYears: null, gender: null, heightCm: null, weightKg: null, bloodType: null, conditions: [] },
+    });
+    expect(reply).toContain('Nothing is recorded yet');
   });
 });

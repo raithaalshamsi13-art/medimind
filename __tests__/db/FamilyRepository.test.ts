@@ -49,6 +49,10 @@ const MOTHER: FamilyMemberInput = {
   relationship: 'MOTHER',
   customRelationship: null,
   dateOfBirth: '1960-03-15',
+  gender: 'FEMALE',
+  heightCm: 160,
+  weightKg: 68.5,
+  bloodType: 'O+',
   avatarColor: 'info',
 };
 
@@ -288,5 +292,66 @@ describe.each(backends)('$name FamilyRepository', (backend) => {
 
     const condition = await conditions.create(ALICE, { ...CONDITION, memberId: mother.value.id });
     expect(condition.ok && condition.value.memberId).toBe(mother.value.id);
+  });
+});
+
+describe.each(backends)('$name FamilyRepository — health profile', (backend) => {
+  let family: FamilyRepository;
+
+  beforeEach(async () => {
+    ({ family } = await backend.make());
+  });
+
+  afterEach(() => backend.teardown());
+
+  it('stores and updates gender, height, weight and blood type', async () => {
+    const mother = await family.create(ALICE, MOTHER);
+    expect(mother.ok && mother.value).toMatchObject({
+      gender: 'FEMALE',
+      heightCm: 160,
+      weightKg: 68.5,
+      bloodType: 'O+',
+    });
+    if (!mother.ok) return;
+
+    const updated = await family.update(ALICE, mother.value.id, {
+      ...MOTHER,
+      gender: null,
+      heightCm: null,
+      weightKg: 70,
+      bloodType: 'UNKNOWN',
+    });
+    expect(updated.ok && updated.value).toMatchObject({
+      gender: null,
+      heightCm: null,
+      weightKg: 70,
+      bloodType: 'UNKNOWN',
+    });
+  });
+
+  it('starts "Me" with the sign-up step pending and marks it done once', async () => {
+    const self = await family.ensureSelf(ALICE, 'Alice');
+    expect(self.ok && self.value.profileSetupDone).toBe(false);
+    if (!self.ok) return;
+
+    const done = await family.markProfileSetupDone(ALICE, self.value.id);
+    expect(done.ok && done.value.profileSetupDone).toBe(true);
+
+    const again = await family.ensureSelf(ALICE, 'Alice');
+    expect(again.ok && again.value.profileSetupDone).toBe(true);
+  });
+
+  it('never asks the step for an added relative', async () => {
+    const mother = await family.create(ALICE, MOTHER);
+    expect(mother.ok && mother.value.profileSetupDone).toBe(true);
+  });
+
+  it('refuses to mark a profile that is not this user’s', async () => {
+    const self = await family.ensureSelf(ALICE, 'Alice');
+    if (!self.ok) return;
+    expect(await family.markProfileSetupDone(BOB, self.value.id)).toMatchObject({
+      ok: false,
+      error: { code: 'NOT_FOUND' },
+    });
   });
 });

@@ -29,6 +29,7 @@ import { firstNameOf } from '@/domain/user';
 import { confirmAction } from '@/lib/confirm';
 import { isStoragePersistent } from '@/lib/storage';
 import { selectUser, useAuthStore } from '@/stores/useAuthStore';
+import { selectSelf, useFamilyStore } from '@/stores/useFamilyStore';
 import { useSettingsStore, type AppearancePreference } from '@/stores/useSettingsStore';
 import { useTheme } from '@/theme/ThemeContext';
 import { PALETTE_LIST, type PaletteId } from '@/theme/palettes';
@@ -64,6 +65,7 @@ export default function SettingsScreen() {
   const router = useRouter();
 
   const user = useAuthStore(selectUser);
+  const self = useFamilyStore(selectSelf);
   const isLocalOnly = useAuthStore((state) => state.isLocalOnly);
   const signOut = useAuthStore((state) => state.signOut);
 
@@ -132,6 +134,16 @@ export default function SettingsScreen() {
               />
             </View>
           </View>
+          {self ? (
+            <Button
+              label="My profile"
+              icon="person-circle-outline"
+              variant="secondary"
+              onPress={() => router.push({ pathname: '/family/[id]', params: { id: self.id } })}
+              accessibilityHint="Opens your profile: date of birth, gender, height, weight, blood type"
+              style={{ marginTop: theme.spacing.md }}
+            />
+          ) : null}
         </Card>
 
         {/* ---------- Appearance ---------- */}

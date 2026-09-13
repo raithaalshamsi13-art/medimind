@@ -12,7 +12,7 @@ import { View } from 'react-native';
 
 import { MemberAvatar } from '@/components/family/MemberAvatar';
 import { AppText, Badge, Button, Card, InlineMessage, Screen } from '@/components/ui';
-import { ageOf, relationshipLabel, type FamilyMember } from '@/domain/familyMember';
+import { ageOf, GENDER_LABELS, relationshipLabel, type FamilyMember } from '@/domain/familyMember';
 import {
   selectActiveMemberId,
   selectMembers,
@@ -126,6 +126,7 @@ function MemberCard({
   const detail = [
     member.isSelf ? 'Me' : relationshipLabel(member),
     age !== null ? `${age} years` : null,
+    member.gender && member.gender !== 'UNSPECIFIED' ? GENDER_LABELS[member.gender] : null,
   ]
     .filter(Boolean)
     .join(' · ');

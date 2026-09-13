@@ -62,6 +62,34 @@ export const AVATAR_COLOR_LABELS: Record<AvatarColor, string> = {
   danger: 'Red',
 };
 
+// ---------------------------------------------------------------------------
+// Personal health profile fields (schema v4)
+//
+// Stored so the assistant can be told that a factor MAY be relevant, and so
+// the person's page can show them. The app itself never calculates anything
+// from them: no dose from weight, no verdict from age. See AGENTS.md.
+// ---------------------------------------------------------------------------
+
+export const GENDERS = ['FEMALE', 'MALE', 'UNSPECIFIED'] as const;
+export type Gender = (typeof GENDERS)[number];
+
+export const GENDER_LABELS: Record<Gender, string> = {
+  FEMALE: 'Female',
+  MALE: 'Male',
+  UNSPECIFIED: 'Prefer not to say',
+};
+
+export const BLOOD_TYPES = ['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-', 'UNKNOWN'] as const;
+export type BloodType = (typeof BLOOD_TYPES)[number];
+
+export function bloodTypeLabel(bloodType: BloodType): string {
+  return bloodType === 'UNKNOWN' ? "Don't know" : bloodType.replace('-', '−');
+}
+
+/** Plausible human ranges — typo guards, not medical limits. */
+export const HEIGHT_CM_RANGE = { min: 30, max: 250 } as const;
+export const WEIGHT_KG_RANGE = { min: 1, max: 400 } as const;
+
 export type FamilyMember = {
   id: string;
   userId: string;
@@ -71,12 +99,30 @@ export type FamilyMember = {
   customRelationship: string | null;
   /** "yyyy-MM-dd" or null. Optional: age is a convenience, not a requirement. */
   dateOfBirth: string | null;
+  gender: Gender | null;
+  heightCm: number | null;
+  weightKg: number | null;
+  bloodType: BloodType | null;
   avatarColor: AvatarColor;
   /** True for the account holder's own profile. Exactly one per account. */
   isSelf: boolean;
+  /**
+   * True once the account holder has seen the "tell us about yourself" step
+   * (saved or skipped). Only meaningful on the self profile.
+   */
+  profileSetupDone: boolean;
   createdAt: string;
   updatedAt: string;
 };
+
+/** "172 cm", "68.5 kg" — or null when not recorded. */
+export function formatHeight(heightCm: number | null): string | null {
+  return heightCm === null ? null : `${Number.isInteger(heightCm) ? heightCm : heightCm.toFixed(1)} cm`;
+}
+
+export function formatWeight(weightKg: number | null): string | null {
+  return weightKg === null ? null : `${Number.isInteger(weightKg) ? weightKg : weightKg.toFixed(1)} kg`;
+}
 
 /** "Mother", or the custom wording, or "Me". */
 export function relationshipLabel(
@@ -141,8 +187,84 @@ function isPastOrToday(value: string): boolean {
   return !Number.isNaN(date.getTime()) && date.getTime() <= Date.now();
 }
 
+/** "" → null; "72,5" → 72.5; anything else → the string (so the number check fails). */
+function optionalNumber(value: unknown): unknown {
+  if (typeof value === 'number') return value;
+  if (typeof value !== 'string') return value ?? null;
+  const trimmed = value.trim().replace(',', '.');
+  if (trimmed.length === 0) return null;
+  const n = Number(trimmed);
+  return Number.isFinite(n) ? n : trimmed;
+}
+
+function measurement(range: { min: number; max: number }, label: string, unit: string) {
+  return z.preprocess(
+    optionalNumber,
+    z
+      .number({ message: `Please enter ${label} as a number, in ${unit}.` })
+      .min(range.min, `Please check the ${label} — it should be between ${range.min} and ${range.max} ${unit}.`)
+      .max(range.max, `Please check the ${label} — it should be between ${range.min} and ${range.max} ${unit}.`)
+      .transform((n) => Math.round(n * 10) / 10)
+      .nullable(),
+  );
+}
+
+/** Just the health-profile fields, shared by the sign-up step and the member form. */
+export const healthProfileSchema = z.object({
+  dateOfBirth: z.preprocess(
+    emptyToNull,
+    z
+      .string()
+      .regex(ISO_DATE, 'Please choose the date of birth from the calendar.')
+      .refine(isPastOrToday, 'The date of birth cannot be in the future.')
+      .nullable(),
+  ),
+  gender: z.preprocess(emptyToNull, z.enum(GENDERS).nullable()),
+  heightCm: measurement(HEIGHT_CM_RANGE, 'height', 'cm'),
+  weightKg: measurement(WEIGHT_KG_RANGE, 'weight', 'kg'),
+  bloodType: z.preprocess(emptyToNull, z.enum(BLOOD_TYPES).nullable()),
+});
+
+export type HealthProfileInput = {
+  dateOfBirth: string | null;
+  gender: Gender | null;
+  heightCm: number | null;
+  weightKg: number | null;
+  bloodType: BloodType | null;
+};
+
+/** Raw strings from the form. */
+export type HealthProfileFormValues = {
+  dateOfBirth: string;
+  gender: Gender | '';
+  heightCm: string;
+  weightKg: string;
+  bloodType: BloodType | '';
+};
+
+export const EMPTY_HEALTH_PROFILE_FORM: HealthProfileFormValues = {
+  dateOfBirth: '',
+  gender: '',
+  heightCm: '',
+  weightKg: '',
+  bloodType: '',
+};
+
+export function toHealthProfileFormValues(
+  member: Pick<FamilyMember, 'dateOfBirth' | 'gender' | 'heightCm' | 'weightKg' | 'bloodType'>,
+): HealthProfileFormValues {
+  return {
+    dateOfBirth: member.dateOfBirth ?? '',
+    gender: member.gender ?? '',
+    heightCm: member.heightCm === null ? '' : String(member.heightCm),
+    weightKg: member.weightKg === null ? '' : String(member.weightKg),
+    bloodType: member.bloodType ?? '',
+  };
+}
+
 export const familyMemberInputSchema = z
   .object({
+    ...healthProfileSchema.shape,
     name: z.preprocess(
       (value) => (typeof value === 'string' ? value.trim() : value),
       z
@@ -154,14 +276,6 @@ export const familyMemberInputSchema = z
     customRelationship: z.preprocess(
       emptyToNull,
       z.string().max(40, 'Please use 40 characters or fewer.').nullable(),
-    ),
-    dateOfBirth: z.preprocess(
-      emptyToNull,
-      z
-        .string()
-        .regex(ISO_DATE, 'Please choose the date of birth from the calendar.')
-        .refine(isPastOrToday, 'The date of birth cannot be in the future.')
-        .nullable(),
     ),
     avatarColor: z.enum(AVATAR_COLORS),
   })
@@ -179,32 +293,45 @@ export const familyMemberInputSchema = z
     customRelationship: value.relationship === 'OTHER' ? value.customRelationship : null,
   }));
 
-export type FamilyMemberInput = {
+export type FamilyMemberInput = HealthProfileInput & {
   name: string;
   relationship: Relationship;
   customRelationship: string | null;
-  dateOfBirth: string | null;
   avatarColor: AvatarColor;
 };
 
-export type FamilyMemberFormValues = {
+export type FamilyMemberFormValues = HealthProfileFormValues & {
   name: string;
   relationship: Relationship | '';
   customRelationship: string;
-  dateOfBirth: string;
   avatarColor: AvatarColor;
 };
 
 export function emptyFamilyMemberForm(avatarColor: AvatarColor = 'primary'): FamilyMemberFormValues {
-  return { name: '', relationship: '', customRelationship: '', dateOfBirth: '', avatarColor };
+  return { ...EMPTY_HEALTH_PROFILE_FORM, name: '', relationship: '', customRelationship: '', avatarColor };
 }
 
 export function toFamilyMemberFormValues(member: FamilyMember): FamilyMemberFormValues {
   return {
+    ...toHealthProfileFormValues(member),
     name: member.name,
     relationship: member.relationship,
     customRelationship: member.customRelationship ?? '',
-    dateOfBirth: member.dateOfBirth ?? '',
+    avatarColor: member.avatarColor,
+  };
+}
+
+/** The stored member's profile fields as an input, so a partial edit keeps the rest. */
+export function toFamilyMemberInput(member: FamilyMember): FamilyMemberInput {
+  return {
+    name: member.name,
+    relationship: member.relationship,
+    customRelationship: member.customRelationship,
+    dateOfBirth: member.dateOfBirth,
+    gender: member.gender,
+    heightCm: member.heightCm,
+    weightKg: member.weightKg,
+    bloodType: member.bloodType,
     avatarColor: member.avatarColor,
   };
 }

@@ -21,6 +21,7 @@ import {
   type AssistantMessage,
   type AssistantSource,
   type AssistantTurn,
+  type PersonContext,
 } from '@/domain/assistant';
 import type { Medication } from '@/domain/medication';
 import { isoNow } from '@/lib/datetime';
@@ -35,7 +36,12 @@ type AssistantState = {
   /** Which implementation answered most recently. */
   lastSource: AssistantSource | null;
 
-  ask: (question: string, medications: Medication[], preferAi: boolean) => Promise<void>;
+  ask: (
+    question: string,
+    medications: Medication[],
+    person: PersonContext | null,
+    preferAi: boolean,
+  ) => Promise<void>;
   reset: () => void;
   clearError: () => void;
 };
@@ -52,7 +58,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => ({
   error: null,
   lastSource: null,
 
-  ask: async (rawQuestion, medications, preferAi) => {
+  ask: async (rawQuestion, medications, person, preferAi) => {
     const question = rawQuestion.trim();
     if (question.length === 0 || get().isThinking) return;
 
@@ -94,6 +100,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => ({
       question,
       history,
       medications: medications.filter((m) => !m.archived).map((m) => toMedicationContext(m)),
+      person,
     });
 
     if (!result.ok) {

@@ -34,6 +34,7 @@ import {
   ASSISTANT_SAFETY_NOTE,
   SUGGESTED_QUESTIONS,
   suggestedQuestionsFor,
+  toPersonContext,
   type AssistantMessage,
 } from '@/domain/assistant';
 import { useAssistantStore } from '@/stores/useAssistantStore';
@@ -44,6 +45,7 @@ import {
   selectMembers,
   useFamilyStore,
 } from '@/stores/useFamilyStore';
+import { selectConditions, useHealthConditionStore } from '@/stores/useHealthConditionStore';
 import { selectMedications, useMedicationStore } from '@/stores/useMedicationStore';
 import { useSettingsStore } from '@/stores/useSettingsStore';
 import { useTheme } from '@/theme/ThemeContext';
@@ -74,6 +76,12 @@ export default function AssistantScreen() {
     () => forMember(allMedications, memberId),
     [allMedications, memberId],
   );
+  // That person's health profile and conditions, as context only.
+  const allConditions = useHealthConditionStore(selectConditions);
+  const person = useMemo(
+    () => (member ? toPersonContext(member, allConditions) : null),
+    [member, allConditions],
+  );
 
   const messages = useAssistantStore((s) => s.messages);
   const isThinking = useAssistantStore((s) => s.isThinking);
@@ -100,7 +108,7 @@ export default function AssistantScreen() {
     const question = text.trim();
     if (question.length === 0 || isThinking) return;
     setDraft('');
-    await ask(question, medications, preferAi);
+    await ask(question, medications, person, preferAi);
   };
 
   // ---------------------------------------------------------------------------

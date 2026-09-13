@@ -19,10 +19,10 @@ step adds an entry to §18 (change log) and updates the sections it touches._
 | Concept | **SCAN → CHECK → CONFIRM → REMIND → TRACK** — verify the medicine before scheduling anything |
 | Platform | iPhone via Expo Go (primary); web browser (UI work only) |
 | Stack | Expo SDK 57 · React Native 0.86 · React 19.2 · TypeScript 6 · Expo Router · SQLite · Zustand · Zod |
-| Source | 170 tracked files · ~16,500 lines across `src/`, tests, the API server, scripts and SQL |
-| Tests | **259 passing** in 16 suites — including real-SQLite tests and a WCAG contrast checker |
-| Commits | 30, all verified (typecheck + tests + iOS and web bundles) before committing |
-| Milestones | M1 Foundation ✅ · M2 UI & Auth ✅ · M3 Database & CRUD ✅ · Assistant ✅ · Deployment ✅ · Structured entry + health conditions ✅ · Family profiles ✅ · M4 Scanner ⬜ · M5 Reminders ⬜ · M6 Polish ⬜ |
+| Source | 172 tracked files · ~17,500 lines across `src/`, tests, the API server, scripts and SQL |
+| Tests | **277 passing** in 16 suites — including real-SQLite tests and a WCAG contrast checker |
+| Commits | 32, all verified (typecheck + tests + iOS and web bundles) before committing |
+| Milestones | M1 Foundation ✅ · M2 UI & Auth ✅ · M3 Database & CRUD ✅ · Assistant ✅ · Deployment ✅ · Structured entry + health conditions ✅ · Family profiles ✅ · Personal health profile ✅ · M4 Scanner ⬜ · M5 Reminders ⬜ · M6 Polish ⬜ |
 | Live | Web: https://medimind-medimind3.vercel.app · API: Railway (`/health` shows version + model) · Accounts/DB: Supabase |
 | Native build needed | **None.** Everything runs in Expo Go — no Xcode, no Mac, no Android Studio, no Apple developer account |
 
@@ -226,6 +226,48 @@ One account manages medicines for several people **without separate logins**.
   ever receives one person's medicines — the medicine it was opened for, else
   the active member — so two relatives' medicines are never mixed in one answer.
 
+### 4.4c Personal health profile — context, never a verdict
+
+- **Where it lives.** The "Me" family member *is* the personal profile, and
+  every family member has the same fields (schema v4 on `family_members`):
+  date of birth (already there; age is always computed, never stored),
+  **gender**, **height (cm)**, **weight (kg)**, **blood type**, plus a
+  `profile_setup_done` flag. Nothing is stored twice: Account → members →
+  each member's profile → their conditions → their medicines.
+- **Sign-up step 2** (`/profile-setup`, "Tell us a little about yourself",
+  STEP 2 OF 2): shown once, right after an account is created, by the auth
+  gate (it waits for the family profiles to load, then sends a self profile
+  that has not seen the step there). Everything is optional; **Save and
+  continue** or **Skip for now** both mark the step done. The same fields are
+  edited later from **Settings → My profile** or any member's **Edit
+  profile**; the member dashboard shows them as a "health profile" card
+  (Age · Gender · Height · Weight · Blood type, "Not recorded" for gaps).
+- **Validation** (`healthProfileSchema`): height 30–250 cm, weight 1–400 kg
+  (comma decimals accepted, rounded to 0.1), date of birth not in the future,
+  gender and blood type from fixed lists ("Prefer not to say" / "Don't
+  know" are real choices). The same ranges are `CHECK` constraints in SQLite
+  and Postgres.
+- **Connection to the assistant.** `toPersonContext()` builds a
+  `PersonContext` for whoever is on screen — the medicine's owner when opened
+  from a medicine, else the active member: label ("you" / "your mother"),
+  **age in years** (not the date of birth), gender, height, weight, blood type
+  and that member's conditions with readings as typed. No name, id or notes.
+  The app also shows the assistant only that member's medicines, so
+  *Mother → Medicines → Ask* is answered about Mother.
+- **What the AI is allowed to do with it** (server v1.3.0, rules 8–11 of the
+  system prompt): say that a factor **may be relevant** and why, in general
+  terms; suggest confirming with a pharmacist. It must **never** call a
+  medicine safe / unsafe / suitable for the person, never calculate or adjust
+  a dose from weight, height or age, never interpret a reading as high, low or
+  normal, never diagnose, and must say "not recorded" for gaps. A malformed
+  profile is dropped, not rejected, so medicines still answer.
+- **The app itself never calculates anything** from height, weight or age —
+  no BMI, no dose, no verdict. The offline assistant can read the profile
+  back ("what is her weight and blood type?") and says in the same breath that
+  it cannot say what any of it means for a medicine.
+- **Gender** was added everywhere a person is described: the family member
+  form and card, the profile card, the sign-up step and the AI context.
+
 ### 4.5 Ask MediMind — the assistant
 
 Reached from the **Ask** tab or a medicine's **Ask about this medicine** button.
@@ -263,9 +305,12 @@ Reached from the **Ask** tab or a medicine's **Ask about this medicine** button.
      take?") is allowed.
   3. A footer on **every** reply — *"May be wrong — check with your doctor or
      pharmacist"* — plus a warning banner pinned above the conversation.
-- **Privacy**: the assistant is told only name, dosage, frequency, instructions,
-  expiry and the app-computed schedule — never notes, photos, ids or account
-  data. Conversations are not saved.
+- **Privacy**: the assistant is told, for ONE family member, the medicines'
+  name, dosage, frequency, instructions, expiry and app-computed schedule,
+  plus that member's health profile as context (age in years, gender, height,
+  weight, blood type, conditions with readings as typed) — never notes,
+  photos, ids, names, dates of birth or account data. Conversations are not
+  saved.
 
 ### 4.6 Platform and tooling
 
@@ -293,7 +338,8 @@ Reached from the **Ask** tab or a medicine's **Ask about this medicine** button.
 | Amount never inferred; schedule never defaulted | `domain/dosing.ts`, `OfflineAssistant.ts` | The one thing a dose helper must not do is make up a dose. |
 | Minimal personal data | signup collects name, email, password only; assistant context is five label fields | Least data kept is least data leaked. |
 | Honest limitations documented in code | `LocalAuthService.ts` header | SHA-256 is not a password KDF; saying so is stronger than hiding it. |
-| Health conditions are a notebook, not a clinical record | `domain/healthCondition.ts`, `AGENTS.md` rule | Readings are stored and shown as typed — never parsed, ranged or coloured good/bad — and are never sent to the assistant. Anything more would be diagnosis. |
+| Health conditions are a notebook, not a clinical record | `domain/healthCondition.ts`, `AGENTS.md` rule | Readings are stored and shown as typed — never parsed, ranged or coloured good/bad by the app. They reach the assistant only as "latest reading as typed", under a prompt rule that forbids interpreting them. |
+| The health profile is context, never a verdict | `domain/assistant.ts` (`PersonContext`), `server/src/index.ts` rules 8–11 | Age, gender, height, weight, blood type let the AI say a factor *may be relevant*; it is forbidden to say safe/unsafe, to derive a dose, to interpret a reading, or to diagnose. The app computes nothing from them. Age in years is sent, never the date of birth. |
 | Expiry decided in one place | `domain/expiry.ts` | The form's live "Expired / Expires in N days" badge and the M4 safety engine share one function, so they can never disagree. Calendar days only, no time-of-day edge cases. |
 | Structured choices never rewrite label text | `domain/medicationOptions.ts` | Chips compose to the stored text; anything unrecognised (e.g. scanned wording) is kept verbatim as "custom". Round-tripping is unit-tested. |
 | One person's data can never appear under another | `member_id` on medicines and conditions; `MemberContextBanner`; `useFamilyStore` | Separation is a column on every row, not a screen remembering to filter. Every screen names whose data it shows; the add form will not render without a member. |
@@ -309,6 +355,7 @@ Reached from the **Ask** tab or a medicine's **Ask about this medicine** button.
 | Onboarding (3 slides) | `src/app/onboarding.tsx` | ✅ |
 | Login (+ demo account) | `src/app/(auth)/login.tsx` | ✅ |
 | Sign up | `src/app/(auth)/signup.tsx` | ✅ |
+| Sign-up step 2 — personal health profile | `src/app/profile-setup.tsx` | ✅ once per account, skippable |
 | Home dashboard | `src/app/(tabs)/index.tsx` | ✅ (Scan action enabled in M4) |
 | Medicines list + search | `src/app/(tabs)/medications.tsx` | ✅ |
 | Ask MediMind | `src/app/(tabs)/assistant.tsx` | ✅ |
@@ -333,6 +380,9 @@ family_members (schema v3)  — profiles under one account, no separate login
   relationship CHECK(ME|MOTHER|FATHER|SPOUSE|SON|DAUGHTER|GRANDMOTHER|GRANDFATHER|OTHER)
   custom_relationship · date_of_birth · avatar_color CHECK(primary|info|success|warning|danger)
   is_self CHECK(0|1) · created_at · updated_at
+  gender CHECK(NULL|FEMALE|MALE|UNSPECIFIED) · height_cm CHECK(30..250)          ← v4
+  weight_kg CHECK(1..400) · blood_type CHECK(NULL|A+|A-|B+|B-|AB+|AB-|O+|O-|UNKNOWN)
+  profile_setup_done CHECK(0|1)                                                  ← v4
   indexes: (user_id, is_self) · UNIQUE (user_id) WHERE is_self = 1   ← exactly one "Me"
 
 medications (SQLite, schema v1 + v2 + v3 columns)
@@ -359,7 +409,7 @@ medication_conditions (schema v2)  — which medicines relate to which condition
   condition_id  → health_conditions(id) ON DELETE CASCADE
   user_id · PRIMARY KEY (medication_id, condition_id)
 
-Schema v4 (Milestone 5) adds reminders and doses with
+Schema v5 (Milestone 5) adds reminders and doses with
 FOREIGN KEY (medication_id) REFERENCES medications(id) ON DELETE CASCADE.
 ```
 
@@ -401,13 +451,13 @@ demo cannot be broken by a missing key or a dead network.
 
 ## 9. Testing and verification
 
-**259 tests in 16 suites**, all passing:
+**277 tests in 16 suites**, all passing:
 
 | Suite | Covers |
 |---|---|
-| `db/migrations` | schema version, idempotence, indexes, every CHECK constraint; v2 columns, condition-type CHECK, link cascade; v3 one-"Me" index, relationship/colour CHECKs, member_id FK + cascade |
-| `db/FamilyRepository` | `ensureSelf` idempotence and adoption of pre-v3 rows, ordering ("Me" first), one-"Me" rule, self kept as ME, per-user isolation, self cannot be removed, removal cascades to that member's medicines and conditions only — **both** backends |
-| `domain/familyMember` | schema (Other needs wording, future DOB rejected), addable relationships exclude Me, labels, age, initials, possessives, least-used avatar colour |
+| `db/migrations` | schema version, idempotence, indexes, every CHECK constraint; v2 columns, condition-type CHECK, link cascade; v3 one-"Me" index, relationship/colour CHECKs, member_id FK + cascade; v4 profile columns default null, value lists and ranges enforced |
+| `db/FamilyRepository` | `ensureSelf` idempotence and adoption of pre-v3 rows, ordering ("Me" first), one-"Me" rule, self kept as ME, per-user isolation, self cannot be removed, removal cascades to that member's medicines and conditions only; profile fields round trip; sign-up step pending for "Me" only and marked done once — **both** backends |
+| `domain/familyMember` | schema (Other needs wording, future DOB rejected; height/weight numeric with comma decimals and plausible ranges; gender/blood-type lists), addable relationships exclude Me, labels, age, initials, possessives, least-used avatar colour |
 | `db/MedicationRepository` | CRUD + per-user isolation + kind/form round trip, run against **both** implementations |
 | `db/HealthConditionRepository` | CRUD, ordering, per-user isolation, medicine links (foreign ids dropped, links replaced/kept/cleared, cascade on delete) — **both** backends |
 | `domain/medication` | validation rules, null normalisation, calendar-date rejection |
@@ -415,12 +465,12 @@ demo cannot be broken by a missing key or a dead network.
 | `domain/expiry` | expired / expiring-soon / in-date boundaries, calendar-day arithmetic, malformed dates |
 | `domain/healthCondition` | schema (Other needs a name, custom name dropped otherwise, lengths), presets, display name |
 | `domain/user` | email/password schemas |
-| `domain/assistant` | safety screen (blocked and allowed questions), context privacy, schedule derivation |
+| `domain/assistant` | safety screen (blocked and allowed questions), context privacy, schedule derivation; `toPersonContext` sends age not DOB, no name/notes, only that member's conditions, hides "unspecified"/"unknown" |
 | `domain/dosing` | frequency parsing incl. refusals, next-dose arithmetic |
 | `lib/storage` | fallback chain when the native store throws |
 | `services/LocalAuthService` | sign up/in/out, no plaintext passwords, no email enumeration |
 | `services/demoAccount` | create-on-first-use, reuse, conflict |
-| `services/OfflineAssistant` | every reply type; never invents an amount or a time |
+| `services/OfflineAssistant` | every reply type; never invents an amount or a time; reads a health profile back without interpreting it, and never invents missing details |
 
 **SQL is tested for real.** `src/db/types.ts` defines a small `SqlDatabase`
 interface so the repository can run against Node 24's built-in `node:sqlite` in
@@ -475,7 +525,10 @@ npx expo start --clear
 Scan the QR code with the iPhone Camera app (opens Expo Go). Then:
 
 1. Onboarding → **Get started**
-2. Login → **Use demo account** (or create one)
+2. Login → **Use demo account** (or create one). The first time an account
+   opens, **Step 2 of 2 — Tell us a little about yourself** asks for date of
+   birth, gender, height, weight and blood type; fill some in or **Skip for
+   now** (editable later from Settings → My profile).
 3. **Medicines → Add medicine**: try an empty name (blocked), then pick
    *Over the counter* + *Tablet*, amount 500 + *mg*, *Twice a day*, tick
    *With food*, and choose an expiry date from the calendar — pick last month
@@ -510,7 +563,7 @@ This is where each one stands.
 | 1 Project setup | ✅ Done | Expo SDK 57, TypeScript, Expo Router, theme, structure, env config |
 | 2 UI foundation — splash, onboarding, auth, dashboard | ✅ Done | Splash uses the real logo; demo account added on top |
 | 3 Medication management — add/view/edit/delete/search/details | ✅ Done | |
-| 4 Database | ✅ Done for medications, health conditions (v2) and family members (v3) | `reminders` and `doses` tables arrive with Phase 9–11 as schema v4 |
+| 4 Database | ✅ Done for medications, health conditions (v2), family members (v3) and health profiles (v4) | `reminders` and `doses` tables arrive with Phase 9–11 as schema v5 |
 | 5 Medication scanner (camera → OCR/AI → data) | ⬜ Not started | **Next.** `MedicationScannerService` interface + mock + Claude vision |
 | 6 Scan result confirmation (Confirm / Edit, never auto-save) | ⬜ Not started | Reuses `MedicationForm` for the Edit path |
 | 7 Safety engine (expiry, missing info, unclear label) | ⬜ Not started | `safety_status` column and labels already exist; only the service is missing |
@@ -734,6 +787,8 @@ will work with no internet and no API key — exactly as the brief requires.
 ## 16. Commit history
 
 ```
+2026-09-13  Personal health profile: sign-up step 2, per-member DOB/gender/height/weight/blood type, AI context with strict rules
+2026-09-13  PROJECT_SUMMARY: tab bar line reflects the Family tab
 2026-09-13  Family: profiles under one account, per-member medicines and conditions, Family tab
 2026-09-13  AGENTS: every step is committed and pushed immediately (Vercel deploys from main)
 2026-09-13  Fix: log out and delete medicine did nothing in the browser
@@ -788,7 +843,9 @@ will work with no internet and no API key — exactly as the brief requires.
 | Health-condition store and repositories | `src/stores/useHealthConditionStore.ts`, `src/db/repositories/*HealthConditionRepository.ts` |
 | Family members (model, "Me", relationships, age) | `src/domain/familyMember.ts` |
 | Family store (active member) and repositories | `src/stores/useFamilyStore.ts`, `src/db/repositories/*FamilyRepository.ts` |
-| Family UI (avatar, context banner, switcher, form) | `src/components/family/` |
+| Family UI (avatar, context banner, switcher, form, health profile fields) | `src/components/family/` |
+| Sign-up step 2 (personal health profile) | `src/app/profile-setup.tsx`, gate in `src/app/_layout.tsx` |
+| Person context sent to the assistant | `toPersonContext` in `src/domain/assistant.ts`; rules 8–11 in `server/src/index.ts` |
 | The medicine form | `src/components/medication/MedicationForm.tsx` |
 | Chips, date picker, collapsible, form section | `src/components/ui/ChoiceChips.tsx`, `DateField.tsx` + `DateField.web.tsx`, `Collapsible.tsx`, `FormSection.tsx` |
 | Assistant safety screen and wording | `src/domain/assistant.ts` |
@@ -811,6 +868,28 @@ will work with no internet and no API key — exactly as the brief requires.
 Newest first. Every commit that changes the app adds an entry here **in the
 same commit**, and updates the sections above that it touches (rule in
 `AGENTS.md`, "Verify before claiming done").
+
+### 2026-09-13 — Personal health profile (per family member) and AI context
+- **Schema v4** on `family_members`: `gender`, `height_cm`, `weight_kg`,
+  `blood_type` (all nullable, CHECK-constrained lists and ranges) and
+  `profile_setup_done`. Supabase mirror. The "Me" profile *is* the personal
+  profile; every relative has the same fields. Age is always computed from the
+  date of birth, never stored.
+- **Sign-up step 2** (`/profile-setup`): shown once per account by the auth
+  gate; Save or Skip. Editable later from Settings → **My profile** and every
+  member's **Edit profile**; the member dashboard gets a health-profile card.
+  Gender added to the family form, cards and profile.
+- **Assistant context**: `PersonContext` (age in years, gender, height,
+  weight, blood type, that member's conditions with readings) is sent with
+  every question, for the person whose medicines are on screen. Server
+  **v1.3.0** validates it (a bad profile is dropped, not fatal) and adds
+  prompt rules 8–11: may-be-relevant only; never safe/unsafe, never a dose
+  from weight, never interpret a reading, never diagnose, "not recorded" for
+  gaps. Offline assistant gains a read-back-only "profile" intent.
+- **Tests**: +18 → 277. App and server typecheck; both bundles export.
+- **Railway**: the server change needs a redeploy (automatic if the GitHub
+  app is connected; otherwise Redeploy in the Railway dashboard). `/health`
+  shows `1.3.0` when live.
 
 ### 2026-09-13 — Family: one account, many profiles
 - **Schema v3**: `family_members` (relationship enum, custom wording, date of

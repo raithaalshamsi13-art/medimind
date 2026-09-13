@@ -11,7 +11,12 @@
 import { create } from 'zustand';
 
 import { getFamilyRepository } from '@/db/repositories';
-import type { FamilyMember, FamilyMemberInput } from '@/domain/familyMember';
+import {
+  toFamilyMemberInput,
+  type FamilyMember,
+  type FamilyMemberInput,
+  type HealthProfileInput,
+} from '@/domain/familyMember';
 import type { AppError } from '@/lib/errors';
 import { toAppError } from '@/lib/errors';
 import { readJson, STORAGE_KEYS, writeJson } from '@/lib/storage';
@@ -32,6 +37,11 @@ type FamilyState = {
   updateMember: (userId: string, id: string, input: FamilyMemberInput) => Promise<boolean>;
   /** Deletes the member and everything recorded for them. Caller confirms first. */
   removeMember: (userId: string, id: string) => Promise<boolean>;
+  /**
+   * Finish the sign-up "about yourself" step for the self profile. `profile`
+   * null means the user skipped; either way the step is not shown again.
+   */
+  completeProfileSetup: (userId: string, profile: HealthProfileInput | null) => Promise<boolean>;
   clearError: () => void;
   clear: () => void;
 };
@@ -148,12 +158,56 @@ export const useFamilyStore = create<FamilyState>((set, get) => {
       }
     },
 
+    completeProfileSetup: async (userId, profile) => {
+      const self = get().members.find((m) => m.isSelf);
+      if (!self) return false;
+      set({ isSaving: true, error: null });
+      try {
+        const repository = await getFamilyRepository();
+        if (profile) {
+          const saved = await repository.update(userId, self.id, {
+            ...toFamilyMemberInput(self),
+            ...profile,
+          });
+          if (!saved.ok) {
+            set({ isSaving: false, error: saved.error });
+            return false;
+          }
+        }
+        const marked = await repository.markProfileSetupDone(userId, self.id);
+        if (!marked.ok) {
+          set({ isSaving: false, error: marked.error });
+          return false;
+        }
+        await refresh(userId);
+        set({ isSaving: false });
+        return true;
+      } catch (error) {
+        set({ isSaving: false, error: toAppError(error, 'DATABASE_ERROR') });
+        return false;
+      }
+    },
+
     clearError: () => set({ error: null }),
 
     clear: () =>
       set({ members: [], activeMemberId: null, error: null, isLoading: false, isSaving: false }),
   };
 });
+
+/** The account holder's own profile, or null before the family has loaded. */
+export const selectSelf = (state: FamilyState): FamilyMember | null =>
+  state.members.find((m) => m.isSelf) ?? null;
+
+/**
+ * True when the signed-in account still needs the sign-up "about yourself"
+ * step; null while the family has not loaded yet (the gate waits).
+ */
+export const selectProfileSetupNeeded = (state: FamilyState): boolean | null => {
+  const self = state.members.find((m) => m.isSelf);
+  if (!self) return null;
+  return !self.profileSetupDone;
+};
 
 // ---------------------------------------------------------------------------
 // Selectors (stable snapshots — see the note in useMedicationStore)

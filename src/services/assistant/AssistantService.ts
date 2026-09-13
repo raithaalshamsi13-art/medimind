@@ -18,6 +18,7 @@ import type {
   AssistantSource,
   AssistantTurn,
   MedicationContext,
+  PersonContext,
 } from '@/domain/assistant';
 import type { Result } from '@/lib/result';
 
@@ -25,8 +26,10 @@ export type AssistantRequest = {
   question: string;
   /** Earlier turns, oldest first, so the AI can follow up on itself. */
   history: AssistantTurn[];
-  /** The user's saved medicines — the only personal data shared. */
+  /** ONE family member's saved medicines. */
   medications: MedicationContext[];
+  /** That member's health profile, as context only. Null when unknown. */
+  person: PersonContext | null;
 };
 
 export interface AssistantService {

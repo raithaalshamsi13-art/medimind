@@ -90,9 +90,18 @@ It reads a medicine label, verifies it, and only then schedules reminders.
   `demoMode` is on.
 - **Health conditions are a notebook, not a clinical record.** Readings in
   `src/domain/healthCondition.ts` are stored and displayed as typed — never
-  parsed, compared with a range, or coloured good/bad — and conditions are
-  never included in the assistant context. Reading hints are format examples
-  ("e.g. 130/85"), never targets.
+  parsed, compared with a range, or coloured good/bad by the app. Reading
+  hints are format examples ("e.g. 130/85"), never targets.
+- **The personal health profile is context, never a verdict.** Date of
+  birth, gender, height, weight and blood type live on `family_members`
+  (`src/domain/familyMember.ts`). The app computes nothing from them — no
+  BMI, no dose, no suitability. They reach the assistant only as
+  `PersonContext` (`src/domain/assistant.ts`: age in years, never the date of
+  birth; no name, id or notes; only that member's conditions), and the server
+  prompt (rules 8–11 in `server/src/index.ts`) allows "may be relevant"
+  wording only — never safe/unsafe, never a dose from weight, never an
+  interpreted reading, never a diagnosis. Keep those rules when editing the
+  prompt, and keep `OfflineAssistant`'s profile reply read-back-only.
 - **Every medicine and health condition belongs to one family member.**
   `memberId` is a column (`src/domain/familyMember.ts`, schema v3), not a
   screen-level filter. Screens show the *active* member from `useFamilyStore`

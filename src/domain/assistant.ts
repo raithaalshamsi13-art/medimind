@@ -24,6 +24,14 @@
  */
 
 import { nextDose, parseFrequency, type DoseSchedule } from './dosing';
+import {
+  ageOf,
+  bloodTypeLabel,
+  GENDER_LABELS,
+  relationshipLabel,
+  type FamilyMember,
+} from './familyMember';
+import { conditionDisplayName, type HealthCondition } from './healthCondition';
 import type { Medication } from './medication';
 
 export type AssistantRole = 'user' | 'assistant';
@@ -105,6 +113,56 @@ export function toMedicationContext(medication: Medication, now: Date = new Date
     expirationDate: medication.expirationDate,
     schedule,
     nextDoseLabel,
+  };
+}
+
+/**
+ * The person a question is about — the family member whose medicines are on
+ * screen — as CONTEXT for the assistant.
+ *
+ * WHAT THIS IS FOR
+ * So the assistant can say that a factor *may be relevant* ("your recorded
+ * weight may matter for this kind of medicine — worth confirming with the
+ * pharmacist") and can keep two relatives' medicines apart. It is never used
+ * to compute a dose, and the assistant is instructed never to call a medicine
+ * safe or unsafe for the person on the strength of it.
+ *
+ * WHAT IS SHARED
+ * No name, no id, no date of birth (age in years instead), no notes. Readings
+ * are passed as the user typed them.
+ */
+export type PersonContext = {
+  /** "you" for the account holder; otherwise "your mother" / "your son" etc. */
+  label: string;
+  /** Display name, used only in on-device wording ("For Fatima: …"). */
+  name: string;
+  isSelf: boolean;
+  ageYears: number | null;
+  gender: string | null;
+  heightCm: number | null;
+  weightKg: number | null;
+  bloodType: string | null;
+  conditions: { name: string; reading: string | null }[];
+};
+
+export function toPersonContext(
+  member: FamilyMember,
+  conditions: HealthCondition[],
+  now: Date = new Date(),
+): PersonContext {
+  const relation = member.isSelf ? 'you' : `your ${relationshipLabel(member).toLowerCase()}`;
+  return {
+    label: relation,
+    name: member.isSelf ? 'you' : member.name,
+    isSelf: member.isSelf,
+    ageYears: ageOf(member, now),
+    gender: member.gender && member.gender !== 'UNSPECIFIED' ? GENDER_LABELS[member.gender] : null,
+    heightCm: member.heightCm,
+    weightKg: member.weightKg,
+    bloodType: member.bloodType && member.bloodType !== 'UNKNOWN' ? bloodTypeLabel(member.bloodType) : null,
+    conditions: conditions
+      .filter((c) => c.memberId === member.id)
+      .map((c) => ({ name: conditionDisplayName(c), reading: c.reading })),
   };
 }
 

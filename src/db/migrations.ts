@@ -142,7 +142,28 @@ export const MIGRATIONS: Migration[] = [
         ON health_conditions (user_id, member_id);
     `,
   },
-  // Milestone 5 adds version 4: the `reminders` and `doses` tables, with
+  {
+    version: 4,
+    name: 'health_profile_fields',
+    up: `
+      -- Personal health profile, per family member. Stored as recorded and
+      -- shown to the assistant as context only; the app never derives a dose
+      -- or a verdict from them (see src/domain/familyMember.ts).
+      ALTER TABLE family_members ADD COLUMN gender TEXT
+        CHECK (gender IS NULL OR gender IN ('FEMALE','MALE','UNSPECIFIED'));
+      ALTER TABLE family_members ADD COLUMN height_cm REAL
+        CHECK (height_cm IS NULL OR (height_cm >= 30 AND height_cm <= 250));
+      ALTER TABLE family_members ADD COLUMN weight_kg REAL
+        CHECK (weight_kg IS NULL OR (weight_kg >= 1 AND weight_kg <= 400));
+      ALTER TABLE family_members ADD COLUMN blood_type TEXT
+        CHECK (blood_type IS NULL OR blood_type IN
+          ('A+','A-','B+','B-','AB+','AB-','O+','O-','UNKNOWN'));
+      -- Whether the account holder has seen the sign-up "about yourself" step.
+      ALTER TABLE family_members ADD COLUMN profile_setup_done INTEGER NOT NULL DEFAULT 0
+        CHECK (profile_setup_done IN (0,1));
+    `,
+  },
+  // Milestone 5 adds version 5: the `reminders` and `doses` tables, with
   // FOREIGN KEY (medication_id) REFERENCES medications(id) ON DELETE CASCADE.
 ];
 

@@ -7,8 +7,10 @@
  * and returns plain text. Anyone who decompiles the app finds only a URL.
  *
  * PRIVACY: the request carries exactly `MedicationContext` — name, dosage,
- * frequency, instructions, expiry — for the user's saved medicines, plus the
- * recent turns of this conversation. Nothing else.
+ * frequency, instructions, expiry — for ONE family member's medicines, that
+ * member's `PersonContext` (age in years, gender, height, weight, blood type,
+ * conditions — never a name, date of birth or id), plus the recent turns of
+ * this conversation. Nothing else.
  */
 
 import { env } from '@/config/env';
@@ -54,6 +56,19 @@ export class ProxyAssistant implements AssistantService {
           question: request.question,
           history: request.history.slice(-MAX_HISTORY_TURNS),
           medications: request.medications,
+          // Age, gender, height, weight, blood type, conditions — no name,
+          // no date of birth, no ids. See PersonContext.
+          person: request.person
+            ? {
+                label: request.person.label,
+                ageYears: request.person.ageYears,
+                gender: request.person.gender,
+                heightCm: request.person.heightCm,
+                weightKg: request.person.weightKg,
+                bloodType: request.person.bloodType,
+                conditions: request.person.conditions,
+              }
+            : null,
         }),
       });
 

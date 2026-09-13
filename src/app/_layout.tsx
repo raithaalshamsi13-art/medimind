@@ -15,7 +15,7 @@ import { useEffect } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { useAuthStore } from '@/stores/useAuthStore';
-import { useFamilyStore } from '@/stores/useFamilyStore';
+import { selectProfileSetupNeeded, useFamilyStore } from '@/stores/useFamilyStore';
 import { useHealthConditionStore } from '@/stores/useHealthConditionStore';
 import { useMedicationStore } from '@/stores/useMedicationStore';
 import { useSettingsStore } from '@/stores/useSettingsStore';
@@ -102,7 +102,9 @@ function RootNavigator() {
     clearFamily,
   ]);
 
-  useAuthGate({ isReady, isSignedIn, hasCompletedOnboarding });
+  const profileSetupNeeded = useFamilyStore(selectProfileSetupNeeded);
+
+  useAuthGate({ isReady, isSignedIn, hasCompletedOnboarding, profileSetupNeeded });
 
   // Render nothing while the native splash is still covering the screen.
   if (!isReady) return null;
@@ -123,6 +125,7 @@ function RootNavigator() {
         }}>
         <Stack.Screen name="onboarding" />
         <Stack.Screen name="(auth)" />
+        <Stack.Screen name="profile-setup" />
         <Stack.Screen name="(tabs)" />
       </Stack>
     </>
@@ -139,10 +142,13 @@ function useAuthGate({
   isReady,
   isSignedIn,
   hasCompletedOnboarding,
+  profileSetupNeeded,
 }: {
   isReady: boolean;
   isSignedIn: boolean;
   hasCompletedOnboarding: boolean;
+  /** Null until the family profiles have loaded for the signed-in account. */
+  profileSetupNeeded: boolean | null;
 }) {
   const segments = useSegments();
   const router = useRouter();
@@ -153,6 +159,7 @@ function useAuthGate({
     const group = segments[0];
     const isOnOnboarding = group === 'onboarding';
     const isInAuthFlow = group === '(auth)';
+    const isOnProfileSetup = group === 'profile-setup';
 
     if (!hasCompletedOnboarding) {
       if (!isOnOnboarding) router.replace('/onboarding');
@@ -164,9 +171,17 @@ function useAuthGate({
       return;
     }
 
-    // Signed in, but sitting on a pre-auth screen — send them to the dashboard.
-    if (isInAuthFlow || isOnOnboarding) {
+    // Step 2 of sign-up: once per account, right after the account exists.
+    // Wait for the family profiles to load before deciding either way.
+    if (profileSetupNeeded === null) return;
+    if (profileSetupNeeded) {
+      if (!isOnProfileSetup) router.replace('/profile-setup');
+      return;
+    }
+
+    // Signed in and set up, but sitting on a pre-auth screen — dashboard.
+    if (isInAuthFlow || isOnOnboarding || isOnProfileSetup) {
       router.replace('/');
     }
-  }, [isReady, isSignedIn, hasCompletedOnboarding, segments, router]);
+  }, [isReady, isSignedIn, hasCompletedOnboarding, profileSetupNeeded, segments, router]);
 }

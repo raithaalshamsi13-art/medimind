@@ -29,8 +29,20 @@ async function readList<T>(key: string): Promise<Result<T[]>> {
 export class JsonFamilyRepository implements FamilyRepository {
   readonly kind = 'json' as const;
 
-  private readAll(): Promise<Result<FamilyMember[]>> {
-    return readList<FamilyMember>(STORAGE_KEYS.familyMembers);
+  private async readAll(): Promise<Result<FamilyMember[]>> {
+    const list = await readList<FamilyMember>(STORAGE_KEYS.familyMembers);
+    if (!list.ok) return list;
+    // Rows written before schema v4 have no health-profile fields.
+    return ok(
+      list.value.map((member) => ({
+        ...member,
+        gender: member.gender ?? null,
+        heightCm: member.heightCm ?? null,
+        weightKg: member.weightKg ?? null,
+        bloodType: member.bloodType ?? null,
+        profileSetupDone: member.profileSetupDone ?? false,
+      })),
+    );
   }
 
   private writeAll(members: FamilyMember[]): Promise<Result<void>> {
@@ -66,8 +78,13 @@ export class JsonFamilyRepository implements FamilyRepository {
       relationship: 'ME',
       customRelationship: null,
       dateOfBirth: null,
+      gender: null,
+      heightCm: null,
+      weightKg: null,
+      bloodType: null,
       avatarColor: 'primary',
       isSelf: true,
+      profileSetupDone: false,
       createdAt: now,
       updatedAt: now,
     };
@@ -101,8 +118,13 @@ export class JsonFamilyRepository implements FamilyRepository {
       relationship: input.relationship,
       customRelationship: input.customRelationship,
       dateOfBirth: input.dateOfBirth,
+      gender: input.gender,
+      heightCm: input.heightCm,
+      weightKg: input.weightKg,
+      bloodType: input.bloodType,
       avatarColor: input.avatarColor,
       isSelf: false,
+      profileSetupDone: true,
       createdAt: now,
       updatedAt: now,
     };
@@ -130,6 +152,10 @@ export class JsonFamilyRepository implements FamilyRepository {
       relationship,
       customRelationship: relationship === 'OTHER' ? input.customRelationship : null,
       dateOfBirth: input.dateOfBirth,
+      gender: input.gender,
+      heightCm: input.heightCm,
+      weightKg: input.weightKg,
+      bloodType: input.bloodType,
       avatarColor: input.avatarColor,
       updatedAt: isoNow(),
     };
@@ -171,6 +197,19 @@ export class JsonFamilyRepository implements FamilyRepository {
       return writeJson(STORAGE_KEYS.healthConditions, keptConditions);
     }
     return ok(undefined);
+  }
+
+  async markProfileSetupDone(userId: string, id: string): Promise<Result<FamilyMember>> {
+    const all = await this.readAll();
+    if (!all.ok) return fail(all.error);
+    const index = all.value.findIndex((m) => m.id === id && m.userId === userId);
+    if (index === -1) return fail(appError('NOT_FOUND'));
+    const updated: FamilyMember = { ...all.value[index], profileSetupDone: true, updatedAt: isoNow() };
+    const next = [...all.value];
+    next[index] = updated;
+    const saved = await this.writeAll(next);
+    if (!saved.ok) return fail(saved.error);
+    return ok(updated);
   }
 
   /** Give every member-less row of this user to `memberId`. */

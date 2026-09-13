@@ -36,4 +36,7 @@ export type FamilyRepository = {
 
   /** Deletes a member and everything recorded for them. NOT_ALLOWED for self. */
   remove(userId: string, id: string): Promise<Result<void>>;
+
+  /** Records that the sign-up "about yourself" step was seen (saved or skipped). */
+  markProfileSetupDone(userId: string, id: string): Promise<Result<FamilyMember>>;
 };

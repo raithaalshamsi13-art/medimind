@@ -1,21 +1,16 @@
 /**
- * Add / edit a family member. Shared by both screens so the rules cannot
- * diverge. Deliberately short: name, relationship, optional date of birth,
- * avatar colour. Nothing else is needed to keep someone's medicines apart.
+ * Add / edit a family member (including the account holder's own "Me"
+ * profile). Shared by both screens so the rules cannot diverge.
+ *
+ * Name, relationship and avatar colour identify the person; the health
+ * profile fields (date of birth, gender, height, weight, blood type) are
+ * optional context — see HealthProfileFields.
  */
 
 import { useState } from 'react';
 import { Pressable, View } from 'react-native';
 
-import {
-  AppText,
-  Button,
-  ChoiceChips,
-  DateField,
-  InlineMessage,
-  TextField,
-  type ChipOption,
-} from '@/components/ui';
+import { AppText, Button, ChoiceChips, InlineMessage, TextField, type ChipOption } from '@/components/ui';
 import {
   ADDABLE_RELATIONSHIPS,
   AVATAR_COLOR_LABELS,
@@ -31,6 +26,7 @@ import type { AppError } from '@/lib/errors';
 import { fieldErrorsOf } from '@/lib/validation';
 import { useTheme } from '@/theme/ThemeContext';
 
+import { HealthProfileFields } from './HealthProfileFields';
 import { MemberAvatar } from './MemberAvatar';
 
 type Field = keyof FamilyMemberFormValues;
@@ -87,7 +83,7 @@ export function FamilyMemberForm({
   };
 
   return (
-    <View style={{ gap: theme.spacing.lg }}>
+    <View style={{ gap: theme.spacing.xl }}>
       {error ? <InlineMessage tone="danger" message={error.message} /> : null}
 
       <View style={{ alignItems: 'center', gap: theme.spacing.sm }}>
@@ -97,78 +93,92 @@ export function FamilyMemberForm({
         </AppText>
       </View>
 
-      <TextField
-        label="Name"
-        value={values.name}
-        onChangeText={(name) => setField('name', name)}
-        placeholder={isSelf ? 'Your name' : 'e.g. Fatima'}
-        error={fieldErrors.name}
-        autoCapitalize="words"
-        helper="Shown on their profile and on every medicine screen."
-      />
+      <View style={{ gap: theme.spacing.lg }}>
+        <AppText variant="heading">{isSelf ? 'About you' : 'Who they are'}</AppText>
 
-      {isSelf ? (
-        <View style={{ gap: theme.spacing.xs }}>
-          <AppText variant="label" color="textSecondary">
-            Relationship
-          </AppText>
-          <AppText variant="body">Me — this is your own profile.</AppText>
-        </View>
-      ) : (
-        <View style={{ gap: theme.spacing.sm }}>
-          <AppText variant="label" color={fieldErrors.relationship ? 'dangerText' : 'textSecondary'}>
-            Relationship to you
-          </AppText>
-          <ChoiceChips
-            options={RELATIONSHIP_OPTIONS}
-            value={values.relationship || null}
-            onChange={(relationship) => setField('relationship', relationship ?? '')}
-            accessibilityLabel="Relationship"
-            allowClear={false}
-          />
-          {fieldErrors.relationship ? (
-            <AppText variant="caption" color="dangerText">
-              {fieldErrors.relationship}
-            </AppText>
-          ) : null}
-        </View>
-      )}
-
-      {values.relationship === 'OTHER' && !isSelf ? (
         <TextField
-          label="How are they related to you?"
-          value={values.customRelationship}
-          onChangeText={(customRelationship) => setField('customRelationship', customRelationship)}
-          placeholder="e.g. Aunt, Neighbour, Friend"
-          error={fieldErrors.customRelationship}
-          autoCapitalize="sentences"
+          label="Name"
+          value={values.name}
+          onChangeText={(name) => setField('name', name)}
+          placeholder={isSelf ? 'Your name' : 'e.g. Fatima'}
+          error={fieldErrors.name}
+          autoCapitalize="words"
+          helper="Shown on the profile and on every medicine screen."
         />
-      ) : null}
 
-      <DateField
-        label="Date of birth (optional)"
-        value={values.dateOfBirth}
-        onChange={(dateOfBirth) => setField('dateOfBirth', dateOfBirth)}
-        error={fieldErrors.dateOfBirth}
-        helper="Only used to show their age on the profile."
-        maximumDate={new Date()}
-      />
-
-      <View style={{ gap: theme.spacing.sm }}>
-        <AppText variant="label" color="textSecondary">
-          Avatar colour
-        </AppText>
-        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.md }}>
-          {AVATAR_COLORS.map((color) => (
-            <ColorSwatch
-              key={color}
-              color={color}
-              name={values.name || '?'}
-              selected={values.avatarColor === color}
-              onPress={() => setField('avatarColor', color)}
+        {isSelf ? (
+          <View style={{ gap: theme.spacing.xs }}>
+            <AppText variant="label" color="textSecondary">
+              Relationship
+            </AppText>
+            <AppText variant="body">Me — this is your own profile.</AppText>
+          </View>
+        ) : (
+          <View style={{ gap: theme.spacing.sm }}>
+            <AppText variant="label" color={fieldErrors.relationship ? 'dangerText' : 'textSecondary'}>
+              Relationship to you
+            </AppText>
+            <ChoiceChips
+              options={RELATIONSHIP_OPTIONS}
+              value={values.relationship || null}
+              onChange={(relationship) => setField('relationship', relationship ?? '')}
+              accessibilityLabel="Relationship"
+              allowClear={false}
             />
-          ))}
+            {fieldErrors.relationship ? (
+              <AppText variant="caption" color="dangerText">
+                {fieldErrors.relationship}
+              </AppText>
+            ) : null}
+          </View>
+        )}
+
+        {values.relationship === 'OTHER' && !isSelf ? (
+          <TextField
+            label="How are they related to you?"
+            value={values.customRelationship}
+            onChangeText={(customRelationship) => setField('customRelationship', customRelationship)}
+            placeholder="e.g. Aunt, Neighbour, Friend"
+            error={fieldErrors.customRelationship}
+            autoCapitalize="sentences"
+          />
+        ) : null}
+
+        <View style={{ gap: theme.spacing.sm }}>
+          <AppText variant="label" color="textSecondary">
+            Avatar colour
+          </AppText>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.md }}>
+            {AVATAR_COLORS.map((color) => (
+              <ColorSwatch
+                key={color}
+                color={color}
+                name={values.name || '?'}
+                selected={values.avatarColor === color}
+                onPress={() => setField('avatarColor', color)}
+              />
+            ))}
+          </View>
         </View>
+      </View>
+
+      <View style={{ gap: theme.spacing.lg }}>
+        <View style={{ gap: theme.spacing.xxs }}>
+          <AppText variant="heading">Health profile</AppText>
+          <AppText variant="caption" color="textSecondary">
+            All optional. Fill in what you know.
+          </AppText>
+        </View>
+        <HealthProfileFields
+          values={values}
+          errors={fieldErrors}
+          onChange={(patch) => {
+            for (const [field, value] of Object.entries(patch) as [Field, FamilyMemberFormValues[Field]][]) {
+              setField(field, value);
+            }
+          }}
+          possessive={isSelf ? 'your' : 'their'}
+        />
       </View>
 
       <View style={{ gap: theme.spacing.md }}>
