@@ -51,7 +51,12 @@ export interface LlmProvider {
   complete(input: CompletionInput): Promise<CompletionResult>;
 }
 
-const MAX_OUTPUT_TOKENS = 1024;
+/**
+ * Generous on purpose. Gemini 3 models spend part of this budget on internal
+ * "thinking" before the visible answer, so 1024 truncated replies
+ * mid-sentence. The prompt itself keeps answers short.
+ */
+const MAX_OUTPUT_TOKENS = 8192;
 /** Low temperature: we want the label read back faithfully, not creatively. */
 const TEMPERATURE = 0.3;
 
@@ -107,6 +112,11 @@ export function createGeminiProvider(apiKey: string, model: string): LlmProvider
         .map((p) => p.text ?? '')
         .join('')
         .trim();
+      if (candidate.finishReason === 'MAX_TOKENS') {
+        // Should be rare with the larger budget; log it so a recurrence is
+        // visible in Railway's logs rather than as a mysteriously short reply.
+        console.warn('Gemini reply hit MAX_TOKENS', { model, chars: text.length });
+      }
       return { text, refused: false, model };
     },
   };

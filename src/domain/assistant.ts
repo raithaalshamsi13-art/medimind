@@ -233,15 +233,15 @@ const EMERGENCY_PATTERNS = [
 /**
  * Questions about taking MORE or LESS than the label, or stopping. Note that
  * "how much do I take" / "what is my dose" are NOT here: those are answered
- * by reading the recorded label back, which is allowed.
+ * by reading the recorded label back. Nor are "how many can I take a day" /
+ * "what is the maximum dose": the AI answers those with what the pack
+ * generally says, under a prompt rule never to exceed the label.
  */
 const DOSING_PATTERNS = [
   /doubl(e|ing)/i,
   /(extra|another|additional|second) (dose|tablet|pill|one)/i,
   /two doses/i,
   /(increase|decrease|raise|lower|change|reduce|adjust) (the |my )?dos/i,
-  /how (many|much) (can|could) i take/i,
-  /(maximum|max|most) (dose|amount|i can take|number)/i,
   /(can|should) i (stop|quit) taking/i,
   /stop taking/i,
   /take more/i,
@@ -298,4 +298,4 @@ export const HIGH_RISK_REPLIES: Record<RiskReason, string> = {
 
 /** The standard closing line the AI is instructed to end every reply with. */
 export const ASSISTANT_CLOSING_LINE =
-  'Please check with your doctor or pharmacist before acting on this.';
+  'Remember, I am an AI and can be wrong — please check with your pharmacist or doctor before acting on this.';

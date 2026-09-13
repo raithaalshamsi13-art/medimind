@@ -21,7 +21,7 @@ step adds an entry to §18 (change log) and updates the sections it touches._
 | Stack | Expo SDK 57 · React Native 0.86 · React 19.2 · TypeScript 6 · Expo Router · SQLite · Zustand · Zod |
 | Source | 172 tracked files · ~17,500 lines across `src/`, tests, the API server, scripts and SQL |
 | Tests | **280 passing** in 16 suites — including real-SQLite tests and a WCAG contrast checker |
-| Commits | 34, all verified (typecheck + tests + iOS and web bundles) before committing |
+| Commits | 35, all verified (typecheck + tests + iOS and web bundles) before committing |
 | Milestones | M1 Foundation ✅ · M2 UI & Auth ✅ · M3 Database & CRUD ✅ · Assistant ✅ · Deployment ✅ · Structured entry + health conditions ✅ · Family profiles ✅ · Personal health profile ✅ · M4 Scanner ⬜ · M5 Reminders ⬜ · M6 Polish ⬜ |
 | Live | Web: https://medimind-medimind3.vercel.app · API: Railway (`/health` shows version + model) · Accounts/DB: Supabase |
 | Native build needed | **None.** Everything runs in Expo Go — no Xcode, no Mac, no Android Studio, no Apple developer account |
@@ -292,9 +292,11 @@ Reached from the **Ask** tab or a medicine's **Ask about this medicine** button.
   out for — marked as general information that may not apply to the person.
   This person's own dose, schedule, instructions and expiry still come only
   from what was recorded. Still never: dose changes, safe/unsafe verdicts,
-  interactions, pregnancy/children advice, diagnosis. The closing "check with
-  your doctor or pharmacist" line is required on any reply with medicine
-  information; greetings get a warm one-liner instead.
+  interactions, pregnancy/children advice, diagnosis. The prompt says
+  *answer first, caveat last*: a general question gets the ordinary
+  leaflet-style answer, then one closing line — "Remember, I am an AI and can
+  be wrong — please check with your pharmacist or doctor before acting on
+  this." Greetings get a warm one-liner instead.
 - **Interface + two implementations** (`src/services/assistant/`):
   - `OfflineAssistant` — deterministic rules that read the user's own records
     back in plain language. Runs on the phone with no network; the fallback
@@ -813,6 +815,7 @@ will work with no internet and no API key — exactly as the brief requires.
 ## 16. Commit history
 
 ```
+2026-09-13  Chatbot: complete answers (8192-token budget), answer-first tone, new closing line, narrower client screen (server 1.4.1)
 2026-09-13  Ask MediMind as a chatbot: messenger UI, AI by default with offline fallback, general info in plain language (server 1.4.0)
 2026-09-13  PROJECT_SUMMARY: record the decision to keep email-only sign-in
 2026-09-13  Personal health profile: sign-up step 2, per-member DOB/gender/height/weight/blood type, AI context with strict rules
@@ -896,6 +899,23 @@ will work with no internet and no API key — exactly as the brief requires.
 Newest first. Every commit that changes the app adds an entry here **in the
 same commit**, and updates the sections above that it touches (rule in
 `AGENTS.md`, "Verify before claiming done").
+
+### 2026-09-13 — Chatbot fix: complete answers, answer-first tone (server 1.4.1)
+- **Cut-off replies**: Gemini 3 spends part of the output budget on internal
+  reasoning, so `maxOutputTokens: 1024` truncated visible answers
+  mid-sentence. Raised to 8192 and a `MAX_TOKENS` finish is logged.
+- **Tone**: the prompt now says *answer first, caveat last* — a general
+  question like "can I use paracetamol for a headache?" gets the ordinary
+  leaflet-style answer, then one reminder: *"Remember, I am an AI and can be
+  wrong — please check with your pharmacist or doctor before acting on
+  this."* (new closing line, also used by the app's constant). Hard limits
+  kept: never more than the label, never a "safe together" verdict, never
+  pregnancy/children/diagnosis, emergencies redirected.
+- **Client screen narrowed**: "how many can I take a day" / "what is the
+  maximum dose" now reach the AI (which answers with what the pack generally
+  says, under the never-exceed-the-label rule) instead of a fixed refusal.
+  Double/extra doses, stopping and "more than the label" remain blocked on
+  the device. Tests updated.
 
 ### 2026-09-13 — Ask MediMind is now a chatbot
 - **Screen** rebuilt messenger-style: assistant header with mark and status,
