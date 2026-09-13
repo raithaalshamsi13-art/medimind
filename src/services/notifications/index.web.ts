@@ -13,4 +13,4 @@ export function getNotificationService(): NotificationService {
   return service;
 }
 
-export type { NotificationPermission, NotificationService } from './NotificationService';
+export type { NotificationPermission, NotificationResponse, NotificationService } from './NotificationService';

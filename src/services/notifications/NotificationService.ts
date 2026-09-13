@@ -16,6 +16,13 @@ import type { Reminder } from '@/domain/reminder';
 
 export type NotificationPermission = 'granted' | 'denied' | 'undetermined';
 
+/** What the user did with a notification. */
+export type NotificationResponse =
+  /** Pressed the Taken / Skip action on a reminder notification. */
+  | { kind: 'mark'; reminderId: string; time: string; status: 'TAKEN' | 'SKIPPED' }
+  /** Tapped the notification itself — open the schedule. */
+  | { kind: 'open' };
+
 export interface NotificationService {
   /** False on web and when the native module is missing. */
   readonly isAvailable: boolean;
@@ -37,4 +44,7 @@ export interface NotificationService {
 
   cancel(identifiers: string[]): Promise<void>;
   cancelAll(): Promise<void>;
+
+  /** Listen for taps and action buttons. Returns an unsubscribe function. */
+  subscribe(handler: (response: NotificationResponse) => void): () => void;
 }

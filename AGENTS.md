@@ -109,6 +109,13 @@ It reads a medicine label, verifies it, and only then schedules reminders.
   answers about medicines. A create call without a `memberId` is a bug; the
   add screens refuse to render a form without one. The assistant receives one
   member's medicines only.
+- **Reminders repeat the label; they never decide.** Suggested times come
+  only from `parseFrequency` on the recorded wording (`suggestReminder` in
+  `src/domain/reminder.ts`) — no suggestion when it is not understood, and
+  `blocked` for an expired medicine (the screen must refuse). A missed dose
+  is recorded and, at most, followed by one gentle notification that says to
+  follow the label and never double up. Nothing may say "take it now".
+  Notification wording lives in `services/notifications/` only.
 - **Structured form choices compose to the existing text columns.** Chips in
   `MedicationForm` produce `dosage` / `frequency` / `instructions` strings via
   `src/domain/medicationOptions.ts`, which must stay round-trippable and must

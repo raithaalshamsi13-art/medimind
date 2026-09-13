@@ -28,8 +28,11 @@ import { APP_NAME, APP_TAGLINE, MEDICAL_DISCLAIMER } from '@/config/constants';
 import { firstNameOf } from '@/domain/user';
 import { confirmAction } from '@/lib/confirm';
 import { isStoragePersistent } from '@/lib/storage';
+import { getNotificationService } from '@/services/notifications';
 import { selectUser, useAuthStore } from '@/stores/useAuthStore';
 import { selectSelf, useFamilyStore } from '@/stores/useFamilyStore';
+import { selectMedications, useMedicationStore } from '@/stores/useMedicationStore';
+import { useReminderStore } from '@/stores/useReminderStore';
 import { useSettingsStore, type AppearancePreference } from '@/stores/useSettingsStore';
 import { useTheme } from '@/theme/ThemeContext';
 import { PALETTE_LIST, type PaletteId } from '@/theme/palettes';
@@ -54,7 +57,6 @@ const PALETTE_OPTIONS: readonly Option<PaletteId>[] = PALETTE_LIST.map((palette)
 }));
 
 const UPCOMING_SETTINGS = [
-  { icon: 'notifications-outline', label: 'Notifications', milestone: 'Milestone 5' },
   { icon: 'volume-high-outline', label: 'Voice alerts', milestone: 'Milestone 6' },
   { icon: 'person-outline', label: 'Edit profile', milestone: 'Milestone 6' },
   { icon: 'lock-closed-outline', label: 'Privacy', milestone: 'Milestone 6' },
@@ -68,6 +70,24 @@ export default function SettingsScreen() {
   const self = useFamilyStore(selectSelf);
   const isLocalOnly = useAuthStore((state) => state.isLocalOnly);
   const signOut = useAuthStore((state) => state.signOut);
+
+  const notificationsEnabled = useSettingsStore((state) => state.notificationsEnabled);
+  const rescheduleAll = useReminderStore((state) => state.rescheduleAll);
+  const medications = useMedicationStore(selectMedications);
+  const notificationsAvailable = getNotificationService().isAvailable;
+
+  const toggleNotifications = async (next: boolean) => {
+    setSetting('notificationsEnabled', next);
+    if (!user) return;
+    if (next) {
+      const permission = await getNotificationService().requestPermission();
+      if (permission !== 'granted' && notificationsAvailable) return;
+      await rescheduleAll(user.id, new Map(medications.map((m) => [m.id, m.name])));
+    } else {
+      await getNotificationService().cancelAll();
+      await rescheduleAll(user.id, new Map());
+    }
+  };
 
   const largeText = useSettingsStore((state) => state.largeText);
   const highContrast = useSettingsStore((state) => state.highContrast);
@@ -209,6 +229,30 @@ export default function SettingsScreen() {
           <AppText variant="caption" color="textMuted">
             These take effect immediately and are remembered next time you open MediMind. High
             contrast replaces the colour theme with maximum-contrast black and white.
+          </AppText>
+        </View>
+
+        {/* ---------- Reminders ---------- */}
+        <View style={{ gap: theme.spacing.md }}>
+          <AppText variant="heading">Reminders</AppText>
+          <Card>
+            <View style={{ gap: theme.spacing.base }}>
+              <ToggleRow
+                icon="notifications-outline"
+                title="Medicine reminder notifications"
+                description={
+                  notificationsAvailable
+                    ? 'A notification at each reminder time, with Taken and Skip buttons.'
+                    : 'Not available in the browser. Open MediMind on your phone to be notified.'
+                }
+                value={notificationsEnabled}
+                onValueChange={(next) => void toggleNotifications(next)}
+              />
+            </View>
+          </Card>
+          <AppText variant="caption" color="textMuted">
+            Switching this off cancels every scheduled notification; the schedule in the app keeps
+            working. Reminders are never set for an expired medicine.
           </AppText>
         </View>
 

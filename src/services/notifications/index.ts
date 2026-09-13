@@ -31,4 +31,4 @@ export function setNotificationService(next: NotificationService | null): void {
   service = next;
 }
 
-export type { NotificationPermission, NotificationService } from './NotificationService';
+export type { NotificationPermission, NotificationResponse, NotificationService } from './NotificationService';

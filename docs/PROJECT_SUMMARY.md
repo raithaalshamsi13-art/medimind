@@ -19,10 +19,10 @@ step adds an entry to §18 (change log) and updates the sections it touches._
 | Concept | **SCAN → CHECK → CONFIRM → REMIND → TRACK** — verify the medicine before scheduling anything |
 | Platform | iPhone via Expo Go (primary); web browser (UI work only) |
 | Stack | Expo SDK 57 · React Native 0.86 · React 19.2 · TypeScript 6 · Expo Router · SQLite · Zustand · Zod |
-| Source | 172 tracked files · ~17,500 lines across `src/`, tests, the API server, scripts and SQL |
-| Tests | **280 passing** in 16 suites — including real-SQLite tests and a WCAG contrast checker |
-| Commits | 35, all verified (typecheck + tests + iOS and web bundles) before committing |
-| Milestones | M1 Foundation ✅ · M2 UI & Auth ✅ · M3 Database & CRUD ✅ · Assistant ✅ · Deployment ✅ · Structured entry + health conditions ✅ · Family profiles ✅ · Personal health profile ✅ · M4 Scanner ⬜ · M5 Reminders ⬜ · M6 Polish ⬜ |
+| Source | 191 tracked files · ~19,500 lines across `src/`, tests, the API server, scripts and SQL |
+| Tests | **315 passing** in 18 suites — including real-SQLite tests and a WCAG contrast checker |
+| Commits | 42, all verified (typecheck + tests + iOS and web bundles) before committing |
+| Milestones | M1 Foundation ✅ · M2 UI & Auth ✅ · M3 Database & CRUD ✅ · Assistant ✅ · Deployment ✅ · Structured entry + health conditions ✅ · Family profiles ✅ · Personal health profile ✅ · M5 Reminders ✅ · M4 Scanner ⬜ (deferred) · M6 Polish ⬜ |
 | Live | Web: https://medimind-medimind3.vercel.app · API: Railway (`/health` shows version + model) · Accounts/DB: Supabase |
 | Native build needed | **None.** Everything runs in Expo Go — no Xcode, no Mac, no Android Studio, no Apple developer account |
 
@@ -268,6 +268,38 @@ One account manages medicines for several people **without separate logins**.
 - **Gender** was added everywhere a person is described: the family member
   form and card, the profile card, the sign-up step and the AI context.
 
+### 4.4d Milestone 5 — Reminders, notifications, dose tracking, missed doses
+
+REMIND and TRACK. Built on the dose parser from the assistant work.
+
+- **Data** (schema v5): `reminders` — one per medicine: times, dose wording,
+  every day / certain days, optional start and end dates, enabled, OS
+  notification ids; `doses` — one row per occurrence, UNIQUE (reminder,
+  scheduled time), UPCOMING / TAKEN / MISSED / SKIPPED. Both cascade from
+  the medicine and the family member. Dose rows are created lazily for the
+  days the app looks at (the last seven and today), never for the whole
+  year.
+- **Set a reminder** (`/reminder/[medicationId]`): opened right after a
+  medicine is saved and from the detail screen's Reminder card. Times are
+  **suggested from the label** ("twice daily" → 8:00 AM and 8:00 PM) and
+  editable with a clock picker; the notification wording is the recorded
+  dosage; every day or chosen weekdays; optional dates for a short course;
+  pause switch. **Expired medicine → no reminder**, explained, with a link to
+  edit the medicine. Wording not understood → empty form, never a guess.
+- **Schedule tab** ("Schedule and history"): Today with Taken / Skip / Undo
+  per dose, then the last seven days grouped by date with taken / missed
+  counts. Home shows "N of M doses taken today" and the next dose.
+- **Notifications**: one repeating local notification per reminder time with
+  Taken / Skip buttons that mark the dose from the lock screen; permission
+  asked once, with the reason; Settings switch; web says it is unavailable.
+  Works inside Expo Go — still no native build.
+- **Missed doses**: swept to MISSED 120 minutes after the time; one gentle
+  follow-up notification per dose ("You may have missed a dose … do not take
+  a double dose"), cancelled when the dose is marked. The app never says
+  "take it now".
+- **Per family member**: every reminder and dose carries `member_id`; the
+  Schedule tab has the same switcher and banner as the rest of the app.
+
 ### 4.5 Ask MediMind — the assistant (a chat)
 
 Reached from the **Ask** tab or a medicine's **Ask about this medicine** button.
@@ -386,7 +418,8 @@ Reached from the **Ask** tab or a medicine's **Ask about this medicine** button.
 | Home dashboard | `src/app/(tabs)/index.tsx` | ✅ (Scan action enabled in M4) |
 | Medicines list + search | `src/app/(tabs)/medications.tsx` | ✅ |
 | Ask MediMind | `src/app/(tabs)/assistant.tsx` | ✅ |
-| Schedule and history | `src/app/(tabs)/schedule.tsx` | placeholder (M5) — upcoming doses plus taken / missed history |
+| Schedule and history | `src/app/(tabs)/schedule.tsx` | ✅ today's doses with Taken / Skip, 7-day history, notification permission |
+| Set / edit reminder | `src/app/reminder/[medicationId].tsx` | ✅ suggested from the label, clock picker, expired blocked |
 | Family | `src/app/(tabs)/family.tsx` | ✅ members, counts, empty state |
 | Family member dashboard | `src/app/family/[id].tsx` | ✅ |
 | Add / edit family member | `src/app/family/add.tsx`, `src/app/family/edit/[id].tsx` | ✅ shared form |
@@ -436,8 +469,16 @@ medication_conditions (schema v2)  — which medicines relate to which condition
   condition_id  → health_conditions(id) ON DELETE CASCADE
   user_id · PRIMARY KEY (medication_id, condition_id)
 
-Schema v5 (Milestone 5) adds reminders and doses with
-FOREIGN KEY (medication_id) REFERENCES medications(id) ON DELETE CASCADE.
+reminders (schema v5)  — one per medicine
+  id TEXT PK · user_id · member_id → family_members ON DELETE CASCADE
+  medication_id → medications ON DELETE CASCADE (UNIQUE) · times JSON ["08:00","20:00"]
+  dose_label · frequency CHECK(DAILY|SPECIFIC_DAYS) · days JSON [1,3,5]
+  start_date · end_date · enabled CHECK(0|1) · notification_ids JSON · created_at · updated_at
+
+doses (schema v5)  — one row per occurrence, created lazily
+  id TEXT PK · user_id · member_id · medication_id · reminder_id (all ON DELETE CASCADE)
+  scheduled_at "yyyy-MM-ddTHH:mm" (local) · status CHECK(UPCOMING|TAKEN|MISSED|SKIPPED)
+  acted_at · follow_up_notification_id · UNIQUE (reminder_id, scheduled_at)
 ```
 
 Rows written before v3 have `member_id = NULL` only until the account next
@@ -482,7 +523,7 @@ demo cannot be broken by a missing key or a dead network.
 
 | Suite | Covers |
 |---|---|
-| `db/migrations` | schema version, idempotence, indexes, every CHECK constraint; v2 columns, condition-type CHECK, link cascade; v3 one-"Me" index, relationship/colour CHECKs, member_id FK + cascade; v4 profile columns default null, value lists and ranges enforced |
+| `db/migrations` | schema version, idempotence, indexes, every CHECK constraint; v2 columns, condition-type CHECK, link cascade; v3 one-"Me" index, relationship/colour CHECKs, member_id FK + cascade; v4 profile columns default null, value lists and ranges enforced; v5 one reminder per medicine, one dose per occurrence, enums, cascades |
 | `db/FamilyRepository` | `ensureSelf` idempotence and adoption of pre-v3 rows, ordering ("Me" first), one-"Me" rule, self kept as ME, per-user isolation, self cannot be removed, removal cascades to that member's medicines and conditions only; profile fields round trip; sign-up step pending for "Me" only and marked done once — **both** backends |
 | `domain/familyMember` | schema (Other needs wording, future DOB rejected; height/weight numeric with comma decimals and plausible ranges; gender/blood-type lists), addable relationships exclude Me, labels, age, initials, possessives, least-used avatar colour |
 | `db/MedicationRepository` | CRUD + per-user isolation + kind/form round trip, run against **both** implementations |
@@ -596,10 +637,10 @@ This is where each one stands.
 | 6 Scan result confirmation (Confirm / Edit, never auto-save) | ⬜ Not started | Reuses `MedicationForm` for the Edit path |
 | 7 Safety engine (expiry, missing info, unclear label) | ⬜ Not started | `safety_status` column and labels already exist; only the service is missing |
 | 8 Manual entry | ✅ Done | Five-section form: type/form chips, amount + unit, frequency presets, calendar date picker with expired / expiring-soon feedback, instruction chips, health conditions; blank → `null`, calendar-date checks |
-| 9 Smart reminders (suggested schedule, editable) | ◐ Foundations | `domain/dosing.ts` already derives times from the label; the reminder screens and table are not built |
-| 10 Notifications (local, Taken / Missed, permissions) | ⬜ Not started | Confirmed to work inside Expo Go on iOS — no native build needed |
-| 11 Dose tracking (today + history) | ⬜ Not started | Schedule and History tabs are placeholders |
-| 12 Missed dose (gentle reminder, never "double up") | ◐ Wording done | The assistant already gives the safe missed-dose answer; the notification-driven follow-up is not built |
+| 9 Smart reminders (suggested schedule, editable) | ✅ Done | Times suggested from the label, editable with a clock picker, every day / chosen days, dates; expired medicines blocked |
+| 10 Notifications (local, Taken / Missed, permissions) | ✅ Done | Repeating local notifications with Taken / Skip actions, permission asked with the reason, Settings switch; works in Expo Go |
+| 11 Dose tracking (today + history) | ✅ Done | Schedule tab: Today with Taken / Skip / Undo, 7-day history grouped by date; Home counts |
+| 12 Missed dose (gentle reminder, never "double up") | ✅ Done | Swept to MISSED after 120 min; one gentle follow-up notification per dose, cancelled when marked; never "take it now" |
 | 13 Voice alerts (TTS, toggle in Settings) | ⬜ Not started | `voiceAlertsEnabled` setting exists; `expo-speech` not yet wired |
 | 14 Offline support | ✅ Done by design | Local-first SQLite, on-device auth, offline assistant; AI features say so when they need internet |
 | 15 Settings (profile, notifications, voice, accessibility, privacy, about, logout) | ◐ Partial | Profile, appearance, accessibility, about, logout done; notifications / voice / privacy screens pending |
@@ -669,9 +710,9 @@ iPhone (the camera cannot run in a browser).
 - Tests: future / today / past / missing expiry; each missing field; confidence
   thresholds.
 
-### Milestone 5 — Reminders, notifications, dose tracking, missed doses
+### Milestone 5 — Reminders, notifications, dose tracking, missed doses ✅ DONE (13 Sep 2026)
 
-Covers Phases 9, 10, 11 and 12.
+Covers Phases 9, 10, 11 and 12. Built as planned below, with these differences: one reminder per medicine holds a list of times (not one row per time); the History placeholder tab folded into the Schedule tab; schema version is v5 (v2–v4 were taken by structured entry, family and profile). See §4.4d and the change log.
 
 **Schema v2 (Phase 4 completion)**
 - Migration 2 adds `reminders` (id, medication_id, user_id, dose, time,
@@ -770,11 +811,11 @@ auth suite.
 | 8 | Check expiration / safety | ⬜ M4 |
 | 9 | Receive a warning for an expired medication | ⬜ M4 |
 | 10 | Add a safe medication | ✅ manually; via scan in M4 |
-| 11 | Generate a reminder | ⬜ M5 (schedule derivation done) |
-| 12 | Receive a notification | ⬜ M5 |
-| 13 | Mark a dose as taken | ⬜ M5 |
-| 14 | Mark / view missed doses | ⬜ M5 |
-| 15 | View medication history | ⬜ M5 |
+| 11 | Generate a reminder | ✅ suggested from the label, confirmed by the user |
+| 12 | Receive a notification | ✅ local, with Taken / Skip actions |
+| 13 | Mark a dose as taken | ✅ in the app or from the notification |
+| 14 | Mark / view missed doses | ✅ automatic after the grace window; Skip by hand |
+| 15 | View medication history | ✅ last seven days in the Schedule tab |
 | 16 | Use manual medication entry | ✅ |
 | 17 | Access saved medications offline | ✅ |
 | 18 | Use voice alerts | ⬜ M6 |
@@ -801,11 +842,11 @@ account managing several people's medicines with no extra logins).
 | 7 | Demonstrate an expired-medication warning | ⬜ M4 (mock "Expired Demo Medicine") |
 | 8 | Scan / use a safe medication | ⬜ M4 (mock "Demo Medicine") |
 | 9 | Confirm the medication | ⬜ M4 |
-| 10 | Show the automatically suggested reminder | ⬜ M5 (times from `domain/dosing.ts`) |
-| 11 | Confirm the reminder | ⬜ M5 |
-| 12 | Show the notification | ⬜ M5 |
-| 13 | Mark the medication as taken | ⬜ M5 |
-| 14 | Show the medication history | ⬜ M5 |
+| 10 | Show the automatically suggested reminder | ✅ |
+| 11 | Confirm the reminder | ✅ |
+| 12 | Show the notification | ✅ |
+| 13 | Mark the medication as taken | ✅ |
+| 14 | Show the medication history | ✅ |
 
 The demo runs on `MockMedicationScanner` and local notifications, so steps 2–14
 will work with no internet and no API key — exactly as the brief requires.
@@ -877,6 +918,10 @@ will work with no internet and no API key — exactly as the brief requires.
 | Family UI (avatar, context banner, switcher, form, health profile fields) | `src/components/family/` |
 | Sign-up step 2 (personal health profile) | `src/app/profile-setup.tsx`, gate in `src/app/_layout.tsx` |
 | Person context sent to the assistant | `toPersonContext` in `src/domain/assistant.ts`; rules 8–11 in `server/src/index.ts` |
+| Reminders and doses (model, suggestion, occurrences, grace) | `src/domain/reminder.ts` |
+| Reminder / dose repositories and stores | `src/db/repositories/*ReminderRepository.ts`, `src/stores/useReminderStore.ts`, `src/stores/useDoseStore.ts` |
+| Notifications (Expo + web no-op, Taken / Skip actions) | `src/services/notifications/` |
+| Reminder screen, Schedule tab, dose row | `src/app/reminder/[medicationId].tsx`, `src/app/(tabs)/schedule.tsx`, `src/components/schedule/DoseRow.tsx` |
 | The medicine form | `src/components/medication/MedicationForm.tsx` |
 | Chips, date picker, collapsible, form section | `src/components/ui/ChoiceChips.tsx`, `DateField.tsx` + `DateField.web.tsx`, `Collapsible.tsx`, `FormSection.tsx` |
 | Assistant safety screen and wording | `src/domain/assistant.ts` |
@@ -899,6 +944,22 @@ will work with no internet and no API key — exactly as the brief requires.
 Newest first. Every commit that changes the app adds an entry here **in the
 same commit**, and updates the sections above that it touches (rule in
 `AGENTS.md`, "Verify before claiming done").
+
+### 2026-09-13 — Milestone 5, steps 4–5: notifications and missed doses
+- **Notifications** (`ExpoNotificationService`): a repeating local
+  notification per reminder time ("Time for your medicine — Paracetamol,
+  500 mg"), daily or weekly per chosen day, with **Taken** and **Skip**
+  action buttons; pressing one marks the dose without opening the app, a
+  plain tap opens the Schedule. Permission is asked once from the Schedule
+  tab, with the reason first; denied → clear warning, schedule still works.
+  Settings gains a **Medicine reminder notifications** switch (off cancels
+  everything; on re-schedules). Web: no-op with an honest message.
+- **Missed doses** (Phase 12): the dose store sweeps UPCOMING doses more than
+  120 minutes past their time to MISSED, and schedules one gentle one-off
+  follow-up per dose at time + grace — "You may have missed a dose …
+  follow the label … do not take a double dose" — cancelled the moment the
+  dose is marked. Never "take it now".
+- Milestone 5 complete: Phases 9, 10, 11, 12 done.
 
 ### 2026-09-13 — Milestone 5, step 3: Schedule and history, Home counts
 - **Schedule tab** rebuilt: member switcher + banner; a notifications card

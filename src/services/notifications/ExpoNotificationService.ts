@@ -18,7 +18,11 @@ import { Platform } from 'react-native';
 
 import type { Reminder } from '@/domain/reminder';
 
-import type { NotificationPermission, NotificationService } from './NotificationService';
+import type {
+  NotificationPermission,
+  NotificationResponse,
+  NotificationService,
+} from './NotificationService';
 
 export const DOSE_CATEGORY = 'MEDIMIND_DOSE';
 export const ACTION_TAKEN = 'TAKEN';
@@ -159,5 +163,40 @@ export class ExpoNotificationService implements NotificationService {
 
   async cancelAll(): Promise<void> {
     await Notifications.cancelAllScheduledNotificationsAsync();
+  }
+
+  subscribe(handler: (response: NotificationResponse) => void): () => void {
+    void configureOnce();
+    const translate = (response: Notifications.NotificationResponse): NotificationResponse | null => {
+      const data = response.notification.request.content.data as Partial<DoseNotificationData> | undefined;
+      const action = response.actionIdentifier;
+      if (
+        data?.kind === 'dose' &&
+        data.reminderId &&
+        data.time &&
+        (action === ACTION_TAKEN || action === ACTION_SKIPPED)
+      ) {
+        return {
+          kind: 'mark',
+          reminderId: data.reminderId,
+          time: data.time,
+          status: action === ACTION_TAKEN ? 'TAKEN' : 'SKIPPED',
+        };
+      }
+      return { kind: 'open' };
+    };
+
+    const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
+      const translated = translate(response);
+      if (translated) handler(translated);
+    });
+    // A notification tapped while the app was closed arrives here instead.
+    void Notifications.getLastNotificationResponseAsync().then((last) => {
+      if (last) {
+        const translated = translate(last);
+        if (translated) handler(translated);
+      }
+    });
+    return () => subscription.remove();
   }
 }

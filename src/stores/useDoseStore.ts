@@ -19,6 +19,7 @@ import {
   localDateKey,
   MISSED_GRACE_MINUTES,
   occurrencesOn,
+  scheduledDate,
   type Dose,
   type DoseStatus,
   type Reminder,
@@ -27,6 +28,9 @@ import { isoNow } from '@/lib/datetime';
 import type { AppError } from '@/lib/errors';
 import { toAppError } from '@/lib/errors';
 import { getNotificationService } from '@/services/notifications';
+
+import { useMedicationStore } from './useMedicationStore';
+import { useSettingsStore } from './useSettingsStore';
 
 /** How many past days the Schedule tab shows as history. */
 export const HISTORY_DAYS = 7;
@@ -47,11 +51,18 @@ type DoseState = {
   /** Materialise + sweep + read, for the given reminders (all members). */
   load: (userId: string, reminders: Reminder[], now?: Date) => Promise<void>;
   markDose: (userId: string, id: string, status: DoseStatus) => Promise<boolean>;
+  /** From a notification action: the dose for this reminder at this time today. */
+  markFromNotification: (
+    userId: string,
+    reminderId: string,
+    time: string,
+    status: 'TAKEN' | 'SKIPPED',
+  ) => Promise<boolean>;
   clearError: () => void;
   clear: () => void;
 };
 
-export const useDoseStore = create<DoseState>((set) => {
+export const useDoseStore = create<DoseState>((set, get) => {
   const read = async (userId: string, now: Date): Promise<void> => {
     const repository = await getDoseRepository();
     const from = `${localDateKey(subDays(now, HISTORY_DAYS))}T00:00`;
@@ -59,6 +70,29 @@ export const useDoseStore = create<DoseState>((set) => {
     const result = await repository.listBetween(userId, from, to);
     if (result.ok) set({ doses: result.value });
     else set({ error: result.error });
+  };
+
+  /**
+   * Phase 12: one gentle follow-up per dose, at scheduled time + grace, for
+   * today's doses that are still ahead and have none yet. Cancelled the
+   * moment the dose is marked. Skipped entirely when notifications are off
+   * or unavailable.
+   */
+  const scheduleFollowUps = async (userId: string, now: Date): Promise<void> => {
+    const notifications = getNotificationService();
+    if (!notifications.isAvailable || !useSettingsStore.getState().notificationsEnabled) return;
+    const repository = await getDoseRepository();
+    const names = new Map(useMedicationStore.getState().medications.map((m) => [m.id, m.name]));
+    const todayKey = localDateKey(now);
+
+    for (const dose of get().doses) {
+      if (dose.status !== 'UPCOMING' || dose.followUpNotificationId) continue;
+      if (!dose.scheduledAt.startsWith(todayKey)) continue;
+      const at = new Date(scheduledDate(dose.scheduledAt).getTime() + MISSED_GRACE_MINUTES * 60 * 1000);
+      if (at.getTime() <= now.getTime()) continue;
+      const id = await notifications.scheduleMissedFollowUp(at, names.get(dose.medicationId) ?? 'Your medicine', dose.id);
+      if (id) await repository.setFollowUpNotificationId(userId, dose.id, id);
+    }
   };
 
   return {
@@ -101,6 +135,7 @@ export const useDoseStore = create<DoseState>((set) => {
         }
 
         await read(userId, now);
+        await scheduleFollowUps(userId, now);
         set({ isLoading: false });
       } catch (error) {
         set({ isLoading: false, error: toAppError(error, 'DATABASE_ERROR') });
@@ -133,6 +168,19 @@ export const useDoseStore = create<DoseState>((set) => {
         set({ isSaving: false, error: toAppError(error, 'DATABASE_ERROR') });
         return false;
       }
+    },
+
+    markFromNotification: async (userId, reminderId, time, status) => {
+      const todayKey = localDateKey(new Date());
+      const scheduledAt = `${todayKey}T${time}`;
+      let dose = get().doses.find((d) => d.reminderId === reminderId && d.scheduledAt === scheduledAt);
+      if (!dose) {
+        // The row may not exist yet if the app was closed all day.
+        await read(userId, new Date());
+        dose = get().doses.find((d) => d.reminderId === reminderId && d.scheduledAt === scheduledAt);
+      }
+      if (!dose) return false;
+      return get().markDose(userId, dose.id, status);
     },
 
     clearError: () => set({ error: null }),

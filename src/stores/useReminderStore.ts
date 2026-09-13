@@ -15,6 +15,7 @@ import { toAppError } from '@/lib/errors';
 import { getNotificationService } from '@/services/notifications';
 
 import { useDoseStore } from './useDoseStore';
+import { useSettingsStore } from './useSettingsStore';
 
 type ReminderState = {
   reminders: Reminder[];
@@ -65,7 +66,8 @@ export const useReminderStore = create<ReminderState>((set, get) => {
     const notifications = getNotificationService();
     const repository = await getReminderRepository();
     await notifications.cancel(reminder.notificationIds);
-    const ids = reminder.enabled ? await notifications.scheduleReminder(reminder, medicationName) : [];
+    const wanted = reminder.enabled && useSettingsStore.getState().notificationsEnabled;
+    const ids = wanted ? await notifications.scheduleReminder(reminder, medicationName) : [];
     await repository.setNotificationIds(userId, reminder.id, ids);
   };
 

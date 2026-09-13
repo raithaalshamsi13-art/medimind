@@ -14,6 +14,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { getNotificationService } from '@/services/notifications';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { useDoseStore } from '@/stores/useDoseStore';
 import { selectProfileSetupNeeded, useFamilyStore } from '@/stores/useFamilyStore';
@@ -120,6 +121,7 @@ function RootNavigator() {
   const profileSetupNeeded = useFamilyStore(selectProfileSetupNeeded);
 
   useAuthGate({ isReady, isSignedIn, hasCompletedOnboarding, profileSetupNeeded });
+  useNotificationResponses(userId);
 
   // Render nothing while the native splash is still covering the screen.
   if (!isReady) return null;
@@ -145,6 +147,26 @@ function RootNavigator() {
       </Stack>
     </>
   );
+}
+
+/**
+ * Taken / Skip pressed on a reminder notification marks the dose; a plain tap
+ * opens the schedule. No-op on web (the service there never fires).
+ */
+function useNotificationResponses(userId: string | null) {
+  const router = useRouter();
+  const markFromNotification = useDoseStore((state) => state.markFromNotification);
+
+  useEffect(() => {
+    if (!userId) return;
+    return getNotificationService().subscribe((response) => {
+      if (response.kind === 'mark') {
+        void markFromNotification(userId, response.reminderId, response.time, response.status);
+      } else {
+        router.push('/schedule');
+      }
+    });
+  }, [userId, markFromNotification, router]);
 }
 
 /**
