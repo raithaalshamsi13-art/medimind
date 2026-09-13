@@ -21,8 +21,6 @@ describe('screenQuestion', () => {
     ['can I double my dose tonight', 'dosing'],
     ['should I take an extra tablet', 'dosing'],
     ['can I stop taking paracetamol', 'dosing'],
-    ['how many can I take in a day', 'none'],
-    ['what is the maximum dose', 'none'],
     ['can I take more than the label says', 'dosing'],
     ['can I take ibuprofen and paracetamol together', 'interaction'],
     ['is it ok with alcohol', 'interaction'],
@@ -31,6 +29,15 @@ describe('screenQuestion', () => {
   ])('flags "%s" as %s', (question, reason) => {
     expect(screenQuestion(question)).toEqual({ level: 'high', reason });
   });
+
+  it.each(['how many can I take in a day', 'what is the maximum dose', 'can I use paracetamol for a headache?'])(
+    'lets the general question "%s" through to the assistant',
+    (question) => {
+      // The AI answers these with what the pack generally says, under the
+      // never-exceed-the-label rule; a fixed refusal here read as unhelpful.
+      expect(screenQuestion(question)).toEqual({ level: 'none' });
+    },
+  );
 
   it('puts emergencies ahead of everything else', () => {
     // Mentions a dose AND an emergency — emergency must win.
