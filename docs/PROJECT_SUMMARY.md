@@ -386,7 +386,7 @@ Reached from the **Ask** tab or a medicine's **Ask about this medicine** button.
 | Home dashboard | `src/app/(tabs)/index.tsx` | ✅ (Scan action enabled in M4) |
 | Medicines list + search | `src/app/(tabs)/medications.tsx` | ✅ |
 | Ask MediMind | `src/app/(tabs)/assistant.tsx` | ✅ |
-| Schedule | `src/app/(tabs)/schedule.tsx` | placeholder (M5) |
+| Schedule and history | `src/app/(tabs)/schedule.tsx` | placeholder (M5) — upcoming doses plus taken / missed history |
 | Family | `src/app/(tabs)/family.tsx` | ✅ members, counts, empty state |
 | Family member dashboard | `src/app/family/[id].tsx` | ✅ |
 | Add / edit family member | `src/app/family/add.tsx`, `src/app/family/edit/[id].tsx` | ✅ shared form |
@@ -899,6 +899,13 @@ will work with no internet and no API key — exactly as the brief requires.
 Newest first. Every commit that changes the app adds an entry here **in the
 same commit**, and updates the sections above that it touches (rule in
 `AGENTS.md`, "Verify before claiming done").
+
+### 2026-09-13 — Decision: dose history lives inside the Schedule tab
+- Confirmed with Omar: the History tab stays out of the bottom bar (Family
+  took its slot). Milestone 5 builds the Schedule tab as "Schedule and
+  history" — upcoming doses on top, taken / missed underneath. The Schedule
+  placeholder now says so. `src/app/(tabs)/history.tsx` remains as a hidden
+  route until then.
 
 ### 2026-09-13 — Chatbot fix: complete answers, answer-first tone (server 1.4.1)
 - **Cut-off replies**: Gemini 3 spends part of the output budget on internal
