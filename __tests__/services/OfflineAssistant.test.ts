@@ -15,6 +15,7 @@ function ctx(partial: Partial<Medication> & { name: string }): MedicationContext
   const medication: Medication = {
     id: 'm',
     userId: 'u',
+    memberId: null,
     kind: null,
     form: null,
     conditionIds: [],

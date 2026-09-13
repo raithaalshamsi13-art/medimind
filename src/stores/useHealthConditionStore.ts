@@ -9,7 +9,11 @@
 import { create } from 'zustand';
 
 import { getHealthConditionRepository } from '@/db/repositories';
-import type { HealthCondition, HealthConditionInput } from '@/domain/healthCondition';
+import type {
+  HealthCondition,
+  HealthConditionCreateInput,
+  HealthConditionInput,
+} from '@/domain/healthCondition';
 import type { AppError } from '@/lib/errors';
 import { toAppError } from '@/lib/errors';
 
@@ -20,7 +24,10 @@ type HealthConditionState = {
   error: AppError | null;
 
   load: (userId: string) => Promise<void>;
-  createCondition: (userId: string, input: HealthConditionInput) => Promise<HealthCondition | null>;
+  createCondition: (
+    userId: string,
+    input: HealthConditionCreateInput,
+  ) => Promise<HealthCondition | null>;
   updateCondition: (userId: string, id: string, input: HealthConditionInput) => Promise<boolean>;
   removeCondition: (userId: string, id: string) => Promise<boolean>;
   clearError: () => void;

@@ -93,6 +93,13 @@ It reads a medicine label, verifies it, and only then schedules reminders.
   parsed, compared with a range, or coloured good/bad — and conditions are
   never included in the assistant context. Reading hints are format examples
   ("e.g. 130/85"), never targets.
+- **Every medicine and health condition belongs to one family member.**
+  `memberId` is a column (`src/domain/familyMember.ts`, schema v3), not a
+  screen-level filter. Screens show the *active* member from `useFamilyStore`
+  and must render a `MemberContextBanner` on any screen that adds, edits or
+  answers about medicines. A create call without a `memberId` is a bug; the
+  add screens refuse to render a form without one. The assistant receives one
+  member's medicines only.
 - **Structured form choices compose to the existing text columns.** Chips in
   `MedicationForm` produce `dosage` / `frequency` / `instructions` strings via
   `src/domain/medicationOptions.ts`, which must stay round-trippable and must

@@ -10,6 +10,7 @@ import {
   CONDITION_TYPES,
   type ConditionType,
   type HealthCondition,
+  type HealthConditionCreateInput,
   type HealthConditionInput,
 } from '@/domain/healthCondition';
 import { isoNow } from '@/lib/datetime';
@@ -29,6 +30,7 @@ type ConditionRow = {
   notes: string | null;
   created_at: string;
   updated_at: string;
+  member_id: string | null;
 };
 
 function toConditionType(value: string): ConditionType {
@@ -41,6 +43,7 @@ function mapRow(row: ConditionRow): HealthCondition {
   return {
     id: row.id,
     userId: row.user_id,
+    memberId: row.member_id,
     type: toConditionType(row.type),
     customName: row.custom_name,
     reading: row.reading,
@@ -50,7 +53,7 @@ function mapRow(row: ConditionRow): HealthCondition {
   };
 }
 
-const SELECT_COLUMNS = `id, user_id, type, custom_name, reading, notes, created_at, updated_at`;
+const SELECT_COLUMNS = `id, user_id, type, custom_name, reading, notes, created_at, updated_at, member_id`;
 
 export class SqliteHealthConditionRepository implements HealthConditionRepository {
   readonly kind = 'sqlite' as const;
@@ -83,11 +86,12 @@ export class SqliteHealthConditionRepository implements HealthConditionRepositor
     }
   }
 
-  async create(userId: string, input: HealthConditionInput): Promise<Result<HealthCondition>> {
+  async create(userId: string, input: HealthConditionCreateInput): Promise<Result<HealthCondition>> {
     const now = isoNow();
     const condition: HealthCondition = {
       id: newId(),
       userId,
+      memberId: input.memberId ?? null,
       type: input.type,
       customName: input.customName,
       reading: input.reading,
@@ -99,8 +103,8 @@ export class SqliteHealthConditionRepository implements HealthConditionRepositor
     try {
       await this.db.runAsync(
         `INSERT INTO health_conditions
-           (id, user_id, type, custom_name, reading, notes, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+           (id, user_id, type, custom_name, reading, notes, created_at, updated_at, member_id)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           condition.id,
           condition.userId,
@@ -110,6 +114,7 @@ export class SqliteHealthConditionRepository implements HealthConditionRepositor
           condition.notes,
           condition.createdAt,
           condition.updatedAt,
+          condition.memberId,
         ],
       );
       return ok(condition);

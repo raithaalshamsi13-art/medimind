@@ -214,4 +214,54 @@ describe('migrations', () => {
       expect(links).toEqual([]);
     });
   });
+
+  describe('version 3 — family members', () => {
+    beforeEach(async () => {
+      await runMigrations(db);
+    });
+
+    const insertMember = (id: string, isSelf: number, relationship = 'MOTHER') =>
+      db.runAsync(
+        `INSERT INTO family_members (id, user_id, name, relationship, is_self, created_at, updated_at)
+         VALUES (?, 'user-1', 'Fatima', ?, ?, '2026-01-01', '2026-01-01')`,
+        [id, relationship, isSelf],
+      );
+
+    it('allows exactly one "Me" per account', async () => {
+      await insertMember('self', 1, 'ME');
+      await expect(insertMember('self-2', 1, 'ME')).rejects.toThrow();
+      await insertMember('mother', 0);
+    });
+
+    it('rejects a relationship or avatar colour outside the list', async () => {
+      await expect(insertMember('bad', 0, 'COUSIN')).rejects.toThrow();
+      await insertMember('ok', 0);
+      await expect(
+        db.runAsync(`UPDATE family_members SET avatar_color = 'purple' WHERE id = 'ok'`, []),
+      ).rejects.toThrow();
+    });
+
+    it('adds a nullable member_id to medicines and conditions that cascades on delete', async () => {
+      await insertMember('mother', 0);
+      await insertMedication(db, { id: 'orphan' });
+      await insertMedication(db, { id: 'hers' });
+      await db.runAsync(`UPDATE medications SET member_id = 'mother' WHERE id = 'hers'`, []);
+      await db.runAsync(
+        `INSERT INTO health_conditions (id, user_id, type, member_id, created_at, updated_at)
+         VALUES ('c1', 'user-1', 'ASTHMA', 'mother', '2026-01-01', '2026-01-01')`,
+        [],
+      );
+
+      // A member that does not exist is refused.
+      await expect(
+        db.runAsync(`UPDATE medications SET member_id = 'ghost' WHERE id = 'orphan'`, []),
+      ).rejects.toThrow();
+
+      await db.runAsync(`DELETE FROM family_members WHERE id = 'mother'`, []);
+      const ids = await db.getAllAsync<{ id: string }>(`SELECT id FROM medications`, []);
+      expect(ids.map((r) => r.id)).toEqual(['orphan']);
+      const conditions = await db.getAllAsync(`SELECT id FROM health_conditions`, []);
+      expect(conditions).toEqual([]);
+    });
+  });
 });

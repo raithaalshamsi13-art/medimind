@@ -4,6 +4,10 @@
  * Uses a FlatList rather than a scrolling column of cards so the list stays
  * smooth as it grows, and keeps the search field and the Add button pinned
  * outside it — a user should never have to scroll to reach either.
+ *
+ * FAMILY: the list shows ONE family member's medicines — the active member —
+ * with a switcher at the top. The Add button carries that member's id, so a
+ * medicine can only ever be saved under the person on screen.
  */
 
 import { Ionicons } from '@expo/vector-icons';
@@ -11,12 +15,22 @@ import { useRouter } from 'expo-router';
 import { useMemo } from 'react';
 import { FlatList, View } from 'react-native';
 
+import { MemberContextBanner } from '@/components/family/MemberContextBanner';
+import { MemberSwitcher } from '@/components/family/MemberSwitcher';
 import { MedicationCard } from '@/components/medication/MedicationCard';
 import { AppText, Button, Card, InlineMessage, Screen, TextField } from '@/components/ui';
+import { possessive } from '@/domain/familyMember';
 import { selectUser, useAuthStore } from '@/stores/useAuthStore';
 import {
+  forMember,
+  memberById,
+  selectActiveMemberId,
+  selectMembers,
+  useFamilyStore,
+} from '@/stores/useFamilyStore';
+import {
+  activeMedications,
   filterMedications,
-  selectMedicationCount,
   selectMedications,
   useMedicationStore,
 } from '@/stores/useMedicationStore';
@@ -27,8 +41,12 @@ export default function MedicationsScreen() {
   const router = useRouter();
   const user = useAuthStore(selectUser);
 
-  const medications = useMedicationStore(selectMedications);
-  const totalCount = useMedicationStore(selectMedicationCount);
+  const members = useFamilyStore(selectMembers);
+  const activeMemberId = useFamilyStore(selectActiveMemberId);
+  const setActiveMember = useFamilyStore((state) => state.setActiveMember);
+  const member = useMemo(() => memberById(members, activeMemberId), [members, activeMemberId]);
+
+  const allMedications = useMedicationStore(selectMedications);
   const searchQuery = useMedicationStore((state) => state.searchQuery);
   const setSearchQuery = useMedicationStore((state) => state.setSearchQuery);
   const isLoading = useMedicationStore((state) => state.isLoading);
@@ -37,11 +55,13 @@ export default function MedicationsScreen() {
 
   // Derived in the component, not in a zustand selector — see the note in
   // useMedicationStore about snapshot stability.
-  const visible = useMemo(
-    () => filterMedications(medications, searchQuery),
-    [medications, searchQuery],
+  const mine = useMemo(
+    () => activeMedications(forMember(allMedications, activeMemberId)),
+    [allMedications, activeMemberId],
   );
+  const visible = useMemo(() => filterMedications(mine, searchQuery), [mine, searchQuery]);
 
+  const totalCount = mine.length;
   const isSearching = searchQuery.trim().length > 0;
 
   return (
@@ -53,13 +73,25 @@ export default function MedicationsScreen() {
           gap: theme.spacing.base,
         }}>
         <View style={{ gap: theme.spacing.xs }}>
-          <AppText variant="title">Medicines</AppText>
+          <AppText variant="title">{member ? possessive(member, 'medicines') : 'Medicines'}</AppText>
           <AppText variant="body" color="textSecondary">
             {totalCount === 0
               ? 'Nothing saved yet'
               : `${totalCount} ${totalCount === 1 ? 'medicine' : 'medicines'} saved`}
           </AppText>
         </View>
+
+        {members.length > 1 && user ? (
+          <MemberSwitcher
+            members={members}
+            activeMemberId={activeMemberId}
+            onSelect={(id) => void setActiveMember(user.id, id)}
+          />
+        ) : null}
+
+        {member && !member.isSelf ? (
+          <MemberContextBanner member={member} prefix="Showing medicines for" />
+        ) : null}
 
         {!isPersistent ? (
           <InlineMessage
@@ -110,7 +142,11 @@ export default function MedicationsScreen() {
             <EmptyState
               icon="medkit-outline"
               title="No medicines yet"
-              body="Add your first medicine by hand, or scan its label once scanning is available."
+              body={
+                member && !member.isSelf
+                  ? `Add ${member.name}’s first medicine by hand, or scan its label once scanning is available.`
+                  : 'Add your first medicine by hand, or scan its label once scanning is available.'
+              }
             />
           )
         }
@@ -128,11 +164,16 @@ export default function MedicationsScreen() {
           backgroundColor: theme.colors.background,
         }}>
         <Button
-          label="Add medicine"
+          label={member && !member.isSelf ? `Add medicine for ${member.name}` : 'Add medicine'}
           icon="add"
           size="large"
-          onPress={() => router.push('/medication/add')}
-          disabled={!user}
+          onPress={() =>
+            router.push({
+              pathname: '/medication/add',
+              params: member ? { memberId: member.id } : {},
+            })
+          }
+          disabled={!user || !member}
         />
       </View>
     </Screen>

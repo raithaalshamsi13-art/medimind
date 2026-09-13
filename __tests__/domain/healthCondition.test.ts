@@ -97,6 +97,7 @@ describe('presets', () => {
       toConditionFormValues({
         id: 'c1',
         userId: 'u1',
+        memberId: null,
         type: 'OTHER',
         customName: 'Migraine',
         reading: null,

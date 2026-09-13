@@ -51,6 +51,7 @@ export class JsonMedicationRepository implements MedicationRepository {
         kind: medication.kind ?? null,
         form: medication.form ?? null,
         conditionIds: Array.isArray(medication.conditionIds) ? medication.conditionIds : [],
+        memberId: medication.memberId ?? null,
       })),
     );
   }
@@ -102,6 +103,7 @@ export class JsonMedicationRepository implements MedicationRepository {
     const medication: Medication = {
       id: newId(),
       userId,
+      memberId: input.memberId ?? null,
       name: input.name,
       kind: input.kind ?? null,
       form: input.form ?? null,

@@ -9,7 +9,11 @@
  * test suite checks both.
  */
 
-import type { HealthCondition, HealthConditionInput } from '@/domain/healthCondition';
+import type {
+  HealthCondition,
+  HealthConditionCreateInput,
+  HealthConditionInput,
+} from '@/domain/healthCondition';
 import type { Result } from '@/lib/result';
 
 import type { MedicationRepositoryKind } from './MedicationRepository';
@@ -22,7 +26,7 @@ export type HealthConditionRepository = {
 
   getById(userId: string, id: string): Promise<Result<HealthCondition | null>>;
 
-  create(userId: string, input: HealthConditionInput): Promise<Result<HealthCondition>>;
+  create(userId: string, input: HealthConditionCreateInput): Promise<Result<HealthCondition>>;
 
   /** Fails with NOT_FOUND if absent for this user. */
   update(userId: string, id: string, input: HealthConditionInput): Promise<Result<HealthCondition>>;

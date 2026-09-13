@@ -1,14 +1,13 @@
 /**
- * Stack for the health screens that sit above the tabs — same header
- * treatment as the medicine stack, for the same reason: these are pushed
- * screens and need an obvious way back.
+ * Stack for the family screens that sit above the tabs — same header
+ * treatment as the medicine stack.
  */
 
 import { Stack } from 'expo-router';
 
 import { useTheme } from '@/theme/ThemeContext';
 
-export default function HealthLayout() {
+export default function FamilyLayout() {
   const theme = useTheme();
 
   return (
@@ -25,7 +24,9 @@ export default function HealthLayout() {
           fontSize: theme.type.subheading.fontSize,
         },
       }}>
-      <Stack.Screen name="conditions" options={{ title: 'Health conditions' }} />
+      <Stack.Screen name="add" options={{ title: 'Add family member' }} />
+      <Stack.Screen name="[id]" options={{ title: 'Family member' }} />
+      <Stack.Screen name="edit/[id]" options={{ title: 'Edit profile' }} />
     </Stack>
   );
 }

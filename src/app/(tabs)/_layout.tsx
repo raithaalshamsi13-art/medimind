@@ -1,5 +1,5 @@
 /**
- * Bottom tab navigator: Home · Medicines · Ask · Schedule · History · Settings.
+ * Bottom tab navigator: Home · Medicines · Ask · Schedule · Family · Settings.
  *
  * Labels are hidden in PORTRAIT and shown in LANDSCAPE (a product decision:
  * six tabs on a phone-width screen leave no room for readable text, while a
@@ -100,9 +100,12 @@ export default function TabsLayout() {
         options={{ title: 'Schedule', tabBarIcon: tabIcon('calendar', 'calendar-outline') }}
       />
       <Tabs.Screen
-        name="history"
-        options={{ title: 'History', tabBarIcon: tabIcon('time', 'time-outline') }}
+        name="family"
+        options={{ title: 'Family', tabBarIcon: tabIcon('people', 'people-outline') }}
       />
+      {/* Dose history (Milestone 5) will live inside the Schedule tab; the
+          route file stays so nothing links to a missing screen. */}
+      <Tabs.Screen name="history" options={{ href: null }} />
       <Tabs.Screen
         name="settings"
         options={{ title: 'Settings', tabBarIcon: tabIcon('settings', 'settings-outline') }}

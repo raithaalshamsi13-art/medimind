@@ -19,10 +19,10 @@ step adds an entry to §18 (change log) and updates the sections it touches._
 | Concept | **SCAN → CHECK → CONFIRM → REMIND → TRACK** — verify the medicine before scheduling anything |
 | Platform | iPhone via Expo Go (primary); web browser (UI work only) |
 | Stack | Expo SDK 57 · React Native 0.86 · React 19.2 · TypeScript 6 · Expo Router · SQLite · Zustand · Zod |
-| Source | 154 tracked files · ~14,000 lines across `src/`, tests, the API server, scripts and SQL |
-| Tests | **223 passing** in 14 suites — including real-SQLite tests and a WCAG contrast checker |
-| Commits | 27, all verified (typecheck + tests + iOS and web bundles) before committing |
-| Milestones | M1 Foundation ✅ · M2 UI & Auth ✅ · M3 Database & CRUD ✅ · Assistant ✅ · Deployment ✅ · Structured entry + health conditions ✅ · M4 Scanner ⬜ · M5 Reminders ⬜ · M6 Polish ⬜ |
+| Source | 170 tracked files · ~16,500 lines across `src/`, tests, the API server, scripts and SQL |
+| Tests | **259 passing** in 16 suites — including real-SQLite tests and a WCAG contrast checker |
+| Commits | 30, all verified (typecheck + tests + iOS and web bundles) before committing |
+| Milestones | M1 Foundation ✅ · M2 UI & Auth ✅ · M3 Database & CRUD ✅ · Assistant ✅ · Deployment ✅ · Structured entry + health conditions ✅ · Family profiles ✅ · M4 Scanner ⬜ · M5 Reminders ⬜ · M6 Polish ⬜ |
 | Live | Web: https://medimind-medimind3.vercel.app · API: Railway (`/health` shows version + model) · Accounts/DB: Supabase |
 | Native build needed | **None.** Everything runs in Expo Go — no Xcode, no Mac, no Android Studio, no Apple developer account |
 
@@ -183,6 +183,48 @@ medicine to any of them and can add one inline. This is strictly a notebook:
 readings are never interpreted, and conditions are **not sent to the
 assistant**.
 
+### 4.4b Family — one account, many profiles
+
+One account manages medicines for several people **without separate logins**.
+
+- **Model** (`src/domain/familyMember.ts`, schema v3): a `family_members`
+  table — name, relationship (Me / Mother / Father / Spouse / Son / Daughter /
+  Grandmother / Grandfather / Other + custom wording), optional date of birth
+  (shown as an age), an avatar colour (a theme role, so it follows the palette
+  and dark mode) and an `is_self` flag. A partial unique index guarantees
+  exactly one "Me" per account. `medications` and `health_conditions` gain a
+  `member_id` with `ON DELETE CASCADE`.
+- **"Me" is automatic and existing data is kept.** On first load
+  `ensureSelf()` creates the account holder's profile and assigns every
+  medicine and condition recorded before v3 to it (SQLite: one UPDATE inside
+  the same transaction; JSON: by hand). Tested on both backends.
+- **Reuse, not duplication.** No second medicine system: the same
+  repositories, stores, form, detail and edit screens carry a `memberId`, and
+  screens filter by the *active* member (`useFamilyStore.activeMemberId`,
+  remembered per account across launches).
+- **Whose data is on screen is always visible.** A `MemberContextBanner`
+  ("Adding medicine for: Fatima · Mother", "Showing medicines for…",
+  "Answering about medicines for…") sits on the add / edit / detail /
+  conditions / assistant screens; the Medicines tab and home dashboard have a
+  member switcher; the Add button carries the member's id, so a medicine can
+  only be saved under the person on screen, and the add screen refuses to
+  render a form without one.
+- **Family tab** (replaces the empty History placeholder in the bar; dose
+  history will live in Schedule from M5): member cards with avatar, relation,
+  age and counts, a "Managing now" badge, a welcoming empty state until a
+  second person is added, and **Add family member**.
+- **Member dashboard** (`/family/[id]`): overview tiles (medicines, expired or
+  expiring, conditions), recent medicines, conditions, a Schedule placeholder
+  for M5, Add medicine, Manage conditions, Switch to managing, Edit profile,
+  Remove.
+- **Removal is deliberate.** The confirmation spells out what goes with the
+  person ("This also deletes their 3 medicines and 1 health condition"), and
+  the "Me" profile cannot be removed (`NOT_ALLOWED`, enforced in both
+  repositories and hidden in the UI).
+- **Assistant privacy** improves as a side effect: the assistant now only
+  ever receives one person's medicines — the medicine it was opened for, else
+  the active member — so two relatives' medicines are never mixed in one answer.
+
 ### 4.5 Ask MediMind — the assistant
 
 Reached from the **Ask** tab or a medicine's **Ask about this medicine** button.
@@ -253,6 +295,8 @@ Reached from the **Ask** tab or a medicine's **Ask about this medicine** button.
 | Health conditions are a notebook, not a clinical record | `domain/healthCondition.ts`, `AGENTS.md` rule | Readings are stored and shown as typed — never parsed, ranged or coloured good/bad — and are never sent to the assistant. Anything more would be diagnosis. |
 | Expiry decided in one place | `domain/expiry.ts` | The form's live "Expired / Expires in N days" badge and the M4 safety engine share one function, so they can never disagree. Calendar days only, no time-of-day edge cases. |
 | Structured choices never rewrite label text | `domain/medicationOptions.ts` | Chips compose to the stored text; anything unrecognised (e.g. scanned wording) is kept verbatim as "custom". Round-tripping is unit-tested. |
+| One person's data can never appear under another | `member_id` on medicines and conditions; `MemberContextBanner`; `useFamilyStore` | Separation is a column on every row, not a screen remembering to filter. Every screen names whose data it shows; the add form will not render without a member. |
+| Removing a family member is explicit and complete | `FamilyRepository.remove`, `/family/[id]` | The confirmation lists the medicines and conditions that go with them; "Me" cannot be removed; cascades are tested on both backends. |
 | AI key lives only in Railway variables | `docs/DEPLOYMENT.md` | Never in the app, never in Vercel, never in git. Supabase `service_role` key is used nowhere; the anon key is public by design and every table has Row Level Security. |
 
 ---
@@ -268,20 +312,31 @@ Reached from the **Ask** tab or a medicine's **Ask about this medicine** button.
 | Medicines list + search | `src/app/(tabs)/medications.tsx` | ✅ |
 | Ask MediMind | `src/app/(tabs)/assistant.tsx` | ✅ |
 | Schedule | `src/app/(tabs)/schedule.tsx` | placeholder (M5) |
-| History | `src/app/(tabs)/history.tsx` | placeholder (M6) |
+| Family | `src/app/(tabs)/family.tsx` | ✅ members, counts, empty state |
+| Family member dashboard | `src/app/family/[id].tsx` | ✅ |
+| Add / edit family member | `src/app/family/add.tsx`, `src/app/family/edit/[id].tsx` | ✅ shared form |
+| History | `src/app/(tabs)/history.tsx` | placeholder, hidden from the bar (folds into Schedule in M5) |
 | Settings | `src/app/(tabs)/settings.tsx` | ✅ |
 | Medicine detail | `src/app/medication/[id].tsx` | ✅ |
 | Add medicine (manual) | `src/app/medication/add.tsx` | ✅ sectioned, chips + date picker |
 | Edit medicine | `src/app/medication/edit/[id].tsx` | ✅ same form |
-| My health conditions | `src/app/health/conditions.tsx` | ✅ |
+| Health conditions (per family member) | `src/app/health/conditions.tsx` | ✅ |
 
 ---
 
 ## 7. Data model
 
 ```
-medications (SQLite, schema v1 + v2 columns)
-  id TEXT PK · user_id · name · dosage · instructions · expiration_date
+family_members (schema v3)  — profiles under one account, no separate login
+  id TEXT PK · user_id · name
+  relationship CHECK(ME|MOTHER|FATHER|SPOUSE|SON|DAUGHTER|GRANDMOTHER|GRANDFATHER|OTHER)
+  custom_relationship · date_of_birth · avatar_color CHECK(primary|info|success|warning|danger)
+  is_self CHECK(0|1) · created_at · updated_at
+  indexes: (user_id, is_self) · UNIQUE (user_id) WHERE is_self = 1   ← exactly one "Me"
+
+medications (SQLite, schema v1 + v2 + v3 columns)
+  id TEXT PK · user_id · member_id → family_members(id) ON DELETE CASCADE   ← v3
+  name · dosage · instructions · expiration_date
   frequency · safety_status CHECK(SAFE|EXPIRING_SOON|EXPIRED|NEEDS_REVIEW|UNKNOWN)
   source CHECK(SCAN|MANUAL) · scan_confidence · notes · image_uri
   archived CHECK(0|1) · created_at · updated_at
@@ -290,8 +345,9 @@ medications (SQLite, schema v1 + v2 columns)
              DROPS|PATCH|SPRAY|OTHER)                                 ← v2
   indexes: (user_id, archived) · (user_id, name) · (user_id, expiration_date)
 
-health_conditions (schema v2)
-  id TEXT PK · user_id · type CHECK(HIGH_BLOOD_PRESSURE|DIABETES|LOW_BLOOD_SUGAR|
+health_conditions (schema v2, + member_id in v3)
+  id TEXT PK · user_id · member_id → family_members(id) ON DELETE CASCADE
+  type CHECK(HIGH_BLOOD_PRESSURE|DIABETES|LOW_BLOOD_SUGAR|
     ASTHMA|HIGH_CHOLESTEROL|HEART|THYROID|KIDNEY|ARTHRITIS|OTHER)
   custom_name (required by the app when type = OTHER) · reading (text, as typed)
   notes · created_at · updated_at
@@ -302,9 +358,12 @@ medication_conditions (schema v2)  — which medicines relate to which condition
   condition_id  → health_conditions(id) ON DELETE CASCADE
   user_id · PRIMARY KEY (medication_id, condition_id)
 
-Schema v3 (Milestone 5) adds reminders and doses with
+Schema v4 (Milestone 5) adds reminders and doses with
 FOREIGN KEY (medication_id) REFERENCES medications(id) ON DELETE CASCADE.
 ```
+
+Rows written before v3 have `member_id = NULL` only until the account next
+loads: `FamilyRepository.ensureSelf` creates the "Me" profile and adopts them.
 
 The same tables exist in Postgres (`supabase/schema.sql`) with Row Level
 Security so each user can only reach their own rows. `dosage`, `frequency`
@@ -328,6 +387,7 @@ Screen (src/app)  →  Store (zustand)  →  Service / Repository interface  →
 AuthService            → LocalAuthService        | SupabaseAuthService (planned)
 MedicationRepository   → SqliteMedicationRepository | JsonMedicationRepository (web)
 HealthConditionRepository → SqliteHealthConditionRepository | JsonHealthConditionRepository (web)
+FamilyRepository       → SqliteFamilyRepository    | JsonFamilyRepository (web)
 AssistantService       → OfflineAssistant        | ProxyAssistant → Railway server → Gemini / Groq / Claude
 MedicationScannerService (M4) → MockMedicationScanner | ClaudeVisionScanner
 ```
@@ -340,11 +400,13 @@ demo cannot be broken by a missing key or a dead network.
 
 ## 9. Testing and verification
 
-**223 tests in 14 suites**, all passing:
+**259 tests in 16 suites**, all passing:
 
 | Suite | Covers |
 |---|---|
-| `db/migrations` | schema version, idempotence, indexes, every CHECK constraint; v2 columns, condition-type CHECK, link cascade |
+| `db/migrations` | schema version, idempotence, indexes, every CHECK constraint; v2 columns, condition-type CHECK, link cascade; v3 one-"Me" index, relationship/colour CHECKs, member_id FK + cascade |
+| `db/FamilyRepository` | `ensureSelf` idempotence and adoption of pre-v3 rows, ordering ("Me" first), one-"Me" rule, self kept as ME, per-user isolation, self cannot be removed, removal cascades to that member's medicines and conditions only — **both** backends |
+| `domain/familyMember` | schema (Other needs wording, future DOB rejected), addable relationships exclude Me, labels, age, initials, possessives, least-used avatar colour |
 | `db/MedicationRepository` | CRUD + per-user isolation + kind/form round trip, run against **both** implementations |
 | `db/HealthConditionRepository` | CRUD, ordering, per-user isolation, medicine links (foreign ids dropped, links replaced/kept/cleared, cascade on delete) — **both** backends |
 | `domain/medication` | validation rules, null normalisation, calendar-date rejection |
@@ -421,9 +483,14 @@ Scan the QR code with the iPhone Camera app (opens Expo Go). Then:
    → it is linked to the medicine immediately. Save.
 5. Open it → **Ask about this medicine** → "When is my next dose?"
 6. **Ask** tab → "can I take two together?" to show the safety screen
-7. **Settings → My health conditions** → edit the reading, remove a condition
+7. **Settings → Health conditions** → edit the reading, remove a condition
    (the medicine stays, the link goes)
-8. **Settings** → switch colour theme, large text, high contrast; log out; log in
+8. **Family** tab → **Add family member** → Fatima, *Mother*, date of birth,
+   pick a colour → her profile opens. **Add medicine for Fatima** → note the
+   banner "Adding medicine for: Fatima · Mother" → save. Back on **Medicines**,
+   switch between Me and Fatima with the chips; each list is separate.
+   **Remove family member** → the confirmation lists her medicines.
+9. **Settings** → switch colour theme, large text, high contrast; log out; log in
 
 Everything above works with the phone in Airplane Mode. The same app is live
 in a browser at https://medimind-medimind3.vercel.app (add to the iPhone home
@@ -442,7 +509,7 @@ This is where each one stands.
 | 1 Project setup | ✅ Done | Expo SDK 57, TypeScript, Expo Router, theme, structure, env config |
 | 2 UI foundation — splash, onboarding, auth, dashboard | ✅ Done | Splash uses the real logo; demo account added on top |
 | 3 Medication management — add/view/edit/delete/search/details | ✅ Done | |
-| 4 Database | ✅ Done for medications + health conditions (schema v2) | `reminders` and `doses` tables arrive with Phase 9–11 as schema v3 |
+| 4 Database | ✅ Done for medications, health conditions (v2) and family members (v3) | `reminders` and `doses` tables arrive with Phase 9–11 as schema v4 |
 | 5 Medication scanner (camera → OCR/AI → data) | ⬜ Not started | **Next.** `MedicationScannerService` interface + mock + Claude vision |
 | 6 Scan result confirmation (Confirm / Edit, never auto-save) | ⬜ Not started | Reuses `MedicationForm` for the Edit path |
 | 7 Safety engine (expiry, missing info, unclear label) | ⬜ Not started | `safety_status` column and labels already exist; only the service is missing |
@@ -633,7 +700,9 @@ auth suite.
 | 20 | Demonstrate the complete workflow reliably | ◐ Everything built so far works in Airplane Mode; scanner and reminders complete the story |
 
 **Beyond the brief:** the Ask MediMind assistant with dose scheduling, selectable
-colour themes, a WCAG contrast checker, and real-SQLite tests.
+colour themes, a WCAG contrast checker, real-SQLite tests, structured manual
+entry with a calendar picker, health conditions, and **Family profiles** (one
+account managing several people's medicines with no extra logins).
 
 ---
 
@@ -664,6 +733,9 @@ will work with no internet and no API key — exactly as the brief requires.
 ## 16. Commit history
 
 ```
+2026-09-13  Family: profiles under one account, per-member medicines and conditions, Family tab
+2026-09-13  AGENTS: every step is committed and pushed immediately (Vercel deploys from main)
+2026-09-13  Fix: log out and delete medicine did nothing in the browser
 2026-09-13  PROJECT_SUMMARY: full audit; change log section; summary-per-step rule in AGENTS.md
 2026-09-11  Structured manual entry form, date picker and health conditions
 2026-09-06  PROJECT_SUMMARY: assistant live on Gemini free tier
@@ -713,6 +785,9 @@ will work with no internet and no API key — exactly as the brief requires.
 | Expiry status (expired / expiring soon) | `src/domain/expiry.ts` |
 | Health conditions (types, presets, validation) | `src/domain/healthCondition.ts` |
 | Health-condition store and repositories | `src/stores/useHealthConditionStore.ts`, `src/db/repositories/*HealthConditionRepository.ts` |
+| Family members (model, "Me", relationships, age) | `src/domain/familyMember.ts` |
+| Family store (active member) and repositories | `src/stores/useFamilyStore.ts`, `src/db/repositories/*FamilyRepository.ts` |
+| Family UI (avatar, context banner, switcher, form) | `src/components/family/` |
 | The medicine form | `src/components/medication/MedicationForm.tsx` |
 | Chips, date picker, collapsible, form section | `src/components/ui/ChoiceChips.tsx`, `DateField.tsx` + `DateField.web.tsx`, `Collapsible.tsx`, `FormSection.tsx` |
 | Assistant safety screen and wording | `src/domain/assistant.ts` |
@@ -735,6 +810,27 @@ will work with no internet and no API key — exactly as the brief requires.
 Newest first. Every commit that changes the app adds an entry here **in the
 same commit**, and updates the sections above that it touches (rule in
 `AGENTS.md`, "Verify before claiming done").
+
+### 2026-09-13 — Family: one account, many profiles
+- **Schema v3**: `family_members` (relationship enum, custom wording, date of
+  birth, avatar colour, `is_self` with a one-per-account unique index);
+  `member_id` on `medications` and `health_conditions` with cascade delete.
+  Supabase mirror with RLS.
+- **Data kept**: `ensureSelf()` creates "Me" on first load and adopts every
+  pre-v3 medicine and condition — nobody loses anything on upgrade.
+- **Repositories / stores**: `FamilyRepository` (SQLite + JSON, shared suite);
+  medicine and condition repositories read/write `member_id`;
+  `useFamilyStore` with a persisted active member.
+- **Screens**: **Family** tab (takes the History placeholder's slot; History
+  folds into Schedule in M5), member dashboard, add / edit profile with a
+  shared form (name, relationship chips, optional date of birth, avatar
+  colour). Medicines tab, home dashboard, add / edit / detail, health
+  conditions and the assistant are all scoped to the active member and show
+  a **MemberContextBanner** naming whose data is on screen. Add screens carry
+  the member id and refuse to render without one.
+- **Removal**: confirmation lists the member's medicines and conditions;
+  "Me" cannot be removed.
+- **Tests**: +36 (2 new suites, v3 migration cases) → 259. Both bundles export.
 
 ### 2026-09-13 — Process: every step is pushed to GitHub straight away
 - Rule added to `AGENTS.md`: each change is committed and pushed immediately,

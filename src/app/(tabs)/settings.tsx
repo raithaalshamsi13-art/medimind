@@ -206,15 +206,22 @@ export default function SettingsScreen() {
           <Card>
             <View style={{ gap: theme.spacing.md }}>
               <AppText variant="body" color="textSecondary">
-                Long-term conditions and readings you want to keep a note of. Stored as you type
-                them, never interpreted.
+                Long-term conditions and readings you want to keep a note of, for you or any
+                family member. Stored as you type them, never interpreted.
               </AppText>
               <Button
-                label="My health conditions"
+                label="Health conditions"
                 icon="heart-outline"
                 variant="secondary"
                 onPress={() => router.push('/health/conditions')}
-                accessibilityHint="Opens the list of your health conditions"
+                accessibilityHint="Opens the health conditions of the family member you are managing"
+              />
+              <Button
+                label="Family members"
+                icon="people-outline"
+                variant="secondary"
+                onPress={() => router.push('/family')}
+                accessibilityHint="Opens the Family tab"
               />
             </View>
           </Card>

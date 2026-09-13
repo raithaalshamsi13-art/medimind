@@ -101,7 +101,48 @@ export const MIGRATIONS: Migration[] = [
         ON medication_conditions (user_id, condition_id);
     `,
   },
-  // Milestone 5 adds version 3: the `reminders` and `doses` tables, with
+  {
+    version: 3,
+    name: 'family_members',
+    up: `
+      -- Profiles managed under one account (no separate login). Exactly one
+      -- row per account has is_self = 1: the account holder ("Me").
+      CREATE TABLE IF NOT EXISTS family_members (
+        id                  TEXT PRIMARY KEY NOT NULL,
+        user_id             TEXT NOT NULL,
+        name                TEXT NOT NULL,
+        relationship        TEXT NOT NULL
+                            CHECK (relationship IN ('ME','MOTHER','FATHER','SPOUSE','SON',
+                              'DAUGHTER','GRANDMOTHER','GRANDFATHER','OTHER')),
+        custom_relationship TEXT,
+        date_of_birth       TEXT,
+        avatar_color        TEXT NOT NULL DEFAULT 'primary'
+                            CHECK (avatar_color IN ('primary','info','success','warning','danger')),
+        is_self             INTEGER NOT NULL DEFAULT 0 CHECK (is_self IN (0,1)),
+        created_at          TEXT NOT NULL,
+        updated_at          TEXT NOT NULL
+      );
+      CREATE INDEX IF NOT EXISTS idx_family_members_user
+        ON family_members (user_id, is_self);
+      -- At most one "Me" per account, enforced by the database.
+      CREATE UNIQUE INDEX IF NOT EXISTS idx_family_members_self
+        ON family_members (user_id) WHERE is_self = 1;
+
+      -- Every medicine and condition belongs to one member. NULL only exists
+      -- transiently for rows written before this version; FamilyRepository
+      -- assigns them to "Me" the first time the account loads.
+      ALTER TABLE medications ADD COLUMN member_id TEXT
+        REFERENCES family_members (id) ON DELETE CASCADE;
+      CREATE INDEX IF NOT EXISTS idx_medications_member
+        ON medications (user_id, member_id);
+
+      ALTER TABLE health_conditions ADD COLUMN member_id TEXT
+        REFERENCES family_members (id) ON DELETE CASCADE;
+      CREATE INDEX IF NOT EXISTS idx_health_conditions_member
+        ON health_conditions (user_id, member_id);
+    `,
+  },
+  // Milestone 5 adds version 4: the `reminders` and `doses` tables, with
   // FOREIGN KEY (medication_id) REFERENCES medications(id) ON DELETE CASCADE.
 ];
 

@@ -50,6 +50,7 @@ type MedicationRow = {
   updated_at: string;
   kind: string | null;
   form: string | null;
+  member_id: string | null;
 };
 
 type LinkRow = { medication_id: string; condition_id: string };
@@ -83,6 +84,7 @@ function mapRow(row: MedicationRow, conditionIds: string[] = []): Medication {
   return {
     id: row.id,
     userId: row.user_id,
+    memberId: row.member_id,
     name: row.name,
     kind: toKind(row.kind),
     form: toForm(row.form),
@@ -106,7 +108,7 @@ function mapRow(row: MedicationRow, conditionIds: string[] = []): Medication {
 const SELECT_COLUMNS = `
   id, user_id, name, dosage, instructions, expiration_date, frequency,
   safety_status, source, scan_confidence, notes, image_uri, archived,
-  created_at, updated_at, kind, form
+  created_at, updated_at, kind, form, member_id
 `;
 
 /** De-duplicate and drop blanks so a bad caller cannot write junk links. */
@@ -197,6 +199,7 @@ export class SqliteMedicationRepository implements MedicationRepository {
     const medication: Medication = {
       id: newId(),
       userId,
+      memberId: input.memberId ?? null,
       name: input.name,
       kind: input.kind ?? null,
       form: input.form ?? null,
@@ -223,8 +226,8 @@ export class SqliteMedicationRepository implements MedicationRepository {
           `INSERT INTO medications (
              id, user_id, name, dosage, instructions, expiration_date, frequency,
              safety_status, source, scan_confidence, notes, image_uri, archived,
-             created_at, updated_at, kind, form
-           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+             created_at, updated_at, kind, form, member_id
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             medication.id,
             medication.userId,
@@ -243,6 +246,7 @@ export class SqliteMedicationRepository implements MedicationRepository {
             medication.updatedAt,
             medication.kind,
             medication.form,
+            medication.memberId,
           ],
         );
         await this.writeLinks(userId, medication.id, conditionIds);

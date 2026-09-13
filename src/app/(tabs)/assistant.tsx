@@ -17,6 +17,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, FlatList, Pressable, View } from 'react-native';
 
 import { ChatBubble } from '@/components/assistant/ChatBubble';
+import { MemberContextBanner } from '@/components/family/MemberContextBanner';
 import {
   AppText,
   Badge,
@@ -36,6 +37,13 @@ import {
   type AssistantMessage,
 } from '@/domain/assistant';
 import { useAssistantStore } from '@/stores/useAssistantStore';
+import {
+  forMember,
+  memberById,
+  selectActiveMemberId,
+  selectMembers,
+  useFamilyStore,
+} from '@/stores/useFamilyStore';
 import { selectMedications, useMedicationStore } from '@/stores/useMedicationStore';
 import { useSettingsStore } from '@/stores/useSettingsStore';
 import { useTheme } from '@/theme/ThemeContext';
@@ -49,10 +57,22 @@ export default function AssistantScreen() {
   const demoMode = useSettingsStore((s) => s.demoMode);
   const setSetting = useSettingsStore((s) => s.set);
 
-  const medications = useMedicationStore(selectMedications);
+  const allMedications = useMedicationStore(selectMedications);
+  const members = useFamilyStore(selectMembers);
+  const activeMemberId = useFamilyStore(selectActiveMemberId);
   const focus = useMemo(
-    () => medications.find((m) => m.id === medicationId) ?? null,
-    [medications, medicationId],
+    () => allMedications.find((m) => m.id === medicationId) ?? null,
+    [allMedications, medicationId],
+  );
+  // The assistant only ever sees ONE family member's medicines: the medicine
+  // it was opened for, otherwise the member being managed. Mixing two
+  // people's medicines into one answer would be exactly the confusion the
+  // Family feature exists to prevent.
+  const memberId = focus?.memberId ?? activeMemberId;
+  const member = useMemo(() => memberById(members, memberId), [members, memberId]);
+  const medications = useMemo(
+    () => forMember(allMedications, memberId),
+    [allMedications, memberId],
   );
 
   const messages = useAssistantStore((s) => s.messages);
@@ -148,6 +168,13 @@ export default function AssistantScreen() {
           gap: theme.spacing.sm,
         }}>
         <AppText variant="title">Ask MediMind</AppText>
+        {member && !member.isSelf ? (
+          <MemberContextBanner
+            member={member}
+            prefix="Answering about medicines for"
+            onChange={() => router.push('/family')}
+          />
+        ) : null}
         <InlineMessage tone="warning" title="Not medical advice" message={ASSISTANT_SAFETY_NOTE} />
         <View
           style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>

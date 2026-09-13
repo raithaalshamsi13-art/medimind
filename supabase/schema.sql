@@ -97,6 +97,43 @@ create policy "medications: own rows"
   with check (auth.uid() = user_id);
 
 -- ---------------------------------------------------------------------------
+-- family_members (schema v3)
+--
+-- Profiles managed under one account — no separate login. Exactly one row per
+-- account has is_self = true (the account holder, "Me").
+-- ---------------------------------------------------------------------------
+create table if not exists public.family_members (
+  id                  uuid primary key,
+  user_id             uuid not null references auth.users (id) on delete cascade,
+  name                text not null,
+  relationship        text not null
+                      check (relationship in ('ME','MOTHER','FATHER','SPOUSE','SON',
+                        'DAUGHTER','GRANDMOTHER','GRANDFATHER','OTHER')),
+  custom_relationship text,
+  date_of_birth       date,
+  avatar_color        text not null default 'primary'
+                      check (avatar_color in ('primary','info','success','warning','danger')),
+  is_self             boolean not null default false,
+  created_at          timestamptz not null default now(),
+  updated_at          timestamptz not null default now()
+);
+
+create index if not exists idx_family_members_user on public.family_members (user_id, is_self);
+create unique index if not exists idx_family_members_self on public.family_members (user_id) where is_self;
+
+alter table public.family_members enable row level security;
+
+create policy "family_members: own rows"
+  on public.family_members for all
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+-- Every medicine and condition belongs to one family member.
+alter table public.medications add column if not exists member_id uuid
+  references public.family_members (id) on delete cascade;
+create index if not exists idx_medications_member on public.medications (user_id, member_id);
+
+-- ---------------------------------------------------------------------------
 -- health_conditions (schema v2)
 --
 -- The user's own notes on long-term conditions. Stored as typed, never
@@ -116,6 +153,10 @@ create table if not exists public.health_conditions (
 );
 
 create index if not exists idx_health_conditions_user on public.health_conditions (user_id, created_at);
+
+alter table public.health_conditions add column if not exists member_id uuid
+  references public.family_members (id) on delete cascade;
+create index if not exists idx_health_conditions_member on public.health_conditions (user_id, member_id);
 
 alter table public.health_conditions enable row level security;
 
@@ -212,6 +253,10 @@ $$;
 
 drop trigger if exists medications_touch on public.medications;
 create trigger medications_touch before update on public.medications
+  for each row execute procedure public.touch_updated_at();
+
+drop trigger if exists family_members_touch on public.family_members;
+create trigger family_members_touch before update on public.family_members
   for each row execute procedure public.touch_updated_at();
 
 drop trigger if exists health_conditions_touch on public.health_conditions;

@@ -66,6 +66,8 @@ export function conditionPreset(type: ConditionType): ConditionPreset {
 export type HealthCondition = {
   id: string;
   userId: string;
+  /** The family member this condition belongs to (see domain/familyMember.ts). */
+  memberId: string | null;
   type: ConditionType;
   /** The user's own name for the condition. Required when type is OTHER. */
   customName: string | null;
@@ -130,6 +132,11 @@ export type HealthConditionInput = {
   customName: string | null;
   reading: string | null;
   notes: string | null;
+};
+
+/** A new condition also says whose it is. Editing never moves it. */
+export type HealthConditionCreateInput = HealthConditionInput & {
+  memberId?: string | null;
 };
 
 /** Raw form state — strings, as a TextInput produces them. */

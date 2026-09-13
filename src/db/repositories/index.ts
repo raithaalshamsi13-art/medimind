@@ -13,15 +13,32 @@
 
 import { getDatabase, isSqliteSupported } from '../database';
 
+import type { FamilyRepository } from './FamilyRepository';
 import type { HealthConditionRepository } from './HealthConditionRepository';
+import { JsonFamilyRepository } from './JsonFamilyRepository';
 import { JsonHealthConditionRepository } from './JsonHealthConditionRepository';
 import { JsonMedicationRepository } from './JsonMedicationRepository';
 import type { MedicationRepository } from './MedicationRepository';
+import { SqliteFamilyRepository } from './SqliteFamilyRepository';
 import { SqliteHealthConditionRepository } from './SqliteHealthConditionRepository';
 import { SqliteMedicationRepository } from './SqliteMedicationRepository';
 
 let cached: MedicationRepository | null = null;
 let cachedConditions: HealthConditionRepository | null = null;
+let cachedFamily: FamilyRepository | null = null;
+
+/** Same backend as medicines, so members and their data share one store. */
+export async function getFamilyRepository(): Promise<FamilyRepository> {
+  if (cachedFamily) return cachedFamily;
+
+  const medications = await getMedicationRepository();
+  if (medications.kind === 'sqlite') {
+    cachedFamily = new SqliteFamilyRepository(await getDatabase());
+  } else {
+    cachedFamily = new JsonFamilyRepository();
+  }
+  return cachedFamily;
+}
 
 /**
  * Same backend decision as medicines, so a medicine and the conditions it
@@ -65,6 +82,7 @@ export async function getMedicationRepository(): Promise<MedicationRepository> {
 export function resetMedicationRepository(): void {
   cached = null;
   cachedConditions = null;
+  cachedFamily = null;
 }
 
 export type {
@@ -72,6 +90,9 @@ export type {
   MedicationRepositoryKind,
 } from './MedicationRepository';
 export type { HealthConditionRepository } from './HealthConditionRepository';
+export type { FamilyRepository } from './FamilyRepository';
+export { JsonFamilyRepository } from './JsonFamilyRepository';
+export { SqliteFamilyRepository } from './SqliteFamilyRepository';
 export { JsonMedicationRepository } from './JsonMedicationRepository';
 export { SqliteMedicationRepository } from './SqliteMedicationRepository';
 export { JsonHealthConditionRepository } from './JsonHealthConditionRepository';

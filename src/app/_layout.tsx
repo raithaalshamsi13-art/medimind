@@ -15,6 +15,7 @@ import { useEffect } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { useAuthStore } from '@/stores/useAuthStore';
+import { useFamilyStore } from '@/stores/useFamilyStore';
 import { useHealthConditionStore } from '@/stores/useHealthConditionStore';
 import { useMedicationStore } from '@/stores/useMedicationStore';
 import { useSettingsStore } from '@/stores/useSettingsStore';
@@ -48,10 +49,13 @@ function RootNavigator() {
   const bootstrapAuth = useAuthStore((state) => state.bootstrap);
 
   const userId = useAuthStore((state) => state.session?.user.id ?? null);
+  const userDisplayName = useAuthStore((state) => state.session?.user.displayName ?? null);
   const loadMedications = useMedicationStore((state) => state.load);
   const clearMedications = useMedicationStore((state) => state.clear);
   const loadConditions = useHealthConditionStore((state) => state.load);
   const clearConditions = useHealthConditionStore((state) => state.clear);
+  const loadFamily = useFamilyStore((state) => state.load);
+  const clearFamily = useFamilyStore((state) => state.clear);
 
   const isSettingsHydrated = useSettingsStore((state) => state.isHydrated);
   const hasCompletedOnboarding = useSettingsStore((state) => state.hasCompletedOnboarding);
@@ -76,13 +80,27 @@ function RootNavigator() {
   // memory on sign-out so the next account never sees the previous one's data.
   useEffect(() => {
     if (userId) {
-      void loadMedications(userId);
-      void loadConditions(userId);
+      // Family first: ensureSelf() assigns any pre-v3 rows to "Me" before the
+      // medicine and condition lists are read.
+      void loadFamily(userId, userDisplayName ?? 'Me').then(() => {
+        void loadMedications(userId);
+        void loadConditions(userId);
+      });
     } else {
       clearMedications();
       clearConditions();
+      clearFamily();
     }
-  }, [userId, loadMedications, clearMedications, loadConditions, clearConditions]);
+  }, [
+    userId,
+    userDisplayName,
+    loadMedications,
+    clearMedications,
+    loadConditions,
+    clearConditions,
+    loadFamily,
+    clearFamily,
+  ]);
 
   useAuthGate({ isReady, isSignedIn, hasCompletedOnboarding });
 

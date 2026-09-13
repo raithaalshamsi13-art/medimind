@@ -150,6 +150,7 @@ describe('toFormValues', () => {
     const medication: Medication = {
       id: 'm1',
       userId: 'u1',
+      memberId: null,
       name: 'Mystery tablets',
       kind: null,
       form: null,

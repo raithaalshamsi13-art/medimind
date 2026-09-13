@@ -1,15 +1,18 @@
 /**
- * My health conditions — add, edit and remove the conditions the user keeps
- * track of. Reached from Settings and from the medicine form.
+ * Health conditions for one family member — add, edit and remove the
+ * conditions they keep track of. Reached from Settings, the medicine form
+ * and the family member's profile.
  *
  * Purely a notebook (see domain/healthCondition.ts): readings are shown as
  * typed and never interpreted.
  */
 
 import { Ionicons } from '@expo/vector-icons';
-import { useState } from 'react';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useMemo, useState } from 'react';
 import { View } from 'react-native';
 
+import { MemberContextBanner } from '@/components/family/MemberContextBanner';
 import { HealthConditionEditor } from '@/components/health/HealthConditionEditor';
 import { AppText, Button, Card, InlineMessage, Screen } from '@/components/ui';
 import {
@@ -21,6 +24,13 @@ import {
 } from '@/domain/healthCondition';
 import { confirmAction } from '@/lib/confirm';
 import { selectUser, useAuthStore } from '@/stores/useAuthStore';
+import {
+  forMember,
+  memberById,
+  selectActiveMemberId,
+  selectMembers,
+  useFamilyStore,
+} from '@/stores/useFamilyStore';
 import { selectConditions, useHealthConditionStore } from '@/stores/useHealthConditionStore';
 import { useMedicationStore } from '@/stores/useMedicationStore';
 import { useTheme } from '@/theme/ThemeContext';
@@ -29,9 +39,22 @@ type Mode = { kind: 'list' } | { kind: 'add' } | { kind: 'edit'; condition: Heal
 
 export default function HealthConditionsScreen() {
   const theme = useTheme();
+  const router = useRouter();
+  const { memberId } = useLocalSearchParams<{ memberId?: string }>();
   const user = useAuthStore(selectUser);
 
-  const conditions = useHealthConditionStore(selectConditions);
+  const members = useFamilyStore(selectMembers);
+  const activeMemberId = useFamilyStore(selectActiveMemberId);
+  const member = useMemo(
+    () => memberById(members, memberId || activeMemberId),
+    [members, memberId, activeMemberId],
+  );
+
+  const allConditions = useHealthConditionStore(selectConditions);
+  const conditions = useMemo(
+    () => forMember(allConditions, member?.id ?? null),
+    [allConditions, member],
+  );
   const isSaving = useHealthConditionStore((state) => state.isSaving);
   const error = useHealthConditionStore((state) => state.error);
   const createCondition = useHealthConditionStore((state) => state.createCondition);
@@ -44,13 +67,28 @@ export default function HealthConditionsScreen() {
   if (!user) {
     return (
       <Screen scroll>
-        <InlineMessage tone="warning" message="You need to be signed in to see your conditions." />
+        <InlineMessage tone="warning" message="You need to be signed in to see health conditions." />
+      </Screen>
+    );
+  }
+
+  if (!member) {
+    return (
+      <Screen scroll>
+        <View style={{ gap: theme.spacing.lg }}>
+          <InlineMessage
+            tone="warning"
+            title="Whose conditions?"
+            message="Choose a family member first, so the conditions are saved under the right person."
+          />
+          <Button label="Go to Family" icon="people-outline" onPress={() => router.push('/family')} />
+        </View>
       </Screen>
     );
   }
 
   const handleCreate = async (input: HealthConditionInput) => {
-    const created = await createCondition(user.id, input);
+    const created = await createCondition(user.id, { ...input, memberId: member.id });
     if (created) setMode({ kind: 'list' });
   };
 
@@ -76,6 +114,8 @@ export default function HealthConditionsScreen() {
   return (
     <Screen scroll keyboardAvoiding>
       <View style={{ gap: theme.spacing.xl }}>
+        <MemberContextBanner member={member} prefix="Health conditions for" />
+
         <AppText variant="body" color="textSecondary">
           Keep a note of long-term conditions and the latest readings you want to remember.
           MediMind stores them as you type them and does not interpret them.
@@ -109,7 +149,8 @@ export default function HealthConditionsScreen() {
             <View style={{ alignItems: 'center', gap: theme.spacing.md }}>
               <Ionicons name="heart-outline" size={40} color={theme.colors.textMuted} />
               <AppText variant="body" color="textSecondary" align="center">
-                No conditions yet. Add one to link it to your medicines.
+                No conditions recorded for {member.isSelf ? 'you' : member.name} yet. Add one to
+                link it to {member.isSelf ? 'your' : 'their'} medicines.
               </AppText>
             </View>
           </Card>

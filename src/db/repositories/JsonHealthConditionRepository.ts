@@ -7,7 +7,11 @@
  * backends do the same thing.
  */
 
-import type { HealthCondition, HealthConditionInput } from '@/domain/healthCondition';
+import type {
+  HealthCondition,
+  HealthConditionCreateInput,
+  HealthConditionInput,
+} from '@/domain/healthCondition';
 import type { Medication } from '@/domain/medication';
 import { isoNow } from '@/lib/datetime';
 import { appError } from '@/lib/errors';
@@ -23,7 +27,9 @@ export class JsonHealthConditionRepository implements HealthConditionRepository 
   private async readAll(): Promise<Result<HealthCondition[]>> {
     const stored = await readJson<HealthCondition[]>(STORAGE_KEYS.healthConditions);
     if (!stored.ok) return fail(stored.error);
-    return ok(Array.isArray(stored.value) ? stored.value : []);
+    const list = Array.isArray(stored.value) ? stored.value : [];
+    // Rows written before schema v3 have no memberId.
+    return ok(list.map((condition) => ({ ...condition, memberId: condition.memberId ?? null })));
   }
 
   private async writeAll(conditions: HealthCondition[]): Promise<Result<void>> {
@@ -45,7 +51,7 @@ export class JsonHealthConditionRepository implements HealthConditionRepository 
     return ok(all.value.find((c) => c.id === id && c.userId === userId) ?? null);
   }
 
-  async create(userId: string, input: HealthConditionInput): Promise<Result<HealthCondition>> {
+  async create(userId: string, input: HealthConditionCreateInput): Promise<Result<HealthCondition>> {
     const all = await this.readAll();
     if (!all.ok) return fail(all.error);
 
@@ -53,6 +59,7 @@ export class JsonHealthConditionRepository implements HealthConditionRepository 
     const condition: HealthCondition = {
       id: newId(),
       userId,
+      memberId: input.memberId ?? null,
       type: input.type,
       customName: input.customName,
       reading: input.reading,

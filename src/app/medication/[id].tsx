@@ -26,6 +26,7 @@ import {
 import { confirmAction } from '@/lib/confirm';
 import { formatIsoDate } from '@/lib/datetime';
 import { selectUser, useAuthStore } from '@/stores/useAuthStore';
+import { memberById, selectMembers, useFamilyStore } from '@/stores/useFamilyStore';
 import { selectConditions, useHealthConditionStore } from '@/stores/useHealthConditionStore';
 import { useMedicationStore } from '@/stores/useMedicationStore';
 import { useTheme } from '@/theme/ThemeContext';
@@ -48,6 +49,8 @@ export default function MedicationDetailScreen() {
   const removeMedication = useMedicationStore((state) => state.removeMedication);
   const isSaving = useMedicationStore((state) => state.isSaving);
   const conditions = useHealthConditionStore(selectConditions);
+  const members = useFamilyStore(selectMembers);
+  const owner = useMemo(() => memberById(members, medication?.memberId), [members, medication]);
 
   const linkedConditions = useMemo(
     () =>
@@ -121,6 +124,13 @@ export default function MedicationDetailScreen() {
           )}
 
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.sm }}>
+            {owner ? (
+              <Badge
+                label={owner.isSelf ? 'My medicine' : `${owner.name}’s medicine`}
+                tone="info"
+                icon="people-outline"
+              />
+            ) : null}
             <Badge
               label={medication.source === 'SCAN' ? 'Added by scanning' : 'Added by hand'}
               tone="neutral"

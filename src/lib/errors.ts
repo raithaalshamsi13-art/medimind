@@ -17,6 +17,7 @@ export type AppErrorCode =
   // Data
   | 'DATABASE_ERROR'
   | 'NOT_FOUND'
+  | 'NOT_ALLOWED'
   // Infrastructure
   | 'STORAGE_UNAVAILABLE'
   | 'NETWORK_UNAVAILABLE'
@@ -40,6 +41,7 @@ const FRIENDLY_MESSAGES: Record<AppErrorCode, string> = {
   DATABASE_ERROR:
     'MediMind could not open your saved medicines. Please close the app completely and open it again.',
   NOT_FOUND: 'That medicine could not be found. It may have already been deleted.',
+  NOT_ALLOWED: 'That action is not allowed.',
   STORAGE_UNAVAILABLE:
     'MediMind could not save data on this device. Please restart the app and try again.',
   NETWORK_UNAVAILABLE:

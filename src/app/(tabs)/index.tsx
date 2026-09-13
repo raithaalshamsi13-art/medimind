@@ -16,18 +16,22 @@ import { useMemo } from 'react';
 import { Pressable, View } from 'react-native';
 
 import { Logo } from '@/components/brand/Logo';
+import { MemberContextBanner } from '@/components/family/MemberContextBanner';
 import { MedicationCard } from '@/components/medication/MedicationCard';
 import { AppText, Button, Card, Screen, TextLink } from '@/components/ui';
 import { MEDICAL_DISCLAIMER_SHORT } from '@/config/constants';
+import { possessive } from '@/domain/familyMember';
 import { firstNameOf } from '@/domain/user';
 import { formatFullDate, greetingFor } from '@/lib/datetime';
 import { selectUser, useAuthStore } from '@/stores/useAuthStore';
 import {
-  activeMedications,
-  selectMedicationCount,
-  selectMedications,
-  useMedicationStore,
-} from '@/stores/useMedicationStore';
+  forMember,
+  memberById,
+  selectActiveMemberId,
+  selectMembers,
+  useFamilyStore,
+} from '@/stores/useFamilyStore';
+import { activeMedications, selectMedications, useMedicationStore } from '@/stores/useMedicationStore';
 import { useTheme } from '@/theme/ThemeContext';
 
 /** How many medicines the dashboard previews before deferring to the tab. */
@@ -38,14 +42,22 @@ export default function HomeScreen() {
   const router = useRouter();
   const user = useAuthStore(selectUser);
 
-  const medications = useMedicationStore(selectMedications);
-  const medicationCount = useMedicationStore(selectMedicationCount);
+  const allMedications = useMedicationStore(selectMedications);
+  const members = useFamilyStore(selectMembers);
+  const activeMemberId = useFamilyStore(selectActiveMemberId);
+  const member = useMemo(() => memberById(members, activeMemberId), [members, activeMemberId]);
 
-  // Most recently added first — derived here rather than in a store selector,
-  // so the snapshot React sees stays stable between renders.
+  // The dashboard shows the active family member's medicines — "Me" unless
+  // the user switched to a relative. Derived here rather than in a store
+  // selector, so the snapshot React sees stays stable between renders.
+  const medications = useMemo(
+    () => activeMedications(forMember(allMedications, activeMemberId)),
+    [allMedications, activeMemberId],
+  );
+  const medicationCount = medications.length;
   const recent = useMemo(
     () =>
-      activeMedications(medications)
+      medications
         .slice()
         .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
         .slice(0, DASHBOARD_PREVIEW_LIMIT),
@@ -76,6 +88,15 @@ export default function HomeScreen() {
           </AppText>
         </View>
 
+        {/* ---------- Whose medicines ---------- */}
+        {member && !member.isSelf ? (
+          <MemberContextBanner
+            member={member}
+            prefix="Showing medicines for"
+            onChange={() => router.push('/family')}
+          />
+        ) : null}
+
         {/* ---------- Hero action: Scan ---------- */}
         <ScanHeroCard />
 
@@ -91,7 +112,7 @@ export default function HomeScreen() {
 
         {/* ---------- Your medicines ---------- */}
         <View style={{ gap: theme.spacing.md }}>
-          <AppText variant="heading">Your medicines</AppText>
+          <AppText variant="heading">{member ? possessive(member, 'medicines') : 'Your medicines'}</AppText>
 
           {medicationCount === 0 ? (
             <Card>
@@ -113,7 +134,12 @@ export default function HomeScreen() {
                   label="Add medicine manually"
                   icon="create-outline"
                   variant="secondary"
-                  onPress={() => router.push('/medication/add')}
+                  onPress={() =>
+                    router.push({
+                      pathname: '/medication/add',
+                      params: member ? { memberId: member.id } : {},
+                    })
+                  }
                   accessibilityHint="Opens a form to type in a medicine"
                 />
               </View>
@@ -141,7 +167,12 @@ export default function HomeScreen() {
                 label="Add medicine"
                 icon="add"
                 variant="secondary"
-                onPress={() => router.push('/medication/add')}
+                onPress={() =>
+                  router.push({
+                    pathname: '/medication/add',
+                    params: member ? { memberId: member.id } : {},
+                  })
+                }
               />
             </View>
           )}

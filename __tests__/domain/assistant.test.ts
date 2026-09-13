@@ -65,6 +65,7 @@ describe('toMedicationContext', () => {
   const medication: Medication = {
     id: 'm1',
     userId: 'u1',
+    memberId: null,
     name: 'Paracetamol',
     kind: null,
     form: null,

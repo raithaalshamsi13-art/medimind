@@ -74,6 +74,12 @@ export const MAX_CONDITIONS_PER_MEDICATION = 20;
 export type Medication = {
   id: string;
   userId: string;
+  /**
+   * The family member this medicine belongs to. Null only for rows written
+   * before schema v3, and only until the account next loads (they are then
+   * assigned to the "Me" profile).
+   */
+  memberId: string | null;
   name: string;
   /** Prescription / over-the-counter / supplement. Null when not chosen. */
   kind: MedicationKind | null;
@@ -231,6 +237,8 @@ export type MedicationInput = {
 
 /** Extra provenance fields, set by the scanner rather than typed by the user. */
 export type MedicationCreateInput = MedicationInput & {
+  /** Which family member the medicine is for. Screens always pass this. */
+  memberId?: string | null;
   source?: MedicationSource;
   scanConfidence?: number | null;
   imageUri?: string | null;
