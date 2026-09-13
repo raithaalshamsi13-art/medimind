@@ -396,6 +396,7 @@ exists" assumptions.
 | Tab bar cut off when the web app is added to the iPhone home screen | Body sized to `100vh` in standalone Safari, which is taller than the visible area | `100dvh` root sizing + `viewport-fit=cover`, explicit tab-bar height with safe-area inset |
 | Tab labels clipped at large text sizes | Five labels do not fit an iPhone width | Icon-only tabs in portrait, labels beside icons in landscape (user's choice) |
 | App showed the template icon | `app.json` pointed at the template icon bundle | `ios.icon` → the supplied square artwork; favicon, manifest and apple-touch icons generated from it |
+| "Log out" and "Delete medicine" did nothing in the browser / home-screen app | Both used `Alert.alert`, which react-native-web does not implement — the tap was silently swallowed | `lib/confirm.ts` (`confirmAction`): native alert on the phone, the browser's confirm dialog on web; used by every destructive button |
 | Two conditions added in the same millisecond listed in random order in the browser | JSON list sorted by `created_at`, then by random id | Insertion order kept (matches SQLite's `ORDER BY created_at, rowid`); caught by the shared repository suite |
 
 ---
@@ -734,6 +735,13 @@ will work with no internet and no API key — exactly as the brief requires.
 Newest first. Every commit that changes the app adds an entry here **in the
 same commit**, and updates the sections above that it touches (rule in
 `AGENTS.md`, "Verify before claiming done").
+
+### 2026-09-13 — Fix: log out (and delete medicine) did nothing on the web
+- Settings → Log out and the medicine Delete button called `Alert.alert`,
+  which the browser build silently ignores, so neither worked on the web or
+  the iPhone home-screen version. Both now use `confirmAction`
+  (`src/lib/confirm.ts`), which shows the native alert on the phone and the
+  browser's own confirm dialog on web. No `Alert.alert` calls remain in screens.
 
 ### 2026-09-13 — Summary audit and the summary-per-step rule
 - Audited this document against every commit since 6 September and filled the

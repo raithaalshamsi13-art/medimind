@@ -10,7 +10,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useMemo } from 'react';
-import { Alert, View } from 'react-native';
+import { View } from 'react-native';
 
 import { medicationIcon } from '@/components/medication/formIcons';
 import { AppText, Badge, Button, Card, InlineMessage, Screen, type BadgeTone } from '@/components/ui';
@@ -23,6 +23,7 @@ import {
   UNKNOWN_FIELD_TEXT,
   type Medication,
 } from '@/domain/medication';
+import { confirmAction } from '@/lib/confirm';
 import { formatIsoDate } from '@/lib/datetime';
 import { selectUser, useAuthStore } from '@/stores/useAuthStore';
 import { selectConditions, useHealthConditionStore } from '@/stores/useHealthConditionStore';
@@ -56,24 +57,21 @@ export default function MedicationDetailScreen() {
     [conditions, medication],
   );
 
-  const confirmDelete = () => {
+  const confirmDelete = async () => {
     if (!user || !medication) return;
 
-    Alert.alert(
-      `Delete ${medication.name}?`,
-      'This removes the medicine and any reminders you have set for it. It cannot be undone.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            const removed = await removeMedication(user.id, medication.id);
-            if (removed) router.back();
-          },
-        },
-      ],
-    );
+    // confirmAction works in the browser too; Alert.alert silently does not.
+    const confirmed = await confirmAction({
+      title: `Delete ${medication.name}?`,
+      message:
+        'This removes the medicine and any reminders you have set for it. It cannot be undone.',
+      confirmLabel: 'Delete',
+      destructive: true,
+    });
+    if (!confirmed) return;
+
+    const removed = await removeMedication(user.id, medication.id);
+    if (removed) router.back();
   };
 
   if (!medication) {
@@ -221,7 +219,7 @@ export default function MedicationDetailScreen() {
             label="Delete medicine"
             icon="trash-outline"
             variant="danger"
-            onPress={confirmDelete}
+            onPress={() => void confirmDelete()}
             loading={isSaving}
           />
         </View>

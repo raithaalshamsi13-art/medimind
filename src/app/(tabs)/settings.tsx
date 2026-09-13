@@ -10,7 +10,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
-import { Alert, Switch, View } from 'react-native';
+import { Switch, View } from 'react-native';
 
 import { isAssistantConfigured, isSupabaseConfigured } from '@/config/env';
 import { Logo } from '@/components/brand/Logo';
@@ -26,6 +26,7 @@ import {
 } from '@/components/ui';
 import { APP_NAME, APP_TAGLINE, MEDICAL_DISCLAIMER } from '@/config/constants';
 import { firstNameOf } from '@/domain/user';
+import { confirmAction } from '@/lib/confirm';
 import { isStoragePersistent } from '@/lib/storage';
 import { selectUser, useAuthStore } from '@/stores/useAuthStore';
 import { useSettingsStore, type AppearancePreference } from '@/stores/useSettingsStore';
@@ -72,11 +73,16 @@ export default function SettingsScreen() {
   const paletteId = useSettingsStore((state) => state.paletteId);
   const setSetting = useSettingsStore((state) => state.set);
 
-  const confirmSignOut = () => {
-    Alert.alert('Log out of MediMind?', 'Your saved medicines and reminders stay on this device.', [
-      { text: 'Cancel', style: 'cancel' },
-      { text: 'Log out', style: 'destructive', onPress: () => void signOut() },
-    ]);
+  const confirmSignOut = async () => {
+    // confirmAction, not Alert.alert: the native alert is a silent no-op in
+    // the browser, which made "Log out" do nothing on the web build.
+    const confirmed = await confirmAction({
+      title: 'Log out of MediMind?',
+      message: 'Your saved medicines and reminders stay on this device.',
+      confirmLabel: 'Log out',
+      destructive: true,
+    });
+    if (confirmed) await signOut();
   };
 
   return (
@@ -275,7 +281,7 @@ export default function SettingsScreen() {
           label="Log out"
           icon="log-out-outline"
           variant="danger"
-          onPress={confirmSignOut}
+          onPress={() => void confirmSignOut()}
           accessibilityHint="Signs you out and returns to the login screen"
         />
       </View>
