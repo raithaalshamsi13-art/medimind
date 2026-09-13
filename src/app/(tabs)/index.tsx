@@ -21,9 +21,11 @@ import { MedicationCard } from '@/components/medication/MedicationCard';
 import { AppText, Button, Card, Screen, TextLink } from '@/components/ui';
 import { MEDICAL_DISCLAIMER_SHORT } from '@/config/constants';
 import { possessive } from '@/domain/familyMember';
+import { localDateKey, scheduledDate } from '@/domain/reminder';
 import { firstNameOf } from '@/domain/user';
-import { formatFullDate, greetingFor } from '@/lib/datetime';
+import { formatClockTime, formatFullDate, greetingFor } from '@/lib/datetime';
 import { selectUser, useAuthStore } from '@/stores/useAuthStore';
+import { dosesOn, selectDoses, useDoseStore } from '@/stores/useDoseStore';
 import {
   forMember,
   memberById,
@@ -63,6 +65,20 @@ export default function HomeScreen() {
         .slice(0, DASHBOARD_PREVIEW_LIMIT),
     [medications],
   );
+
+  // Today's doses for the active member, from the dose store (TRACK).
+  const doses = useDoseStore(selectDoses);
+  const todayDoses = useMemo(
+    () => dosesOn(doses, localDateKey(new Date()), activeMemberId),
+    [doses, activeMemberId],
+  );
+  const takenToday = todayDoses.filter((d) => d.status === 'TAKEN').length;
+  const nextDose = todayDoses.find((d) => d.status === 'UPCOMING') ?? null;
+  const nextDoseLabel = nextDose
+    ? `${formatClockTime(scheduledDate(nextDose.scheduledAt))} · ${
+        medications.find((m) => m.id === nextDose.medicationId)?.name ?? 'Medicine'
+      }`
+    : '';
 
   const greeting = user ? `${greetingFor()}, ${firstNameOf(user)}` : greetingFor();
 
@@ -107,8 +123,35 @@ export default function HomeScreen() {
             value={medicationCount}
             label={medicationCount === 1 ? 'Medicine saved' : 'Medicines saved'}
           />
-          <StatCard icon="checkmark-done-outline" value={0} label="Doses taken today" />
+          <StatCard
+            icon="checkmark-done-outline"
+            value={takenToday}
+            label={todayDoses.length > 0 ? `of ${todayDoses.length} doses taken today` : 'Doses taken today'}
+          />
         </View>
+
+        {/* ---------- Next dose ---------- */}
+        <Card
+          onPress={() => router.push('/schedule')}
+          accessibilityLabel={nextDose ? `Next dose: ${nextDoseLabel}` : 'Open the schedule'}
+          accessibilityHint="Opens the schedule">
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
+            <Ionicons name="alarm-outline" size={26} color={theme.colors.primary} />
+            <View style={{ flex: 1, gap: theme.spacing.xxs }}>
+              <AppText variant="label" color="textMuted">
+                NEXT DOSE
+              </AppText>
+              <AppText variant="subheading">
+                {nextDose
+                  ? nextDoseLabel
+                  : todayDoses.length > 0
+                    ? 'All done for today'
+                    : 'No reminders set yet'}
+              </AppText>
+            </View>
+            <Ionicons name="chevron-forward" size={22} color={theme.colors.textMuted} />
+          </View>
+        </Card>
 
         {/* ---------- Your medicines ---------- */}
         <View style={{ gap: theme.spacing.md }}>

@@ -900,6 +900,19 @@ Newest first. Every commit that changes the app adds an entry here **in the
 same commit**, and updates the sections above that it touches (rule in
 `AGENTS.md`, "Verify before claiming done").
 
+### 2026-09-13 — Milestone 5, step 3: Schedule and history, Home counts
+- **Schedule tab** rebuilt: member switcher + banner; a notifications card
+  (ask once / off warning / "not available in the browser"); **Today** —
+  every dose due today for the active member with time, medicine, dose
+  wording, status badge and **Taken / Skip** (Undo afterwards); **History**
+  — the last seven days grouped by date with "2 of 3 taken · 1 missed" and
+  a line per dose. Doses are materialised and swept for missed ones every
+  time the tab is focused. No charts, by design.
+- **Home**: "Doses taken today" is real ("1 of 3 doses taken today") and a
+  **Next dose** card (time · medicine) opens the schedule.
+- Wording: a missed dose is recorded, never chased — "follow the label,
+  never take a double dose to catch up".
+
 ### 2026-09-13 — Milestone 5, step 2: the reminder screen
 - **`/reminder/[medicationId]`** — set or edit the one reminder for a
   medicine. Opened automatically after **Add medicine** saves (`?new=1`,
