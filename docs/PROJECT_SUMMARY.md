@@ -519,10 +519,12 @@ demo cannot be broken by a missing key or a dead network.
 
 ## 9. Testing and verification
 
-**277 tests in 16 suites**, all passing:
+**315 tests in 18 suites**, all passing:
 
 | Suite | Covers |
 |---|---|
+| `db/ReminderRepository` | reminder CRUD, one per medicine, notification ids, per-user isolation; doses created once per occurrence, status kept on re-seed, missed sweep only touches UPCOMING before the cutoff, follow-up id; cascades from medicine and family member — **both** backends |
+| `domain/reminder` | suggestion from the label (blocked when expired, none when not understood, as-needed), input schema (sorted unique times, days rules, date order), occurrences per day, grace window, wording helpers |
 | `db/migrations` | schema version, idempotence, indexes, every CHECK constraint; v2 columns, condition-type CHECK, link cascade; v3 one-"Me" index, relationship/colour CHECKs, member_id FK + cascade; v4 profile columns default null, value lists and ranges enforced; v5 one reminder per medicine, one dose per occurrence, enums, cascades |
 | `db/FamilyRepository` | `ensureSelf` idempotence and adoption of pre-v3 rows, ordering ("Me" first), one-"Me" rule, self kept as ME, per-user isolation, self cannot be removed, removal cascades to that member's medicines and conditions only; profile fields round trip; sign-up step pending for "Me" only and marked done once — **both** backends |
 | `domain/familyMember` | schema (Other needs wording, future DOB rejected; height/weight numeric with comma decimals and plausible ranges; gender/blood-type lists), addable relationships exclude Me, labels, age, initials, possessives, least-used avatar colour |
