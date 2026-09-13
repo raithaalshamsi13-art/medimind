@@ -46,9 +46,17 @@ type AssistantState = {
   clearError: () => void;
 };
 
-function message(role: AssistantMessage['role'], text: string, source?: AssistantSource): AssistantMessage {
-  return { id: newId(), role, text, source, createdAt: isoNow() };
+function message(
+  role: AssistantMessage['role'],
+  text: string,
+  source?: AssistantSource,
+  note?: string,
+): AssistantMessage {
+  return { id: newId(), role, text, source, note, createdAt: isoNow() };
 }
+
+const OFFLINE_FALLBACK_NOTE =
+  'The AI could not be reached, so this answer comes from the offline assistant, which only reads your records back.';
 
 const initialMessages = (): AssistantMessage[] => [message('assistant', ASSISTANT_INTRO, 'offline')];
 
@@ -95,13 +103,26 @@ export const useAssistantStore = create<AssistantState>((set, get) => ({
       return;
     }
 
-    const service = getAssistantService(preferAi);
-    const result = await service.ask({
+    const request = {
       question,
       history,
       medications: medications.filter((m) => !m.archived).map((m) => toMedicationContext(m)),
       person,
-    });
+    };
+
+    const service = getAssistantService(preferAi);
+    let result = await service.ask(request);
+    let note: string | undefined;
+
+    // A chat that goes silent when the network drops is worse than a plainer
+    // answer: fall back to the offline assistant and say so on the bubble.
+    if (!result.ok && service.kind === 'ai') {
+      const fallback = await getAssistantService(false).ask(request);
+      if (fallback.ok) {
+        result = fallback;
+        note = OFFLINE_FALLBACK_NOTE;
+      }
+    }
 
     if (!result.ok) {
       set({ isThinking: false, error: result.error });
@@ -109,7 +130,10 @@ export const useAssistantStore = create<AssistantState>((set, get) => ({
     }
 
     set({
-      messages: [...get().messages, message('assistant', result.value.text, result.value.source)],
+      messages: [
+        ...get().messages,
+        message('assistant', result.value.text, result.value.source, note),
+      ],
       isThinking: false,
       lastSource: result.value.source,
     });

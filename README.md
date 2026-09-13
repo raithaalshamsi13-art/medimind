@@ -353,9 +353,10 @@ what to do about a missed dose.
 Two implementations behind one interface, chosen in
 [src/services/assistant/index.ts](src/services/assistant/index.ts):
 
-- **`OfflineAssistant`** (active in Demo Mode, and whenever no proxy is
-  configured) — deterministic rules that read the user's own records back in
-  plain language. Needs no network. Every reply it can give is unit-tested.
+- **`OfflineAssistant`** (whenever no proxy is configured, and the fallback
+  when the AI cannot be reached) — deterministic rules that read the user's
+  own records back in plain language. Needs no network. Every reply it can
+  give is unit-tested.
 - **`ProxyAssistant`** — sends the question to the MediMind API server in
   [server/](server/src/index.ts) (deployed on Railway), which
   holds the Anthropic API key server-side and calls Claude with a system prompt

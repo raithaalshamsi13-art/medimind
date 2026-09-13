@@ -117,7 +117,12 @@ It reads a medicine label, verifies it, and only then schedules reminders.
   `src/domain/assistant.ts` runs before either assistant implementation and
   must stay in the store, not in a service, so it cannot be bypassed by
   swapping implementations. Every assistant reply is rendered with the
-  "may be wrong / check with your doctor" footer. The Claude call lives only
+  "may be wrong / check with your doctor" footer. The AI may give *general*
+  plain-language information (what a saved medicine is commonly used for,
+  common side effects to look out for), marked as general; the person's own
+  dose, schedule and instructions come only from the record. The AI answers
+  whenever the server is configured; Demo Mode does not gate the chat, and an
+  AI failure falls back to `OfflineAssistant` with a note on the bubble. The Claude call lives only
   in `server/src/providers.ts` (a separate Node package deployed on Railway, excluded from the
   app tsconfig); the app must never import `@anthropic-ai/sdk` or hold an API
   key.

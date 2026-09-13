@@ -1,37 +1,37 @@
 /**
- * Ask MediMind — the assistant chat screen.
+ * Ask MediMind — the assistant, as a chat.
  *
  * Three layers of "do not depend on this":
  *   1. a one-time acknowledgement the user must accept before first use
- *   2. a warning banner pinned above every conversation
+ *   2. a warning line pinned above every conversation
  *   3. a footer on every single reply bubble
  *
  * Lives in the bottom tab bar as "Ask". A medicine's detail screen can also
- * open it with `?medicationId=…`, in which case the suggested questions are
- * about that medicine.
+ * open it with `?medicationId=…`, in which case the quick replies are about
+ * that medicine.
+ *
+ * The AI answers whenever the server is configured (Demo Mode only affects
+ * the scanner); if the AI cannot be reached the store falls back to the
+ * offline assistant and the bubble says so. The conversation lives in the
+ * store, so switching tabs and coming back keeps it; it is never persisted to
+ * disk.
  */
 
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ActivityIndicator, FlatList, Pressable, View } from 'react-native';
+import { FlatList, Pressable, ScrollView, TextInput, View } from 'react-native';
 
 import { ChatBubble } from '@/components/assistant/ChatBubble';
+import { TypingIndicator } from '@/components/assistant/TypingIndicator';
+import { LogoMark } from '@/components/brand/Logo';
 import { MemberContextBanner } from '@/components/family/MemberContextBanner';
-import {
-  AppText,
-  Badge,
-  Button,
-  Card,
-  InlineMessage,
-  Screen,
-  TextField,
-  TextLink,
-} from '@/components/ui';
+import { AppText, Button, Card, InlineMessage, Screen } from '@/components/ui';
 import { isAssistantConfigured } from '@/config/env';
 import {
   ASSISTANT_ACKNOWLEDGEMENT,
   ASSISTANT_SAFETY_NOTE,
+  MAX_QUESTION_LENGTH,
   SUGGESTED_QUESTIONS,
   suggestedQuestionsFor,
   toPersonContext,
@@ -56,7 +56,6 @@ export default function AssistantScreen() {
   const { medicationId } = useLocalSearchParams<{ medicationId?: string }>();
 
   const acknowledged = useSettingsStore((s) => s.assistantDisclaimerAcknowledged);
-  const demoMode = useSettingsStore((s) => s.demoMode);
   const setSetting = useSettingsStore((s) => s.set);
 
   const allMedications = useMedicationStore(selectMedications);
@@ -93,11 +92,16 @@ export default function AssistantScreen() {
   const [draft, setDraft] = useState('');
   const listRef = useRef<FlatList<AssistantMessage>>(null);
 
-  // AI only when the user has left demo mode AND a proxy is configured.
-  const preferAi = !demoMode && isAssistantConfigured;
-  const modeLabel = preferAi ? 'AI assistant' : 'Offline assistant';
+  // AI whenever a server is configured. Demo Mode only affects the scanner.
+  const preferAi = isAssistantConfigured;
 
-  const suggestions = focus ? suggestedQuestionsFor(focus.name) : SUGGESTED_QUESTIONS;
+  const suggestions = useMemo(() => {
+    if (focus) return suggestedQuestionsFor(focus.name);
+    const first = medications[0];
+    return first
+      ? [...SUGGESTED_QUESTIONS.slice(0, 3), `What is ${first.name} usually used for?`]
+      : SUGGESTED_QUESTIONS;
+  }, [focus, medications]);
   const hasConversation = messages.length > 1;
 
   useEffect(() => {
@@ -167,34 +171,75 @@ export default function AssistantScreen() {
   // ---------------------------------------------------------------------------
   // Conversation
   // ---------------------------------------------------------------------------
+  const canSend = draft.trim().length > 0 && !isThinking;
+
   return (
     <Screen padded={false} keyboardAvoiding>
+      {/* ---------- Chat header ---------- */}
       <View
         style={{
           paddingHorizontal: theme.layout.screenPadding,
           paddingTop: theme.spacing.md,
+          paddingBottom: theme.spacing.sm,
           gap: theme.spacing.sm,
+          borderBottomWidth: 1,
+          borderBottomColor: theme.colors.border,
+          backgroundColor: theme.colors.surface,
         }}>
-        <AppText variant="title">Ask MediMind</AppText>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
+          <LogoMark size={44} />
+          <View style={{ flex: 1, gap: theme.spacing.xxs }}>
+            <AppText variant="subheading">MediMind Assistant</AppText>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.xs }}>
+              <View
+                style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: theme.radius.pill,
+                  backgroundColor: preferAi ? theme.colors.success : theme.colors.textMuted,
+                }}
+              />
+              <AppText variant="caption" color="textSecondary">
+                {preferAi ? 'AI chat · falls back to offline answers' : 'Offline · reads your records back'}
+              </AppText>
+            </View>
+          </View>
+          {hasConversation ? (
+            <Pressable
+              onPress={reset}
+              accessibilityRole="button"
+              accessibilityLabel="Start a new conversation"
+              hitSlop={8}
+              style={({ pressed }) => ({
+                width: theme.touch.minTarget,
+                height: theme.touch.minTarget,
+                borderRadius: theme.radius.pill,
+                alignItems: 'center',
+                justifyContent: 'center',
+                backgroundColor: pressed ? theme.colors.surfaceAlt : 'transparent',
+              })}>
+              <Ionicons name="create-outline" size={24} color={theme.colors.primary} />
+            </Pressable>
+          ) : null}
+        </View>
+
         {member && !member.isSelf ? (
           <MemberContextBanner
             member={member}
-            prefix="Answering about medicines for"
+            prefix="Chatting about medicines for"
             onChange={() => router.push('/family')}
           />
         ) : null}
-        <InlineMessage tone="warning" title="Not medical advice" message={ASSISTANT_SAFETY_NOTE} />
-        <View
-          style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-          <Badge
-            label={modeLabel}
-            tone={preferAi ? 'info' : 'neutral'}
-            icon={preferAi ? 'sparkles-outline' : 'phone-portrait-outline'}
-          />
-          {hasConversation ? <TextLink label="Clear conversation" onPress={reset} /> : null}
+
+        <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: theme.spacing.xs }}>
+          <Ionicons name="alert-circle-outline" size={16} color={theme.colors.warningText} style={{ marginTop: 2 }} />
+          <AppText variant="caption" color="textSecondary" style={{ flex: 1 }}>
+            {ASSISTANT_SAFETY_NOTE}
+          </AppText>
         </View>
       </View>
 
+      {/* ---------- Messages ---------- */}
       <FlatList
         ref={listRef}
         data={messages}
@@ -205,59 +250,21 @@ export default function AssistantScreen() {
         contentContainerStyle={{
           paddingHorizontal: theme.layout.screenPadding,
           paddingVertical: theme.spacing.base,
-          gap: theme.spacing.md,
+          gap: theme.spacing.base,
           flexGrow: 1,
         }}
         ListFooterComponent={
-          <View style={{ gap: theme.spacing.md, paddingTop: theme.spacing.sm }}>
-            {isThinking ? (
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm }}>
-                <ActivityIndicator color={theme.colors.primary} />
-                <AppText variant="caption" color="textMuted">
-                  Thinking…
-                </AppText>
-              </View>
-            ) : null}
-
-            {!hasConversation && !isThinking ? (
-              <View style={{ gap: theme.spacing.sm }}>
-                <AppText variant="label" color="textMuted">
-                  TRY ASKING
-                </AppText>
-                {suggestions.map((question) => (
-                  <Pressable
-                    key={question}
-                    onPress={() => void send(question)}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Ask: ${question}`}
-                    style={({ pressed }) => ({
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      gap: theme.spacing.sm,
-                      minHeight: theme.touch.minTarget,
-                      paddingHorizontal: theme.spacing.base,
-                      paddingVertical: theme.spacing.sm,
-                      borderRadius: theme.radius.pill,
-                      borderWidth: 1,
-                      borderColor: theme.colors.borderStrong,
-                      backgroundColor: pressed ? theme.colors.surfaceAlt : theme.colors.surface,
-                      alignSelf: 'flex-start',
-                    })}>
-                    <Ionicons name="help-circle-outline" size={18} color={theme.colors.primary} />
-                    <AppText variant="body" style={{ color: theme.colors.primary }}>
-                      {question}
-                    </AppText>
-                  </Pressable>
-                ))}
-              </View>
-            ) : null}
-          </View>
+          isThinking ? (
+            <View style={{ paddingTop: theme.spacing.xs }}>
+              <TypingIndicator />
+            </View>
+          ) : null
         }
       />
 
+      {/* ---------- Quick replies + composer ---------- */}
       <View
         style={{
-          paddingHorizontal: theme.layout.screenPadding,
           paddingTop: theme.spacing.sm,
           paddingBottom: theme.spacing.base,
           gap: theme.spacing.sm,
@@ -265,26 +272,107 @@ export default function AssistantScreen() {
           borderTopColor: theme.colors.borderStrong,
           backgroundColor: theme.colors.background,
         }}>
-        {error ? <InlineMessage tone="danger" message={error.message} /> : null}
-        <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: theme.spacing.sm }}>
-          <TextField
-            label="Your question"
-            value={draft}
-            onChangeText={setDraft}
-            placeholder="e.g. When does Paracetamol expire?"
-            autoCapitalize="sentences"
-            returnKeyType="send"
-            onSubmitEditing={() => void send(draft)}
-            editable={!isThinking}
-            style={{ flex: 1 }}
-          />
-          <Button
-            label="Send"
-            icon="send"
+        {error ? (
+          <View style={{ paddingHorizontal: theme.layout.screenPadding }}>
+            <InlineMessage tone="danger" message={error.message} />
+          </View>
+        ) : null}
+
+        {!isThinking ? (
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            contentContainerStyle={{
+              paddingHorizontal: theme.layout.screenPadding,
+              gap: theme.spacing.sm,
+            }}>
+            {suggestions.map((question) => (
+              <Pressable
+                key={question}
+                onPress={() => void send(question)}
+                accessibilityRole="button"
+                accessibilityLabel={`Ask: ${question}`}
+                style={({ pressed }) => ({
+                  minHeight: theme.touch.minTarget,
+                  justifyContent: 'center',
+                  paddingHorizontal: theme.spacing.base,
+                  paddingVertical: theme.spacing.sm,
+                  borderRadius: theme.radius.pill,
+                  borderWidth: 1,
+                  borderColor: theme.colors.primary,
+                  backgroundColor: pressed ? theme.colors.primarySoft : theme.colors.surface,
+                })}>
+                <AppText variant="label" color="primary">
+                  {question}
+                </AppText>
+              </Pressable>
+            ))}
+          </ScrollView>
+        ) : null}
+
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'flex-end',
+            gap: theme.spacing.sm,
+            paddingHorizontal: theme.layout.screenPadding,
+          }}>
+          <View
+            style={{
+              flex: 1,
+              minHeight: theme.touch.comfortable,
+              maxHeight: 140,
+              justifyContent: 'center',
+              paddingHorizontal: theme.spacing.lg,
+              borderRadius: theme.radius.xl + 6,
+              borderWidth: 2,
+              borderColor: theme.colors.borderStrong,
+              backgroundColor: theme.colors.surface,
+            }}>
+            <TextInput
+              value={draft}
+              onChangeText={setDraft}
+              placeholder="Message MediMind…"
+              placeholderTextColor={theme.colors.textMuted}
+              multiline
+              maxLength={MAX_QUESTION_LENGTH}
+              autoCapitalize="sentences"
+              autoCorrect
+              editable={!isThinking}
+              accessibilityLabel="Message"
+              accessibilityHint="Type a question about your saved medicines"
+              allowFontScaling
+              style={{
+                color: theme.colors.text,
+                fontSize: theme.type.body.fontSize,
+                lineHeight: theme.type.body.lineHeight,
+                paddingVertical: theme.spacing.md,
+                maxHeight: 120,
+              }}
+            />
+          </View>
+          <Pressable
             onPress={() => void send(draft)}
-            disabled={draft.trim().length === 0 || isThinking}
-            accessibilityHint="Sends your question to the assistant"
-          />
+            disabled={!canSend}
+            accessibilityRole="button"
+            accessibilityLabel="Send"
+            accessibilityState={{ disabled: !canSend }}
+            style={({ pressed }) => ({
+              width: theme.touch.comfortable,
+              height: theme.touch.comfortable,
+              borderRadius: theme.radius.pill,
+              alignItems: 'center',
+              justifyContent: 'center',
+              backgroundColor: canSend
+                ? pressed
+                  ? theme.colors.primaryPressed
+                  : theme.colors.primary
+                : theme.colors.surfaceAlt,
+              opacity: canSend ? 1 : 0.7,
+            })}>
+            <Ionicons name="send" size={22} color={canSend ? theme.colors.primaryText : theme.colors.textMuted} />
+          </Pressable>
         </View>
       </View>
     </Screen>

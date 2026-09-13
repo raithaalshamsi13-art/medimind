@@ -20,8 +20,8 @@ step adds an entry to §18 (change log) and updates the sections it touches._
 | Platform | iPhone via Expo Go (primary); web browser (UI work only) |
 | Stack | Expo SDK 57 · React Native 0.86 · React 19.2 · TypeScript 6 · Expo Router · SQLite · Zustand · Zod |
 | Source | 172 tracked files · ~17,500 lines across `src/`, tests, the API server, scripts and SQL |
-| Tests | **277 passing** in 16 suites — including real-SQLite tests and a WCAG contrast checker |
-| Commits | 32, all verified (typecheck + tests + iOS and web bundles) before committing |
+| Tests | **280 passing** in 16 suites — including real-SQLite tests and a WCAG contrast checker |
+| Commits | 34, all verified (typecheck + tests + iOS and web bundles) before committing |
 | Milestones | M1 Foundation ✅ · M2 UI & Auth ✅ · M3 Database & CRUD ✅ · Assistant ✅ · Deployment ✅ · Structured entry + health conditions ✅ · Family profiles ✅ · Personal health profile ✅ · M4 Scanner ⬜ · M5 Reminders ⬜ · M6 Polish ⬜ |
 | Live | Web: https://medimind-medimind3.vercel.app · API: Railway (`/health` shows version + model) · Accounts/DB: Supabase |
 | Native build needed | **None.** Everything runs in Expo Go — no Xcode, no Mac, no Android Studio, no Apple developer account |
@@ -268,14 +268,39 @@ One account manages medicines for several people **without separate logins**.
 - **Gender** was added everywhere a person is described: the family member
   form and card, the profile card, the sign-up step and the AI context.
 
-### 4.5 Ask MediMind — the assistant
+### 4.5 Ask MediMind — the assistant (a chat)
 
 Reached from the **Ask** tab or a medicine's **Ask about this medicine** button.
 
+- **A chatbot, not a form.** Messenger-style screen: assistant header with the
+  MediMind mark and a status line ("AI chat · falls back to offline answers"
+  / "Offline · reads your records back"), bubbles with the mark beside the
+  assistant's, a time on every bubble, an animated "MediMind is typing…"
+  indicator, a horizontal row of quick-reply chips (about the medicine it was
+  opened for, otherwise general ones), a round message composer with a send
+  button, and a "new conversation" button. The conversation stays in memory
+  while you switch tabs and is never written to disk.
+- **AI by default.** Whenever the Railway server is configured the AI
+  answers — Demo Mode no longer switches the chat to canned replies (it only
+  affects the scanner). If the AI cannot be reached, the store retries with
+  the offline assistant and the bubble says so ("The AI could not be reached,
+  so this answer comes from the offline assistant…"), so the chat never goes
+  silent.
+- **Scope (server v1.4.0)**: conversational and follow-up-aware; may explain,
+  in general plain-language terms, what a saved medicine is commonly used for,
+  how medicines of that kind are usually taken and common side effects to look
+  out for — marked as general information that may not apply to the person.
+  This person's own dose, schedule, instructions and expiry still come only
+  from what was recorded. Still never: dose changes, safe/unsafe verdicts,
+  interactions, pregnancy/children advice, diagnosis. The closing "check with
+  your doctor or pharmacist" line is required on any reply with medicine
+  information; greetings get a warm one-liner instead.
 - **Interface + two implementations** (`src/services/assistant/`):
   - `OfflineAssistant` — deterministic rules that read the user's own records
-    back in plain language. Runs on the phone with no network. Active in Demo
-    Mode. Every reply it can produce is unit-tested.
+    back in plain language. Runs on the phone with no network; the fallback
+    when the AI is unreachable. For "what is X used for / side effects" it
+    says it cannot explain that offline and points to the leaflet. Every reply
+    it can produce is unit-tested.
   - `ProxyAssistant` — posts to the MediMind API server in `server/`
     (deployed on Railway), which holds the AI key server-side and calls the
     model with a system prompt forbidding diagnosis, dose changes and
@@ -470,7 +495,7 @@ demo cannot be broken by a missing key or a dead network.
 | `lib/storage` | fallback chain when the native store throws |
 | `services/LocalAuthService` | sign up/in/out, no plaintext passwords, no email enumeration |
 | `services/demoAccount` | create-on-first-use, reuse, conflict |
-| `services/OfflineAssistant` | every reply type; never invents an amount or a time; reads a health profile back without interpreting it, and never invents missing details |
+| `services/OfflineAssistant` | every reply type; never invents an amount or a time; reads a health profile back without interpreting it, never invents missing details; declines "what is it for / side effects" offline without guessing, while "what is my next dose" still answers |
 
 **SQL is tested for real.** `src/db/types.ts` defines a small `SqlDatabase`
 interface so the repository can run against Node 24's built-in `node:sqlite` in
@@ -548,8 +573,9 @@ Scan the QR code with the iPhone Camera app (opens Expo Go). Then:
 
 Everything above works with the phone in Airplane Mode. The same app is live
 in a browser at https://medimind-medimind3.vercel.app (add to the iPhone home
-screen from Safari for the full-screen version); with **Demo Mode off** the
-Ask tab uses the Railway server and Gemini.
+screen from Safari for the full-screen version). The Ask tab chats through
+the Railway server and Gemini whenever it is reachable, and falls back to
+offline answers otherwise.
 
 ---
 
@@ -787,6 +813,8 @@ will work with no internet and no API key — exactly as the brief requires.
 ## 16. Commit history
 
 ```
+2026-09-13  Ask MediMind as a chatbot: messenger UI, AI by default with offline fallback, general info in plain language (server 1.4.0)
+2026-09-13  PROJECT_SUMMARY: record the decision to keep email-only sign-in
 2026-09-13  Personal health profile: sign-up step 2, per-member DOB/gender/height/weight/blood type, AI context with strict rules
 2026-09-13  PROJECT_SUMMARY: tab bar line reflects the Family tab
 2026-09-13  Family: profiles under one account, per-member medicines and conditions, Family tab
@@ -868,6 +896,24 @@ will work with no internet and no API key — exactly as the brief requires.
 Newest first. Every commit that changes the app adds an entry here **in the
 same commit**, and updates the sections above that it touches (rule in
 `AGENTS.md`, "Verify before claiming done").
+
+### 2026-09-13 — Ask MediMind is now a chatbot
+- **Screen** rebuilt messenger-style: assistant header with mark and status,
+  avatar beside assistant bubbles, time on every bubble, animated typing
+  indicator, always-available quick-reply chips, round composer with a send
+  button, "new conversation" action. Conversation kept in memory across tab
+  switches, never persisted.
+- **AI by default**: `preferAi` is now simply "a server is configured"; Demo
+  Mode no longer forces canned replies. On an AI failure the store falls back
+  to `OfflineAssistant` and notes it on the bubble.
+- **Scope widened, safely** (server **v1.4.0**): conversational, remembers
+  the thread, may give general plain-language information about what a saved
+  medicine is used for and side effects to look out for, clearly marked as
+  general; own dose/schedule still only from the record; all refusals kept.
+  Acknowledgement text and intro updated to say so. Offline assistant gained
+  a "general" intent that declines without guessing.
+- **Tests**: +3 → 280. App and server typecheck; both bundles export.
+  Railway needs a redeploy for 1.4.0 (`/health` shows the version).
 
 ### 2026-09-13 — Decision: sign-in stays email + password
 - A redesign offering **email OR phone number OR Emirates ID** for sign-in and

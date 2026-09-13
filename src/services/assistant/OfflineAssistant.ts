@@ -29,6 +29,7 @@ import type { AssistantRequest, AssistantService } from './AssistantService';
 type Intent =
   | 'help'
   | 'profile'
+  | 'general'
   | 'list'
   | 'next'
   | 'expiry'
@@ -63,6 +64,12 @@ function detectIntent(q: string): Intent {
     )
   ) {
     return 'instructions';
+  }
+  // General knowledge ("what is it for", "side effects") — the AI can explain
+  // this in general terms; offline we can only point to the leaflet. Checked
+  // after the record-based intents so "what is my next dose" stays "next".
+  if (/\b(used for|use for|what is \w[\w ]* for\b|what does \w[\w ]* do\b|side effects?)\b/.test(q)) {
+    return 'general';
   }
   if (
     /\b(what (medicines|medications|meds|drugs)|list|which medicines|my medicines|my medications|do i have)\b/.test(
@@ -277,6 +284,14 @@ export class OfflineAssistant implements AssistantService {
     if (intent === 'help') return HELP_REPLY;
     if (intent === 'missed') return MISSED_DOSE_REPLY;
     if (intent === 'profile') return describeProfile(person ?? null);
+    if (intent === 'general') {
+      const subject = mentioned ? mentioned.name : 'a medicine';
+      return (
+        `I cannot explain what ${subject} is used for, or its side effects, while I am offline — ` +
+        `I only read back what you recorded. The leaflet in the box covers both, and a pharmacist can ` +
+        `explain it in plain words. When the AI assistant is reachable it can give general information too.`
+      );
+    }
 
     if (medications.length === 0) {
       return (

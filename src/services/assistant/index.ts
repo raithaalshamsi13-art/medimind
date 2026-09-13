@@ -1,11 +1,13 @@
 /**
  * Assistant factory — the only place that decides which implementation runs.
  *
- *   Demo Mode on, or no proxy configured  → OfflineAssistant
- *   Demo Mode off and proxy configured    → ProxyAssistant (Claude)
+ *   proxy configured and AI wanted  → ProxyAssistant (Gemini / Groq / Claude via Railway)
+ *   otherwise                       → OfflineAssistant
  *
- * The screen says whether the AI is wanted; the factory knows whether the AI
- * is *possible*. Either can force the offline path, never the reverse.
+ * The screen says whether the AI is wanted (always, when configured — Demo
+ * Mode no longer switches the chat off); the factory knows whether the AI is
+ * *possible*. Either can force the offline path, never the reverse. The
+ * store also falls back to OfflineAssistant when an AI call fails.
  */
 
 import { isAssistantConfigured } from '@/config/env';

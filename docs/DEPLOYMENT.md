@@ -57,7 +57,7 @@ Do them in this order — each later step needs a value from an earlier one.
 4. **Settings → Networking → Generate Domain**. Copy it, e.g.
    `https://medimind-server-production.up.railway.app`.
 5. Check it works: open `<that domain>/health` in a browser. You should see
-   `{"ok":true,"service":"medimind-server","version":"1.3.0","assistant":true,...}`.
+   `{"ok":true,"service":"medimind-server","version":"1.4.0","assistant":true,...}`.
    If `version` is older than the one in `server/src/index.ts`, Railway has
    not picked up the latest push: open the service → **Deployments →
    Redeploy**, or connect the Railway GitHub App so pushes deploy automatically.
@@ -100,8 +100,8 @@ EXPO_PUBLIC_ASSISTANT_ENDPOINT=https://<railway-domain>/assistant
 EXPO_PUBLIC_ASSISTANT_ACCESS_KEY=...
 ```
 
-Then in the app: **Settings → turn Demo Mode off**. The Ask tab's badge changes
-from "Offline assistant" to "AI assistant".
+The Ask tab then chats through the server automatically — its header reads
+"AI chat · falls back to offline answers". Demo Mode does not affect the chat.
 
 ---
 

@@ -246,3 +246,23 @@ describe('health profile (read back only)', () => {
     expect(reply).toContain('Nothing is recorded yet');
   });
 });
+
+describe('general medicine knowledge (offline cannot give it)', () => {
+  it('points to the leaflet and the AI instead of guessing what a medicine is for', () => {
+    const reply = answer('what is paracetamol used for?');
+    expect(reply).toContain('cannot explain what Paracetamol is used for');
+    expect(reply).toContain('leaflet');
+    expect(reply).not.toMatch(/pain|fever/i);
+  });
+
+  it('still answers record questions that happen to start with "what is"', () => {
+    expect(answer('what is my next dose?')).toContain('next dose of Paracetamol');
+    expect(answer('what is my dose of paracetamol?')).toContain('500 mg');
+  });
+
+  it('handles side-effect questions the same way', () => {
+    const reply = answer('what side effects does paracetamol have?');
+    expect(reply).toContain('side effects');
+    expect(reply).toContain('pharmacist');
+  });
+});

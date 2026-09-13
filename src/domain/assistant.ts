@@ -45,6 +45,8 @@ export type AssistantMessage = {
   text: string;
   /** Present on assistant messages only. */
   source?: AssistantSource;
+  /** Shown under the bubble, e.g. "the AI could not be reached, answered offline". */
+  note?: string;
   createdAt: string;
 };
 
@@ -178,24 +180,25 @@ export const ASSISTANT_REPLY_FOOTER = 'May be wrong — check with your doctor o
 
 /** Read once, before first use. Deliberately plain and unhurried. */
 export const ASSISTANT_ACKNOWLEDGEMENT =
-  'The MediMind assistant can answer questions about the medicines you have saved, such as ' +
-  'when they expire, what dosage you recorded, and when your next dose is due.\n\n' +
-  'It only repeats what you recorded from your labels. It is not a doctor or a pharmacist. ' +
-  'It can misread your records or give a wrong answer, and it does not know your medical ' +
-  'history.\n\n' +
+  'The MediMind assistant is a chat helper for the medicines you have saved: when they expire, ' +
+  'what dosage you recorded, when your next dose is due, and — in general, plain-language terms ' +
+  '— what a medicine is commonly used for and what side effects people are told to look out for.\n\n' +
+  'It is not a doctor or a pharmacist. General information may not apply to you, it can ' +
+  'misread your records or give a wrong answer, and it does not know your full medical history.\n\n' +
   'Please do not depend on it. Never change how much or how often you take a medicine ' +
   'because of something the assistant said — follow the label, and follow up with your ' +
   'doctor or pharmacist.';
 
 export const ASSISTANT_INTRO =
-  'Hello! I can answer questions about the medicines you have saved in MediMind — for example ' +
-  'when your next dose is due, what dosage and instructions you recorded, or when a medicine ' +
-  'expires. What would you like to know?';
+  'Hi! I’m the MediMind assistant. Ask me anything about the medicines you have saved — when ' +
+  'the next dose is due, what you recorded, when something expires, or what a medicine is ' +
+  'generally used for. What would you like to know?';
 
 export const SUGGESTED_QUESTIONS: readonly string[] = [
   'What is my next dose?',
   'Which of my medicines expires first?',
   'What should I do if I miss a dose?',
+  'What can you help me with?',
 ];
 
 /** Questions tailored to one medicine, used when opened from its detail screen. */
@@ -203,7 +206,8 @@ export function suggestedQuestionsFor(name: string): readonly string[] {
   return [
     `When is my next dose of ${name}?`,
     `How much ${name} do I take?`,
-    `How should I take ${name}?`,
+    `What is ${name} usually used for?`,
+    `What side effects should I look out for with ${name}?`,
   ];
 }
 
