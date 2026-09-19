@@ -25,6 +25,8 @@ import { doseStatusLabel, formatTime12, possessiveT, tCount } from '@/i18n/label
 import { localDateKey, type Dose, type DoseStatus } from '@/domain/reminder';
 import { formatIsoDate } from '@/lib/datetime';
 import { getNotificationService, type NotificationPermission } from '@/services/notifications';
+import { getVoiceService } from '@/services/voice/VoiceService';
+import { useSettingsStore } from '@/stores/useSettingsStore';
 import { selectUser, useAuthStore } from '@/stores/useAuthStore';
 import { dosesByDay, dosesOn, selectDoses, useDoseStore } from '@/stores/useDoseStore';
 import {
@@ -39,9 +41,10 @@ import { useTheme } from '@/theme/ThemeContext';
 
 export default function ScheduleScreen() {
   const theme = useTheme();
-  const { t } = useT();
+  const { t, language } = useT();
   const router = useRouter();
   const user = useAuthStore(selectUser);
+  const voiceAlertsEnabled = useSettingsStore((s) => s.voiceAlertsEnabled);
 
   const members = useFamilyStore(selectMembers);
   const activeMemberId = useFamilyStore(selectActiveMemberId);
@@ -99,6 +102,15 @@ export default function ScheduleScreen() {
   };
 
   const takenToday = today.filter((d) => d.status === 'TAKEN').length;
+
+  // "Read aloud": the next upcoming dose today, spoken in the current language.
+  const readAloud = () => {
+    const next = today.find((d) => d.status === 'UPCOMING');
+    const sentence = next
+      ? t('voice.nextDose', { name: nameOf(next.medicationId), time: formatTime12(t, next.scheduledAt.slice(11, 16)) })
+      : t('voice.nothingDue');
+    void getVoiceService().speak(sentence, language);
+  };
 
   return (
     <Screen scroll>
@@ -160,7 +172,20 @@ export default function ScheduleScreen() {
 
         {/* ---------- Today ---------- */}
         <View style={{ gap: theme.spacing.md }}>
-          <AppText variant="heading">{t('schedule.today', { date: formatIsoDate(todayKey) })}</AppText>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
+            <AppText variant="heading" style={{ flex: 1 }}>
+              {t('schedule.today', { date: formatIsoDate(todayKey) })}
+            </AppText>
+            {voiceAlertsEnabled && today.length > 0 ? (
+              <Button
+                label={t('schedule.readAloud')}
+                icon="volume-high-outline"
+                variant="ghost"
+                fullWidth={false}
+                onPress={readAloud}
+              />
+            ) : null}
+          </View>
 
           {today.length === 0 ? (
             <Card>

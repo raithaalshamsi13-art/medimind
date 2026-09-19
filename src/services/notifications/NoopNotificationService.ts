@@ -32,4 +32,12 @@ export class NoopNotificationService implements NotificationService {
   subscribe(): () => void {
     return () => {};
   }
+
+  subscribeArrivals(): () => void {
+    return () => {};
+  }
+
+  async scheduleSnooze(): Promise<string | null> {
+    return null;
+  }
 }

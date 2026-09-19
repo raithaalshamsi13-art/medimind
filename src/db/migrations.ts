@@ -212,6 +212,15 @@ export const MIGRATIONS: Migration[] = [
         ON doses (user_id, member_id, scheduled_at);
     `,
   },
+  {
+    version: 6,
+    name: 'scanned_label_text',
+    up: `
+      -- Everything legible on the scanned packaging, as read, so the user can
+      -- re-read the label inside the app. Null for medicines added by hand.
+      ALTER TABLE medications ADD COLUMN label_text TEXT;
+    `,
+  },
 ];
 
 export const LATEST_SCHEMA_VERSION =

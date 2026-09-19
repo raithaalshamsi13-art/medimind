@@ -87,6 +87,7 @@ describe('toMedicationContext', () => {
     scanConfidence: 0.9,
     notes: 'private note',
     imageUri: 'file:///label.jpg',
+    labelText: null,
     archived: false,
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',

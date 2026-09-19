@@ -28,6 +28,7 @@ function ctx(partial: Partial<Medication> & { name: string }): MedicationContext
     scanConfidence: null,
     notes: null,
     imageUri: null,
+    labelText: null,
     archived: false,
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',

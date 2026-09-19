@@ -45,10 +45,24 @@ export class ProviderError extends Error {
   }
 }
 
+export type LabelReadInput = {
+  /** Base64 image bytes, no data: prefix. */
+  imageBase64: string;
+  mimeType: string;
+  /** The instruction that asks for JSON — see index.ts SCAN_PROMPT. */
+  prompt: string;
+};
+
 export interface LlmProvider {
   readonly name: 'gemini' | 'groq' | 'anthropic';
   readonly model: string;
   complete(input: CompletionInput): Promise<CompletionResult>;
+  /**
+   * Read a medicine label from a photo and return the model's raw text reply
+   * (expected to be JSON; index.ts parses and validates it). Providers
+   * without a vision model throw ProviderError 501.
+   */
+  readLabel(input: LabelReadInput): Promise<string>;
 }
 
 /**
@@ -119,6 +133,40 @@ export function createGeminiProvider(apiKey: string, model: string): LlmProvider
       }
       return { text, refused: false, model };
     },
+
+    async readLabel(input) {
+      const url =
+        `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}` +
+        `:generateContent?key=${encodeURIComponent(apiKey)}`;
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [
+            {
+              role: 'user',
+              parts: [
+                { inlineData: { mimeType: input.mimeType, data: input.imageBase64 } },
+                { text: input.prompt },
+              ],
+            },
+          ],
+          generationConfig: {
+            maxOutputTokens: MAX_OUTPUT_TOKENS,
+            temperature: 0,
+            responseMimeType: 'application/json',
+          },
+        }),
+      });
+      if (!res.ok) {
+        const body = await res.text().catch(() => '');
+        throw new ProviderError(`Gemini ${res.status}: ${body.slice(0, 300)}`, res.status, 'gemini');
+      }
+      const data = (await res.json()) as {
+        candidates?: { content?: { parts?: { text?: string }[] } }[];
+      };
+      return (data.candidates?.[0]?.content?.parts ?? []).map((p) => p.text ?? '').join('').trim();
+    },
   };
 }
 
@@ -158,6 +206,11 @@ export function createGroqProvider(apiKey: string, model: string): LlmProvider {
       const text = (choice?.message?.content ?? '').trim();
       return { text, refused: choice?.finish_reason === 'content_filter', model };
     },
+
+    async readLabel() {
+      // Groq's free chat models are text-only; scanning needs Gemini or Claude.
+      throw new ProviderError('Label scanning is not available with the Groq provider', 501, 'groq');
+    },
   };
 }
 
@@ -187,6 +240,39 @@ export function createAnthropicProvider(apiKey: string, model: string): LlmProvi
           .join('\n')
           .trim();
         return { text, refused: response.stop_reason === 'refusal', model: response.model };
+      } catch (error) {
+        if (error instanceof Anthropic.APIError) {
+          throw new ProviderError(
+            `Anthropic ${error.status ?? 'error'}: ${error.message}`,
+            error.status ?? 502,
+            'anthropic',
+          );
+        }
+        throw error;
+      }
+    },
+
+    async readLabel(input) {
+      try {
+        const mediaType = input.mimeType === 'image/png' ? 'image/png' : 'image/jpeg';
+        const response = await client.messages.create({
+          model,
+          max_tokens: MAX_OUTPUT_TOKENS,
+          messages: [
+            {
+              role: 'user',
+              content: [
+                { type: 'image', source: { type: 'base64', media_type: mediaType, data: input.imageBase64 } },
+                { type: 'text', text: input.prompt },
+              ],
+            },
+          ],
+        });
+        return response.content
+          .filter((b): b is Anthropic.TextBlock => b.type === 'text')
+          .map((b) => b.text)
+          .join('\n')
+          .trim();
       } catch (error) {
         if (error instanceof Anthropic.APIError) {
           throw new ProviderError(

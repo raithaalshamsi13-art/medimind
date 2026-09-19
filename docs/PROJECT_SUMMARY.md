@@ -19,10 +19,10 @@ step adds an entry to §18 (change log) and updates the sections it touches._
 | Concept | **SCAN → CHECK → CONFIRM → REMIND → TRACK** — verify the medicine before scheduling anything |
 | Platform | iPhone via Expo Go (primary); web browser (UI work only) |
 | Stack | Expo SDK 57 · React Native 0.86 · React 19.2 · TypeScript 6 · Expo Router · SQLite · Zustand · Zod |
-| Source | 196 tracked files · ~21,500 lines across `src/`, tests, the API server, scripts and SQL |
-| Tests | **325 passing** in 19 suites — including real-SQLite tests and a WCAG contrast checker |
-| Commits | 44, all verified (typecheck + tests + iOS and web bundles) before committing |
-| Milestones | M1 Foundation ✅ · M2 UI & Auth ✅ · M3 Database & CRUD ✅ · Assistant ✅ · Deployment ✅ · Structured entry + health conditions ✅ · Family profiles ✅ · Personal health profile ✅ · M5 Reminders ✅ · M4 Scanner ⬜ (deferred) · M6 Polish ⬜ |
+| Source | 217 tracked files · ~29,000 lines across `src/`, tests, the API server, scripts and SQL |
+| Tests | **352 passing** in 21 suites — including real-SQLite tests and a WCAG contrast checker |
+| Commits | 46, all verified (typecheck + tests + iOS and web bundles) before committing |
+| Milestones | M1 Foundation ✅ · M2 UI & Auth ✅ · M3 Database & CRUD ✅ · Assistant ✅ · Deployment ✅ · Structured entry + health conditions ✅ · Family profiles ✅ · Personal health profile ✅ · M5 Reminders ✅ · M4 Scanner + safety engine ✅ · Voice alerts ✅ · M6 Polish ◐ (language, voice, privacy done) |
 | Live | Web: https://medimind-medimind3.vercel.app · API: Railway (`/health` shows version + model) · Accounts/DB: Supabase |
 | Native build needed | **None.** Everything runs in Expo Go — no Xcode, no Mac, no Android Studio, no Apple developer account |
 
@@ -335,6 +335,81 @@ REMIND and TRACK. Built on the dose parser from the assistant work.
   same placeholders, interpolation, `localizeMessage` lookup, counts, times,
   expiry labels, frequency display, possessives.
 
+### 4.4f Milestone 4 — Scanner, label reading, safety engine, demo scenarios
+
+SCAN → CHECK → CONFIRM is now real. Built 19 Sep 2026.
+
+- **Camera** (`src/app/scan/index.tsx`, phone): `expo-camera` live preview
+  with a dimmed surround and a clear framing window ("Fill the frame with the
+  label…"), one 84 pt shutter, **Choose a photo** (library) and **Enter
+  manually** always visible. Permission asked with a plain reason; when denied
+  the screen explains, offers the phone's Settings, the library and manual
+  entry — never a dead end. The web build (`index.web.tsx`) has no in-app
+  camera, so it goes straight to the photo picker (on a phone browser that
+  picker offers the camera itself).
+- **Reader** (`src/services/scanner/`): `MedicationScannerService` with two
+  implementations. `MockScanner` returns three fixed readings (Safe / Expired /
+  Unreadable), chosen with chips on the scan screen while Demo Mode is on.
+  `ProxyScanner` posts the photo (base64, ≤ 8 MiB) to the Railway server's
+  new **`POST /scan`**, which asks a vision model (Gemini by default, Claude
+  if that key is set; Groq has no vision and answers 501) for the label text
+  and structured fields in strict JSON. Everything that comes back is
+  validated with `scanResultSchema` (`src/domain/scan.ts`): blanks → `null`,
+  a date that is not `yyyy-MM-dd` → `null`, confidence clamped 0–1.
+- **Result screen** (`src/app/scan/result.tsx`): the photo (tap to enlarge,
+  pinch-zoom) beside a **selectable, scrollable panel with the exact label
+  text**; side by side from 720 px, stacked on a phone. Below it, the fields
+  MediMind picked out, each badged **Read from label**, **Check this** (read
+  below 0.7 confidence) or **Not on the label**, plus any reader warnings.
+- **Adding to the list, without guessing**: when the name was read
+  confidently the medicine is saved automatically (source `SCAN`, confidence,
+  photo and label text kept) and the screen says so, with **Open medicine**,
+  **Set a reminder**, **Scan another**. When the name is weak or missing the
+  user types it first — the app never invents a name, dosage or schedule. A
+  medicine with the same normalised name for the same family member is not
+  added twice: the screen offers **Open the existing entry** or **Save as a
+  new entry anyway**. Retake / Scan again / Enter manually are always there.
+- **Safety engine** (`src/domain/safety.ts`): one pure function
+  `evaluateSafety(medication, today)` → `EXPIRED` · `NEEDS_REVIEW` (low scan
+  confidence, no dosage, no frequency) · `EXPIRING_SOON` · `SAFE` (with
+  `NO_EXPIRY` noted). It runs on every save and on every load (dates move)
+  through `useMedicationStore.applySafety`, and the detail screen shows the
+  status with its reasons and the note that it "does not judge whether a
+  medicine suits you". An expired scan is saved as expired and offered no
+  reminder.
+- **Detail screen**: a collapsible **Show the scanned label** with the photo
+  and the raw text, so the user can always compare the record with the pack.
+- **Storage**: schema **v6** adds `label_text`; the photo is copied out of the
+  camera cache into the app's document folder (`src/lib/scanImage.ts`) so it
+  survives a restart; on the web it is kept as a data URI when small enough.
+  Supabase mirror updated.
+- **Entry points**: the Home hero card and a **Scan a label** button on the
+  Medicines tab.
+
+### 4.4g Voice alerts
+
+- **`VoiceService`** (`src/services/voice/`) over `expo-speech`: the phone's
+  (or browser's) built-in voices, in the current language (`en-GB` /
+  `ar-SA`), nothing downloaded or recorded.
+- **What is spoken**: "It's time for your scheduled medication, Paracetamol,
+  500 mg. Please check your medication instructions." — the name and dose
+  label from the record, never a made-up instruction.
+- **When** (`src/components/voice/useVoiceAnnouncer.ts`, mounted once in the
+  root layout): when a reminder notification arrives while MediMind is open,
+  and when the user opens the app from one. Each dose is announced at most
+  once per day, so a notification that arrives and is then tapped is not read
+  twice. Honest limitation, stated in Settings: a phone does not let an app
+  speak while it is closed or locked, so the notification sound is the alert
+  that always arrives.
+- **Settings → Voice alerts**: master switch, alert style **Sound and voice /
+  Sound only / Voice only** ("voice only" schedules silent notifications), and
+  **Hear an example**. The Schedule tab has **Read aloud** for the next dose.
+- **Snooze**: a third action on the reminder notification, "Snooze 10 min",
+  schedules one more nudge for the same dose.
+- **Settings placeholders gone**: voice is real, and **Privacy and your data**
+  (`src/app/about/privacy.tsx`) states plainly what is stored where, what the
+  assistant and scanner send, and how to delete everything.
+
 ### 4.5 Ask MediMind — the assistant (a chat)
 
 Reached from the **Ask** tab or a medicine's **Ask about this medicine** button.
@@ -439,6 +514,10 @@ Reached from the **Ask** tab or a medicine's **Ask about this medicine** button.
 | One person's data can never appear under another | `member_id` on medicines and conditions; `MemberContextBanner`; `useFamilyStore` | Separation is a column on every row, not a screen remembering to filter. Every screen names whose data it shows; the add form will not render without a member. |
 | Removing a family member is explicit and complete | `FamilyRepository.remove`, `/family/[id]` | The confirmation lists the medicines and conditions that go with them; "Me" cannot be removed; cascades are tested on both backends. |
 | AI key lives only in Railway variables | `docs/DEPLOYMENT.md` | Never in the app, never in Vercel, never in git. Supabase `service_role` key is used nowhere; the anon key is public by design and every table has Row Level Security. |
+| Scanned fields are never guessed | `domain/scan.ts` (`scanResultSchema`), server `SCAN_PROMPT` | The model is told to return `null` for anything not printed or not legible; the schema drops malformed dates instead of fixing them; fields read below 0.7 confidence are badged "Check this" and make the medicine `NEEDS_REVIEW`. |
+| A scan is added automatically only with a confident name; never twice | `useScanStore.save`, `findDuplicate` | The name is the one field that must be right for the entry to mean anything, so a weak read asks the user. The same name for the same person offers "open existing" rather than a silent duplicate. |
+| The safety engine judges dates and completeness, not suitability | `domain/safety.ts`, detail screen note | "Safe" means in date and complete enough to remind about. The screen says it does not judge whether a medicine suits the person. |
+| Voice says only what the record says | `useVoiceAnnouncer.ts`, `VoiceService.ts` | The spoken sentence carries the medicine name and dose label; it never adds an instruction, and it is on-device text-to-speech (nothing recorded, nothing sent). |
 
 ---
 
@@ -450,8 +529,11 @@ Reached from the **Ask** tab or a medicine's **Ask about this medicine** button.
 | Login (+ demo account) | `src/app/(auth)/login.tsx` | ✅ |
 | Sign up | `src/app/(auth)/signup.tsx` | ✅ |
 | Sign-up step 2 — personal health profile | `src/app/profile-setup.tsx` | ✅ once per account, skippable |
-| Home dashboard | `src/app/(tabs)/index.tsx` | ✅ (Scan action enabled in M4) |
+| Home dashboard | `src/app/(tabs)/index.tsx` | ✅ Scan hero card opens the camera |
 | Medicines list + search | `src/app/(tabs)/medications.tsx` | ✅ |
+| Scan — camera (phone) / photo picker (web) | `src/app/scan/index.tsx`, `src/app/scan/index.web.tsx` | ✅ framing guide, permission states, demo scenario chips |
+| Scan result — photo beside label text, auto-add | `src/app/scan/result.tsx` | ✅ selectable text panel, field badges, name confirmation, duplicate handling |
+| Privacy and your data | `src/app/about/privacy.tsx` | ✅ |
 | Ask MediMind | `src/app/(tabs)/assistant.tsx` | ✅ |
 | Schedule and history | `src/app/(tabs)/schedule.tsx` | ✅ today's doses with Taken / Skip, 7-day history, notification permission |
 | Set / edit reminder | `src/app/reminder/[medicationId].tsx` | ✅ suggested from the label, clock picker, expired blocked |
@@ -460,7 +542,7 @@ Reached from the **Ask** tab or a medicine's **Ask about this medicine** button.
 | Add / edit family member | `src/app/family/add.tsx`, `src/app/family/edit/[id].tsx` | ✅ shared form |
 | History | `src/app/(tabs)/history.tsx` | placeholder, hidden from the bar (folds into Schedule in M5) |
 | Settings | `src/app/(tabs)/settings.tsx` | ✅ |
-| Medicine detail | `src/app/medication/[id].tsx` | ✅ |
+| Medicine detail | `src/app/medication/[id].tsx` | ✅ safety check with reasons, scanned photo + label text |
 | Add medicine (manual) | `src/app/medication/add.tsx` | ✅ sectioned, chips + date picker |
 | Edit medicine | `src/app/medication/edit/[id].tsx` | ✅ same form |
 | Health conditions (per family member) | `src/app/health/conditions.tsx` | ✅ |
@@ -480,7 +562,7 @@ family_members (schema v3)  — profiles under one account, no separate login
   profile_setup_done CHECK(0|1)                                                  ← v4
   indexes: (user_id, is_self) · UNIQUE (user_id) WHERE is_self = 1   ← exactly one "Me"
 
-medications (SQLite, schema v1 + v2 + v3 columns)
+medications (SQLite, schema v1 + v2 + v3 + v6 columns)
   id TEXT PK · user_id · member_id → family_members(id) ON DELETE CASCADE   ← v3
   name · dosage · instructions · expiration_date
   frequency · safety_status CHECK(SAFE|EXPIRING_SOON|EXPIRED|NEEDS_REVIEW|UNKNOWN)
@@ -489,6 +571,7 @@ medications (SQLite, schema v1 + v2 + v3 columns)
   kind CHECK(NULL|PRESCRIPTION|OTC|SUPPLEMENT)                       ← v2
   form CHECK(NULL|TABLET|CAPSULE|LIQUID|INHALER|INJECTION|CREAM|
              DROPS|PATCH|SPRAY|OTHER)                                 ← v2
+  label_text (exact text read from the label by the scanner)              ← v6
   indexes: (user_id, archived) · (user_id, name) · (user_id, expiration_date)
 
 health_conditions (schema v2, + member_id in v3)
@@ -554,17 +637,19 @@ demo cannot be broken by a missing key or a dead network.
 
 ## 9. Testing and verification
 
-**325 tests in 19 suites**, all passing:
+**352 tests in 21 suites**, all passing:
 
 | Suite | Covers |
 |---|---|
+| `domain/safety` | SAFE / EXPIRING_SOON / EXPIRED / NEEDS_REVIEW boundaries against a fixed today; missing dosage, frequency, expiry; scan-confidence threshold applies to scans only; reason ordering |
+| `domain/scan` | result schema (trim, blank → null, malformed date dropped, confidence range, lengths), name confirmation rule, "check this" per field, overall confidence, scan → medicine input (label-read fields only, confirmed name wins, no name → null), duplicate detection (normalised name, same member, archived ignored), the three demo readings |
 | `i18n/translate` | every English key has an Arabic string with matching placeholders, interpolation, `localizeMessage` lookup, counts, 12-hour times per language, expiry wording, frequency display, possessives |
 | `db/ReminderRepository` | reminder CRUD, one per medicine, notification ids, per-user isolation; doses created once per occurrence, status kept on re-seed, missed sweep only touches UPCOMING before the cutoff, follow-up id; cascades from medicine and family member — **both** backends |
 | `domain/reminder` | suggestion from the label (blocked when expired, none when not understood, as-needed), input schema (sorted unique times, days rules, date order), occurrences per day, grace window, wording helpers |
-| `db/migrations` | schema version, idempotence, indexes, every CHECK constraint; v2 columns, condition-type CHECK, link cascade; v3 one-"Me" index, relationship/colour CHECKs, member_id FK + cascade; v4 profile columns default null, value lists and ranges enforced; v5 one reminder per medicine, one dose per occurrence, enums, cascades |
+| `db/migrations` | schema version, idempotence, indexes, every CHECK constraint; v2 columns, condition-type CHECK, link cascade; v3 one-"Me" index, relationship/colour CHECKs, member_id FK + cascade; v4 profile columns default null, value lists and ranges enforced; v5 one reminder per medicine, one dose per occurrence, enums, cascades; v6 nullable `label_text` |
 | `db/FamilyRepository` | `ensureSelf` idempotence and adoption of pre-v3 rows, ordering ("Me" first), one-"Me" rule, self kept as ME, per-user isolation, self cannot be removed, removal cascades to that member's medicines and conditions only; profile fields round trip; sign-up step pending for "Me" only and marked done once — **both** backends |
 | `domain/familyMember` | schema (Other needs wording, future DOB rejected; height/weight numeric with comma decimals and plausible ranges; gender/blood-type lists), addable relationships exclude Me, labels, age, initials, possessives, least-used avatar colour |
-| `db/MedicationRepository` | CRUD + per-user isolation + kind/form round trip, run against **both** implementations |
+| `db/MedicationRepository` | CRUD + per-user isolation + kind/form round trip, scanned `labelText` kept (null for manual), `setSafetyStatus` changes only the status and refuses another user — run against **both** implementations |
 | `db/HealthConditionRepository` | CRUD, ordering, per-user isolation, medicine links (foreign ids dropped, links replaced/kept/cleared, cascade on delete) — **both** backends |
 | `domain/medication` | validation rules, null normalisation, calendar-date rejection |
 | `domain/medicationOptions` | dosage amount + unit compose/parse, frequency presets understood by `parseFrequency`, instruction chips round trip, unrecognised text kept verbatim |
@@ -650,7 +735,17 @@ Scan the QR code with the iPhone Camera app (opens Expo Go). Then:
    banner "Adding medicine for: Fatima · Mother" → save. Back on **Medicines**,
    switch between Me and Fatima with the chips; each list is separate.
    **Remove family member** → the confirmation lists her medicines.
-9. **Settings** → switch colour theme, large text, high contrast; log out; log in
+9. **Home → Scan Medicine** (Demo Mode is on by default): pick *Safe
+   medicine* under the camera, photograph anything → the result screen shows
+   the photo beside the label text, the fields badged "Read from label", and
+   "Demo Medicine" is added to the list automatically. **Scan another** with
+   *Expired medicine* → saved as expired, red banner, no reminder offered.
+   *Unreadable label* → nothing is guessed; type the name or enter manually.
+   Scan the same one twice → "Already in the list".
+10. **Settings → Voice alerts → Hear an example**; set a reminder one minute
+   ahead and keep the app open to hear it spoken when the notification
+   arrives; on the lock screen use **Snooze 10 min**.
+11. **Settings** → switch colour theme, large text, high contrast; log out; log in
 
 Everything above works with the phone in Airplane Mode. The same app is live
 in a browser at https://medimind-medimind3.vercel.app (add to the iPhone home
@@ -670,23 +765,23 @@ This is where each one stands.
 | 1 Project setup | ✅ Done | Expo SDK 57, TypeScript, Expo Router, theme, structure, env config |
 | 2 UI foundation — splash, onboarding, auth, dashboard | ✅ Done | Splash uses the real logo; demo account added on top |
 | 3 Medication management — add/view/edit/delete/search/details | ✅ Done | |
-| 4 Database | ✅ Done for medications, health conditions (v2), family members (v3) and health profiles (v4) | `reminders` and `doses` tables arrive with Phase 9–11 as schema v5 |
-| 5 Medication scanner (camera → OCR/AI → data) | ⬜ Not started | **Next.** `MedicationScannerService` interface + mock + Claude vision |
-| 6 Scan result confirmation (Confirm / Edit, never auto-save) | ⬜ Not started | Reuses `MedicationForm` for the Edit path |
-| 7 Safety engine (expiry, missing info, unclear label) | ⬜ Not started | `safety_status` column and labels already exist; only the service is missing |
+| 4 Database | ✅ Done | Schema v1–v6: medications, health conditions, family members, profiles, reminders + doses, scanned label text |
+| 5 Medication scanner (camera → OCR/AI → data) | ✅ Done | `expo-camera` screen with framing guide; `MedicationScannerService` with mock + server `/scan` (Gemini / Claude vision); label text shown verbatim beside the photo |
+| 6 Scan result confirmation | ✅ Done | Per-field "Read from label / Check this / Not on the label"; auto-added only when the name is confident, otherwise the user confirms it; duplicates offered "open existing"; edit through the existing form |
+| 7 Safety engine (expiry, missing info, unclear label) | ✅ Done | `evaluateSafety` on every save and load; status + reasons on the detail screen; expired never offered a reminder |
 | 8 Manual entry | ✅ Done | Five-section form: type/form chips, amount + unit, frequency presets, calendar date picker with expired / expiring-soon feedback, instruction chips, health conditions; blank → `null`, calendar-date checks |
 | 9 Smart reminders (suggested schedule, editable) | ✅ Done | Times suggested from the label, editable with a clock picker, every day / chosen days, dates; expired medicines blocked |
 | 10 Notifications (local, Taken / Missed, permissions) | ✅ Done | Repeating local notifications with Taken / Skip actions, permission asked with the reason, Settings switch; works in Expo Go |
 | 11 Dose tracking (today + history) | ✅ Done | Schedule tab: Today with Taken / Skip / Undo, 7-day history grouped by date; Home counts |
 | 12 Missed dose (gentle reminder, never "double up") | ✅ Done | Swept to MISSED after 120 min; one gentle follow-up notification per dose, cancelled when marked; never "take it now" |
-| 13 Voice alerts (TTS, toggle in Settings) | ⬜ Not started | `voiceAlertsEnabled` setting exists; `expo-speech` not yet wired |
+| 13 Voice alerts (TTS, toggle in Settings) | ✅ Done | `expo-speech`; spoken when a reminder arrives with the app open or is opened from the notification; sound / voice / both; snooze; Read aloud |
 | 14 Offline support | ✅ Done by design | Local-first SQLite, on-device auth, offline assistant; AI features say so when they need internet |
-| 15 Settings (profile, notifications, voice, accessibility, privacy, about, logout) | ◐ Mostly done | Profile, language (English / Arabic, RTL), appearance, accessibility, reminder notifications, health shortcuts, about, logout done; voice / privacy pending |
+| 15 Settings (profile, notifications, voice, accessibility, privacy, about, logout) | ✅ Done | Profile, language, appearance, accessibility, reminder notifications, voice alerts + alert style, health shortcuts, privacy page, about, logout |
 | 16 Accessibility | ◐ Strong foundation | Large text, high contrast, WCAG-checked palettes, 48 pt targets, labels never colour-only; a final screen-reader pass remains |
-| 17 Error handling (friendly messages everywhere) | ◐ Partial | `Result<T>` + error catalogue used throughout; camera / notification / OCR cases arrive with their features |
+| 17 Error handling (friendly messages everywhere) | ✅ Done | `Result<T>` + error catalogue throughout; camera denied, photo unreadable, scan server unreachable, notification denied all have a friendly message and a way forward |
 | 18 Security | ◐ Partial | No secrets in the bundle, per-user scoping, minimal data, no admin login; Supabase RLS pending |
-| 19 Demo mode (safe / expired / unreadable scenarios) | ◐ Partial | `demoMode` flag, demo account and offline assistant exist; the three scanner scenarios arrive with Phase 5 |
-| 20 Testing | ◐ Ongoing | 171 tests covering auth, medication, database, storage, assistant, dosing; scanner / safety / reminder / notification suites to come |
+| 19 Demo mode (safe / expired / unreadable scenarios) | ✅ Done | Demo Mode routes scanning through `MockScanner`; the three scenarios are chips on the scan screen; demo account and offline assistant |
+| 20 Testing | ◐ Ongoing | 352 tests: auth, medication, database (real SQLite, v1–v6), storage, assistant, dosing, family, reminders, i18n, scanner rules, safety engine; a device pass with a real label and the AI reader remains |
 
 **Not planned, by the brief's own rule ("do not overbuild"):** social features,
 chat between users, hospital systems, payments, analytics dashboards, AI
@@ -696,10 +791,23 @@ diagnosis.
 
 ## 13. Remaining work in detail
 
-### Milestone 4 — Scanner, confirmation, safety engine, demo scenarios
+### Milestone 4 — Scanner, confirmation, safety engine, demo scenarios ✅ DONE (19 Sep 2026)
 
-Covers Phases 5, 6, 7 and 19. This is the heart of the project and needs the
-iPhone (the camera cannot run in a browser).
+Delivered as described in §4.4f. Differences from the plan below, kept for the
+record: the safety engine is a domain function (`src/domain/safety.ts`) rather
+than a service; there is no separate "processing" or "unreadable" screen — the
+result screen shows the reading state and the unreadable case (name
+confirmation or manual entry) itself; the reader lives on the Railway server
+(`POST /scan`, Gemini or Claude vision) rather than a Supabase function; and,
+at Omar's request, a confidently-read medicine is added to the list
+automatically with the photo and the exact label text kept, instead of a
+Confirm button — the user still confirms any weak name and can edit the entry
+through the ordinary form. What remains for a real device pass: try the AI
+reader with a physical pack once a Gemini key is on Railway, and tune the
+prompt on what it returns.
+
+Original plan:
+
 
 **Camera (Phase 5)**
 - Install `expo-camera`; add `NSCameraUsageDescription` to `app.json` (iOS
@@ -793,9 +901,14 @@ Covers Phases 9, 10, 11 and 12. Built as planned below, with these differences: 
   Follow the instructions on the label, and ask a pharmacist if unsure." Never
   "take it now" and never "take two".
 
-### Milestone 6 — Voice, settings, accessibility, security, hardening
+### Milestone 6 — Voice, settings, accessibility, security, hardening ◐
 
-Covers Phases 13, 15, 16, 17, 18 and the rest of 20.
+Covers Phases 13, 15, 16, 17, 18 and the rest of 20. **Done so far:** language
+(English / Arabic), voice alerts with alert style and snooze, the privacy
+page, friendly errors for the camera / scan / notification cases. **Left:**
+the VoiceOver pass, Supabase-backed auth and optional sync, and a device pass
+with a real label.
+
 
 **Voice alerts (Phase 13)** — `VoiceService` over `expo-speech`. Reminder:
 "It is time for your medication." Safety: "Warning. This medication appears to
@@ -843,12 +956,12 @@ auth suite.
 | 2 | Create an account | ✅ |
 | 3 | Log in | ✅ (plus one-tap demo account) |
 | 4 | View the home dashboard | ✅ |
-| 5 | Scan a medication label | ⬜ M4 |
-| 6 | Extract medication information | ⬜ M4 |
-| 7 | Review / edit the extracted information | ⬜ M4 (form already exists) |
-| 8 | Check expiration / safety | ⬜ M4 |
-| 9 | Receive a warning for an expired medication | ⬜ M4 |
-| 10 | Add a safe medication | ✅ manually; via scan in M4 |
+| 5 | Scan a medication label | ✅ camera on the phone, photo picker on the web |
+| 6 | Extract medication information | ✅ label text verbatim + structured fields with confidence (mock in Demo Mode, vision model via Railway otherwise) |
+| 7 | Review / edit the extracted information | ✅ per-field badges on the result screen; edit through the medicine form |
+| 8 | Check expiration / safety | ✅ safety engine on every save and load |
+| 9 | Receive a warning for an expired medication | ✅ red banner on the result and detail screens; no reminder offered |
+| 10 | Add a safe medication | ✅ manually or automatically from a scan |
 | 11 | Generate a reminder | ✅ suggested from the label, confirmed by the user |
 | 12 | Receive a notification | ✅ local, with Taken / Skip actions |
 | 13 | Mark a dose as taken | ✅ in the app or from the notification |
@@ -856,9 +969,9 @@ auth suite.
 | 15 | View medication history | ✅ last seven days in the Schedule tab |
 | 16 | Use manual medication entry | ✅ |
 | 17 | Access saved medications offline | ✅ |
-| 18 | Use voice alerts | ⬜ M6 |
-| 19 | Manage notification / voice settings | ◐ toggles exist; screens in M6 |
-| 20 | Demonstrate the complete workflow reliably | ◐ Everything built so far works in Airplane Mode; scanner and reminders complete the story |
+| 18 | Use voice alerts | ✅ spoken reminder with the app open or opened from the notification; example in Settings; Read aloud |
+| 19 | Manage notification / voice settings | ✅ notifications switch, voice switch, sound / voice / both |
+| 20 | Demonstrate the complete workflow reliably | ✅ the whole story runs in Demo Mode with no internet and no key |
 
 **Beyond the brief:** the Ask MediMind assistant with dose scheduling, selectable
 colour themes, a WCAG contrast checker, real-SQLite tests, structured manual
@@ -872,28 +985,29 @@ account managing several people's medicines with no extra logins).
 | Step | Action | Status |
 |---|---|---|
 | 1 | Open MediMind | ✅ |
-| 2 | Go to Scan Medication | ⬜ M4 |
-| 3 | Scan a medicine label | ⬜ M4 |
-| 4 | Show AI / OCR extraction | ⬜ M4 (mock in demo mode, Claude when deployed) |
+| 2 | Go to Scan Medication | ✅ Home hero card / Medicines tab |
+| 3 | Scan a medicine label | ✅ |
+| 4 | Show AI / OCR extraction | ✅ label text beside the photo (mock in Demo Mode, Gemini / Claude vision when deployed) |
 | 5 | Show medication details | ✅ detail screen exists |
-| 6 | Show safety verification | ⬜ M4 |
-| 7 | Demonstrate an expired-medication warning | ⬜ M4 (mock "Expired Demo Medicine") |
-| 8 | Scan / use a safe medication | ⬜ M4 (mock "Demo Medicine") |
-| 9 | Confirm the medication | ⬜ M4 |
+| 6 | Show safety verification | ✅ safety check card with reasons |
+| 7 | Demonstrate an expired-medication warning | ✅ "Expired medicine" demo scenario |
+| 8 | Scan / use a safe medication | ✅ "Safe medicine" demo scenario |
+| 9 | Confirm the medication | ✅ added automatically when the name is confident; confirmed by the user otherwise |
 | 10 | Show the automatically suggested reminder | ✅ |
 | 11 | Confirm the reminder | ✅ |
 | 12 | Show the notification | ✅ |
 | 13 | Mark the medication as taken | ✅ |
 | 14 | Show the medication history | ✅ |
 
-The demo runs on `MockMedicationScanner` and local notifications, so steps 2–14
-will work with no internet and no API key — exactly as the brief requires.
+The demo runs on `MockScanner` and local notifications, so steps 2–14 work
+with no internet and no API key — exactly as the brief requires.
 
 ---
 
 ## 16. Commit history
 
 ```
+2026-09-19  Milestone 4 + voice: camera scanning, label text panel, auto-add with safety engine, voice alerts, snooze, privacy page (schema v6, server 1.6.0)
 2026-09-13  Chatbot: complete answers (8192-token budget), answer-first tone, new closing line, narrower client screen (server 1.4.1)
 2026-09-13  Ask MediMind as a chatbot: messenger UI, AI by default with offline fallback, general info in plain language (server 1.4.0)
 2026-09-13  PROJECT_SUMMARY: record the decision to keep email-only sign-in
@@ -958,7 +1072,15 @@ will work with no internet and no API key — exactly as the brief requires.
 | Person context sent to the assistant | `toPersonContext` in `src/domain/assistant.ts`; rules 8–11 in `server/src/index.ts` |
 | Reminders and doses (model, suggestion, occurrences, grace) | `src/domain/reminder.ts` |
 | Reminder / dose repositories and stores | `src/db/repositories/*ReminderRepository.ts`, `src/stores/useReminderStore.ts`, `src/stores/useDoseStore.ts` |
-| Notifications (Expo + web no-op, Taken / Skip actions) | `src/services/notifications/` |
+| Notifications (Expo + web no-op, Taken / Skip / Snooze actions, arrivals) | `src/services/notifications/` |
+| Scanner contract, mock, server proxy | `src/services/scanner/` |
+| Scan result rules (schema, confidence, duplicates, demo readings) | `src/domain/scan.ts` |
+| Safety engine | `src/domain/safety.ts`, applied in `src/stores/useMedicationStore.ts` |
+| Scan flow state (run, auto-save, duplicates) | `src/stores/useScanStore.ts`, photo kept by `src/lib/scanImage.ts` |
+| Scan screens (camera / web picker / result) | `src/app/scan/` + `src/components/scan/` |
+| Voice (text-to-speech, announcer, snooze handling) | `src/services/voice/VoiceService.ts`, `src/components/voice/useVoiceAnnouncer.ts` |
+| Privacy page | `src/app/about/privacy.tsx` |
+| Server `/scan` route and vision prompt | `handleScan`, `SCAN_PROMPT` in `server/src/index.ts`; `readLabel` in `server/src/providers.ts` |
 | Reminder screen, Schedule tab, dose row | `src/app/reminder/[medicationId].tsx`, `src/app/(tabs)/schedule.tsx`, `src/components/schedule/DoseRow.tsx` |
 | The medicine form | `src/components/medication/MedicationForm.tsx` |
 | Chips, date picker, collapsible, form section | `src/components/ui/ChoiceChips.tsx`, `DateField.tsx` + `DateField.web.tsx`, `Collapsible.tsx`, `FormSection.tsx` |
@@ -983,6 +1105,46 @@ will work with no internet and no API key — exactly as the brief requires.
 Newest first. Every commit that changes the app adds an entry here **in the
 same commit**, and updates the sections above that it touches (rule in
 `AGENTS.md`, "Verify before claiming done").
+
+### 2026-09-19 — Milestone 4 (scanner + safety engine) and voice alerts
+- **Camera scanning** (`src/app/scan/`): `expo-camera` preview with a
+  framing window and instructions, shutter, photo-library and manual-entry
+  routes, permission states (ask / denied → Settings), web variant with the
+  photo picker. Demo Mode chips choose Safe / Expired / Unreadable.
+- **Label reading**: `MedicationScannerService` (`MockScanner`,
+  `ProxyScanner` → server **`POST /scan`**, Gemini `inlineData` or Claude
+  image block; Groq answers 501). Server **v1.6.0** with `SCAN_PROMPT`
+  ("never invent; null when not printed or not legible"), 8 MiB image limit,
+  JSON extraction and normalisation. Result validated by `scanResultSchema`.
+- **Result screen**: photo (enlarge + zoom) beside a selectable, scrollable
+  panel with the exact label text (side by side ≥ 720 px); fields badged
+  Read from label / Check this / Not on the label; reader warnings.
+- **Auto-add without guessing** (`useScanStore`): saved automatically when
+  the name is confident (source SCAN, confidence, photo copied to the app's
+  documents folder, `label_text` kept — schema **v6**, Supabase mirror);
+  weak or missing name → the user types it; same name for the same member →
+  "Open the existing entry" / "Save as a new entry anyway"; then Open
+  medicine / Set a reminder / Scan another.
+- **Safety engine** (`src/domain/safety.ts`) runs on every save and load via
+  `applySafety`; the detail screen shows the status, its reasons and the
+  scanned photo + label text (collapsible). Home hero card enabled; Medicines
+  tab gains **Scan a label**.
+- **Voice alerts**: `VoiceService` over `expo-speech`; `useVoiceAnnouncer`
+  speaks a reminder when it arrives with the app open or is opened from the
+  notification (once per dose per day); Settings **Voice alerts** switch,
+  alert style sound / voice / both ("voice only" = silent notification),
+  **Hear an example**; **Read aloud** on the Schedule tab; **Snooze 10 min**
+  notification action (`ACTION_SNOOZE`, `scheduleSnooze`). Limitation stated
+  in Settings: no speech while the phone is locked — the sound covers that.
+- **Settings**: placeholders removed; **Privacy and your data** page
+  (`src/app/about/privacy.tsx`). Strings added in English and Arabic
+  (`scan.*`, `safetyReason.*`, `voice.*`, `privacy.*`, `notif.snooze`).
+- Packages: `expo-camera`, `expo-image-picker`, `expo-file-system`,
+  `expo-speech` (all Expo Go compatible); `app.json` plugins with permission
+  texts.
+- Tests **+27** (352 in 21 suites): `domain/safety`, `domain/scan`,
+  migration v6, repository `labelText` / `setSafetyStatus`. Typecheck (app +
+  server) and iOS + web exports clean.
 
 ### 2026-09-19 — Arabic language switch, right-to-left, AI replies in Arabic
 - **Settings → Language** (English / العربية). Typed dictionaries in

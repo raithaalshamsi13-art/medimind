@@ -57,12 +57,17 @@ Do them in this order — each later step needs a value from an earlier one.
 4. **Settings → Networking → Generate Domain**. Copy it, e.g.
    `https://medimind-server-production.up.railway.app`.
 5. Check it works: open `<that domain>/health` in a browser. You should see
-   `{"ok":true,"service":"medimind-server","version":"1.5.0","assistant":true,...}`.
+   `{"ok":true,"service":"medimind-server","version":"1.6.0","assistant":true,...}`.
    If `version` is older than the one in `server/src/index.ts`, Railway has
    not picked up the latest push: open the service → **Deployments →
    Redeploy**, or connect the Railway GitHub App so pushes deploy automatically.
 
-The app will talk to `<that domain>/assistant`.
+The app will talk to `<that domain>/assistant` (the chat) and
+`<that domain>/scan` (label reading — the app derives it from the assistant
+endpoint, or set `EXPO_PUBLIC_SCAN_ENDPOINT` to point somewhere else).
+**Label reading needs a vision model:** Gemini or Claude. Groq has no vision
+model, so with only a Groq key the app's scanner stays on the demo reader and
+`/scan` answers 501.
 
 ---
 
@@ -79,6 +84,7 @@ The app will talk to `<that domain>/assistant`.
    | `EXPO_PUBLIC_SUPABASE_ANON_KEY` | from Supabase step 4 |
    | `EXPO_PUBLIC_ASSISTANT_ENDPOINT` | Railway domain + `/assistant` |
    | `EXPO_PUBLIC_ASSISTANT_ACCESS_KEY` | the same string you used for `APP_ACCESS_KEY` on Railway |
+   | `EXPO_PUBLIC_SCAN_ENDPOINT` | optional — only if the scanner should use a different URL than Railway domain + `/scan` |
 
 4. **Deploy**. About two minutes later you get a URL like
    `https://medimind-xyz.vercel.app`.

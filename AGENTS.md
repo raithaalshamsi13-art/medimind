@@ -125,6 +125,23 @@ It reads a medicine label, verifies it, and only then schedules reminders.
   is recorded and, at most, followed by one gentle notification that says to
   follow the label and never double up. Nothing may say "take it now".
   Notification wording lives in `services/notifications/` only.
+- **The scanner reads; it never guesses.** Whatever the reader returns goes
+  through `scanResultSchema` in `src/domain/scan.ts` (blank → `null`,
+  malformed date → `null`) before any screen sees it. A scanned medicine is
+  added automatically only when the name was read at or above
+  `FIELD_CONFIDENCE_THRESHOLD`; otherwise the user types the name. Fields
+  below the threshold are badged "Check this" and make the medicine
+  `NEEDS_REVIEW` via `evaluateSafety` (`src/domain/safety.ts`), which is the
+  only place a `safety_status` is decided and runs on every save and load.
+  The exact label text is stored in `label_text` and shown verbatim. No
+  reminder is ever created from a scan. The server's `SCAN_PROMPT` must keep
+  the "null when not printed or not legible" rule.
+- **Voice says what the record says.** `VoiceService` (`expo-speech`) speaks
+  the medicine name and dose label from the reminder — never an added
+  instruction — and only when `voiceAlertsEnabled` and the alert style allow.
+  `useVoiceAnnouncer` is mounted once, in the root layout, and announces each
+  dose at most once per day. Speech cannot play while the phone is locked;
+  the notification sound is the guaranteed alert, and Settings says so.
 - **Structured form choices compose to the existing text columns.** Chips in
   `MedicationForm` produce `dosage` / `frequency` / `instructions` strings via
   `src/domain/medicationOptions.ts`, which must stay round-trippable and must

@@ -13,6 +13,9 @@ import { DEFAULT_PALETTE_ID, PALETTES, type PaletteId } from '@/theme/palettes';
 /** Follow the phone's setting, or force one appearance. */
 export type AppearancePreference = 'system' | 'light' | 'dark';
 
+/** How a reminder makes itself heard (only applies while voice alerts are on). */
+export type AlertStyle = 'sound' | 'voice' | 'both';
+
 export type SettingsFlags = {
   /** Master switch for medication reminder notifications. */
   notificationsEnabled: boolean;
@@ -38,6 +41,8 @@ export type SettingsFlags = {
   assistantDisclaimerAcknowledged: boolean;
   /** UI language. Arabic also switches the layout to right-to-left. */
   language: 'en' | 'ar';
+  /** How a reminder alerts: notification sound, spoken voice, or both. */
+  alertStyle: AlertStyle;
 };
 
 const defaultFlags: SettingsFlags = {
@@ -51,6 +56,7 @@ const defaultFlags: SettingsFlags = {
   paletteId: DEFAULT_PALETTE_ID,
   assistantDisclaimerAcknowledged: false,
   language: 'en',
+  alertStyle: 'both',
 };
 
 /** Keys whose value is a boolean — all of them today, kept honest by types. */
@@ -82,6 +88,7 @@ function pickFlags(state: SettingsFlags): SettingsFlags {
     paletteId: state.paletteId,
     assistantDisclaimerAcknowledged: state.assistantDisclaimerAcknowledged,
     language: state.language,
+    alertStyle: state.alertStyle,
   };
 }
 
@@ -93,6 +100,9 @@ function sanitise(values: Partial<SettingsFlags>): Partial<SettingsFlags> {
   }
   if (next.language !== undefined && next.language !== 'en' && next.language !== 'ar') {
     next = { ...next, language: 'en' };
+  }
+  if (next.alertStyle !== undefined && !['sound', 'voice', 'both'].includes(next.alertStyle)) {
+    next = { ...next, alertStyle: 'both' };
   }
   return next;
 }

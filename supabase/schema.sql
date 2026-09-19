@@ -78,6 +78,9 @@ create table if not exists public.medications (
                     ('TABLET','CAPSULE','LIQUID','INHALER','INJECTION','CREAM','DROPS','PATCH','SPRAY','OTHER'))
 );
 
+-- Schema v6: the scanned label text, as read (null for manual entries).
+alter table public.medications add column if not exists label_text text;
+
 -- Re-running on a project created before v2: add the columns if missing.
 alter table public.medications add column if not exists kind text
   check (kind is null or kind in ('PRESCRIPTION','OTC','SUPPLEMENT'));

@@ -318,6 +318,25 @@ describe('migrations', () => {
     });
   });
 
+  describe('version 6 — scanned label text', () => {
+    it('adds a nullable label_text column to medications', async () => {
+      await runMigrations(db);
+      await insertMedication(db, { id: 'med-1' });
+      await db.runAsync(`UPDATE medications SET label_text = 'Panadol 500 mg' WHERE id = 'med-1'`, []);
+      const row = await db.getFirstAsync<{ label_text: string | null }>(
+        `SELECT label_text FROM medications WHERE id = 'med-1'`,
+        [],
+      );
+      expect(row?.label_text).toBe('Panadol 500 mg');
+      await insertMedication(db, { id: 'med-2' });
+      const empty = await db.getFirstAsync<{ label_text: string | null }>(
+        `SELECT label_text FROM medications WHERE id = 'med-2'`,
+        [],
+      );
+      expect(empty?.label_text).toBeNull();
+    });
+  });
+
   describe('version 4 — health profile fields', () => {
     beforeEach(async () => {
       await runMigrations(db);

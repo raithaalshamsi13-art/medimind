@@ -10,12 +10,13 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useMemo } from 'react';
-import { View } from 'react-native';
+import { Image, View } from 'react-native';
 
 import { medicationIcon } from '@/components/medication/formIcons';
-import { AppText, Badge, Button, Card, InlineMessage, Screen, type BadgeTone } from '@/components/ui';
+import { AppText, Badge, Button, Card, Collapsible, InlineMessage, Screen, type BadgeTone } from '@/components/ui';
 import { expiryStatus, type ExpiryState } from '@/domain/expiry';
-import type { Medication } from '@/domain/medication';
+import type { Medication, SafetyStatus } from '@/domain/medication';
+import { evaluateSafety } from '@/domain/safety';
 import { useT } from '@/i18n';
 import {
   conditionNameT,
@@ -40,6 +41,22 @@ const EXPIRY_TONES: Record<ExpiryState, BadgeTone> = {
   EXPIRED: 'danger',
   EXPIRING_SOON: 'warning',
   OK: 'success',
+};
+
+const SAFETY_TONES: Record<SafetyStatus, BadgeTone> = {
+  SAFE: 'success',
+  EXPIRING_SOON: 'warning',
+  EXPIRED: 'danger',
+  NEEDS_REVIEW: 'warning',
+  UNKNOWN: 'neutral',
+};
+
+const SAFETY_ICONS: Record<SafetyStatus, keyof typeof Ionicons.glyphMap> = {
+  SAFE: 'shield-checkmark-outline',
+  EXPIRING_SOON: 'time-outline',
+  EXPIRED: 'alert-circle',
+  NEEDS_REVIEW: 'help-circle-outline',
+  UNKNOWN: 'help-circle-outline',
 };
 
 export default function MedicationDetailScreen() {
@@ -111,6 +128,9 @@ export default function MedicationDetailScreen() {
   }
 
   const expiry = expiryStatus(medication.expirationDate);
+  // Evaluated live so the reasons always match today's date, even if the
+  // stored status was written on an earlier day.
+  const safety = evaluateSafety(medication);
 
   return (
     <Screen scroll>
@@ -134,12 +154,6 @@ export default function MedicationDetailScreen() {
             </AppText>
           </View>
 
-          {/* Once Milestone 4 evaluates safety this becomes the headline
-              status. Until then it stays hidden rather than showing
-              "Not checked yet" on every medicine. */}
-          {medication.safetyStatus === 'UNKNOWN' ? null : (
-            <Badge label={safetyStatusLabel(t, medication.safetyStatus)} tone="neutral" />
-          )}
 
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.sm }}>
             {owner ? (
@@ -170,6 +184,72 @@ export default function MedicationDetailScreen() {
             title={t('detail.expiredTitle')}
             message={t('detail.expiredBody')}
           />
+        ) : null}
+
+        {/* ---------- Safety check (CHECK) ---------- */}
+        <Card>
+          <View style={{ gap: theme.spacing.md }}>
+            <AppText variant="label" color="textMuted">
+              {t('detail.safetyTitle')}
+            </AppText>
+            <Badge
+              label={safetyStatusLabel(t, safety.status)}
+              tone={SAFETY_TONES[safety.status]}
+              icon={SAFETY_ICONS[safety.status]}
+            />
+            {(safety.reasons.length > 0 ? safety.reasons : (['OK'] as const)).map((reason) => (
+              <View key={reason} style={{ flexDirection: 'row', gap: theme.spacing.sm, alignItems: 'flex-start' }}>
+                <Ionicons
+                  name={reason === 'OK' ? 'checkmark-circle-outline' : 'ellipse'}
+                  size={reason === 'OK' ? 18 : 8}
+                  color={theme.colors.textSecondary}
+                  style={reason === 'OK' ? undefined : { marginTop: 8 }}
+                />
+                <AppText variant="body" color="textSecondary" style={{ flex: 1 }}>
+                  {t(`safetyReason.${reason}`)}
+                </AppText>
+              </View>
+            ))}
+            <AppText variant="caption" color="textMuted">
+              {t('detail.safetyNote')}
+            </AppText>
+          </View>
+        </Card>
+
+        {/* ---------- Scanned label ---------- */}
+        {medication.source === 'SCAN' && (medication.imageUri || medication.labelText) ? (
+          <Collapsible title={t('detail.showLabel')} icon="camera-outline">
+            <View style={{ gap: theme.spacing.md }}>
+              {medication.imageUri ? (
+                <View style={{ gap: theme.spacing.xs }}>
+                  <AppText variant="label" color="textMuted">
+                    {t('detail.labelPhoto').toUpperCase()}
+                  </AppText>
+                  <Image
+                    source={{ uri: medication.imageUri }}
+                    accessibilityLabel={t('detail.labelPhoto')}
+                    resizeMode="contain"
+                    style={{
+                      width: '100%',
+                      height: 240,
+                      borderRadius: theme.radius.md,
+                      backgroundColor: theme.colors.surfaceAlt,
+                    }}
+                  />
+                </View>
+              ) : null}
+              {medication.labelText ? (
+                <View style={{ gap: theme.spacing.xs }}>
+                  <AppText variant="label" color="textMuted">
+                    {t('detail.labelText')}
+                  </AppText>
+                  <AppText variant="body" selectable style={{ fontFamily: 'monospace', lineHeight: 24 }}>
+                    {medication.labelText}
+                  </AppText>
+                </View>
+              ) : null}
+            </View>
+          </Collapsible>
         ) : null}
 
         {/* ---------- Fields ---------- */}

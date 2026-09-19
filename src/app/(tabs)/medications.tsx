@@ -163,18 +163,30 @@ export default function MedicationsScreen() {
           borderTopColor: theme.colors.borderStrong,
           backgroundColor: theme.colors.background,
         }}>
-        <Button
-          label={member && !member.isSelf ? t('medicines.addFor', { name: member.name }) : t('medicines.add')}
-          icon="add"
-          size="large"
-          onPress={() =>
-            router.push({
-              pathname: '/medication/add',
-              params: member ? { memberId: member.id } : {},
-            })
-          }
-          disabled={!user || !member}
-        />
+        <View style={{ flexDirection: 'row', gap: theme.spacing.md }}>
+          <Button
+            label={t('medicines.scan')}
+            icon="camera-outline"
+            size="large"
+            variant="secondary"
+            onPress={() => router.push('/scan')}
+            disabled={!user || !member}
+            style={{ flex: 1 }}
+          />
+          <Button
+            label={member && !member.isSelf ? t('medicines.addFor', { name: member.name }) : t('medicines.add')}
+            icon="add"
+            size="large"
+            onPress={() =>
+              router.push({
+                pathname: '/medication/add',
+                params: member ? { memberId: member.id } : {},
+              })
+            }
+            disabled={!user || !member}
+            style={{ flex: 1.3 }}
+          />
+        </View>
       </View>
     </Screen>
   );

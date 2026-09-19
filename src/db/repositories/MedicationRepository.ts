@@ -11,7 +11,12 @@
  * lets the browser build run on a JSON store while the phone runs real SQLite.
  */
 
-import type { Medication, MedicationCreateInput, MedicationInput } from '@/domain/medication';
+import type {
+  Medication,
+  MedicationCreateInput,
+  MedicationInput,
+  SafetyStatus,
+} from '@/domain/medication';
 import type { Result } from '@/lib/result';
 
 export type MedicationRepositoryKind = 'sqlite' | 'json';
@@ -36,4 +41,10 @@ export type MedicationRepository = {
 
   /** Permanently deletes. Fails with NOT_FOUND if absent. */
   remove(userId: string, id: string): Promise<Result<void>>;
+
+  /**
+   * Record the safety engine's verdict. The ONLY way `safety_status` changes
+   * (see `domain/safety.ts`); `create` and `update` never touch it.
+   */
+  setSafetyStatus(userId: string, id: string, status: SafetyStatus): Promise<Result<void>>;
 };

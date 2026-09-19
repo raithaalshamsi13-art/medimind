@@ -20,14 +20,23 @@ import type { Reminder } from '@/domain/reminder';
 import { tNow } from '@/i18n';
 
 import type {
+  NotificationArrival,
   NotificationPermission,
   NotificationResponse,
   NotificationService,
 } from './NotificationService';
+import { useSettingsStore } from '@/stores/useSettingsStore';
 
 export const DOSE_CATEGORY = 'MEDIMIND_DOSE';
 export const ACTION_TAKEN = 'TAKEN';
 export const ACTION_SKIPPED = 'SKIPPED';
+export const ACTION_SNOOZE = 'SNOOZE';
+
+/** Sound only when the alert style asks for it; "voice only" keeps the banner silent. */
+function notificationSound(): 'default' | undefined {
+  const { voiceAlertsEnabled, alertStyle } = useSettingsStore.getState();
+  return voiceAlertsEnabled && alertStyle === 'voice' ? undefined : 'default';
+}
 
 export type DoseNotificationData = {
   kind: 'dose' | 'follow-up';
@@ -46,7 +55,7 @@ async function configureOnce(): Promise<void> {
     handleNotification: async () => ({
       shouldShowBanner: true,
       shouldShowList: true,
-      shouldPlaySound: true,
+      shouldPlaySound: notificationSound() !== undefined,
       shouldSetBadge: false,
     }),
   });
@@ -54,6 +63,7 @@ async function configureOnce(): Promise<void> {
   await Notifications.setNotificationCategoryAsync(DOSE_CATEGORY, [
     { identifier: ACTION_TAKEN, buttonTitle: tNow('notif.taken'), options: { opensAppToForeground: false } },
     { identifier: ACTION_SKIPPED, buttonTitle: tNow('notif.skip'), options: { opensAppToForeground: false } },
+    { identifier: ACTION_SNOOZE, buttonTitle: tNow('notif.snooze'), options: { opensAppToForeground: false } },
   ]);
 
   if (Platform.OS === 'android') {
@@ -98,7 +108,7 @@ export class ExpoNotificationService implements NotificationService {
         title: tNow('notif.title'),
         body,
         categoryIdentifier: DOSE_CATEGORY,
-        sound: 'default',
+        sound: notificationSound(),
         data: { kind: 'dose', reminderId: reminder.id, time } satisfies DoseNotificationData,
       };
 
@@ -143,7 +153,7 @@ export class ExpoNotificationService implements NotificationService {
       content: {
         title: tNow('notif.missedTitle'),
         body: tNow('notif.missedBody', { name: medicationName }),
-        sound: 'default',
+        sound: notificationSound(),
         data: { kind: 'follow-up', doseId } satisfies DoseNotificationData,
       },
       trigger: {
@@ -169,18 +179,19 @@ export class ExpoNotificationService implements NotificationService {
     const translate = (response: Notifications.NotificationResponse): NotificationResponse | null => {
       const data = response.notification.request.content.data as Partial<DoseNotificationData> | undefined;
       const action = response.actionIdentifier;
-      if (
-        data?.kind === 'dose' &&
-        data.reminderId &&
-        data.time &&
-        (action === ACTION_TAKEN || action === ACTION_SKIPPED)
-      ) {
-        return {
-          kind: 'mark',
-          reminderId: data.reminderId,
-          time: data.time,
-          status: action === ACTION_TAKEN ? 'TAKEN' : 'SKIPPED',
-        };
+      if (data?.kind === 'dose' && data.reminderId && data.time) {
+        if (action === ACTION_TAKEN || action === ACTION_SKIPPED) {
+          return {
+            kind: 'mark',
+            reminderId: data.reminderId,
+            time: data.time,
+            status: action === ACTION_TAKEN ? 'TAKEN' : 'SKIPPED',
+          };
+        }
+        if (action === ACTION_SNOOZE) {
+          return { kind: 'snooze', reminderId: data.reminderId, time: data.time };
+        }
+        return { kind: 'open', reminderId: data.reminderId, time: data.time };
       }
       return { kind: 'open' };
     };
@@ -197,5 +208,41 @@ export class ExpoNotificationService implements NotificationService {
       }
     });
     return () => subscription.remove();
+  }
+
+  subscribeArrivals(handler: (arrival: NotificationArrival) => void): () => void {
+    void configureOnce();
+    const subscription = Notifications.addNotificationReceivedListener((notification) => {
+      const data = notification.request.content.data as Partial<DoseNotificationData> | undefined;
+      if (data?.kind === 'dose' && data.reminderId && data.time) {
+        handler({ reminderId: data.reminderId, time: data.time });
+      }
+    });
+    return () => subscription.remove();
+  }
+
+  async scheduleSnooze(
+    reminderId: string,
+    time: string,
+    medicationName: string,
+    doseLabel: string | null,
+    minutes: number,
+  ): Promise<string | null> {
+    await configureOnce();
+    if ((await this.getPermission()) !== 'granted') return null;
+    return Notifications.scheduleNotificationAsync({
+      content: {
+        title: tNow('notif.title'),
+        body: doseLabel ? tNow('notif.body', { name: medicationName, dose: doseLabel }) : medicationName,
+        categoryIdentifier: DOSE_CATEGORY,
+        sound: notificationSound(),
+        data: { kind: 'dose', reminderId, time } satisfies DoseNotificationData,
+      },
+      trigger: {
+        type: Notifications.SchedulableTriggerInputTypes.TIME_INTERVAL,
+        seconds: Math.max(60, minutes * 60),
+        channelId: 'reminders',
+      },
+    });
   }
 }

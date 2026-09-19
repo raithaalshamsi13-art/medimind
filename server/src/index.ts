@@ -15,6 +15,7 @@
  *
  * ENDPOINTS
  *   GET  /health      → { ok, service, version, assistant, provider, model }
+ *   POST /scan        → { result: ScanResult }  body: { image: base64, mimeType, language }
  *   POST /assistant   → { reply: string, model: string }
  *                       body: { question, history?, medications?, person? }
  *                       `person` is one family member's health profile (age in
@@ -36,7 +37,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { ProviderError, selectProvider, type Turn } from './providers.js';
 
 /** Bumped on every change so /health shows which code is live. */
-const VERSION = '1.5.0';
+const VERSION = '1.6.0';
 
 const MAX_QUESTION_LENGTH = 500;
 const MAX_HISTORY_TURNS = 10;
@@ -79,6 +80,37 @@ About the person (when a profile is supplied below):
 9. You may use the profile (age, gender, height, weight, blood type, recorded conditions and readings) ONLY to say that a factor MAY BE RELEVANT and why, in general terms — for example that age, weight or a recorded condition is something a pharmacist would want to know about before this kind of medicine. Frame it as "may be relevant" or "worth confirming", never as a conclusion.
 10. Never say a medicine is safe, unsafe, suitable, unsuitable, too strong or too weak for the person. Never calculate, adjust or suggest a dose from weight, height, age or anything else. Never interpret a reading (do not say a blood pressure or sugar reading is high, low or normal). Never diagnose. If asked any of these, say you cannot judge that and a pharmacist or doctor can.
 11. If a profile detail is missing, say it is not recorded rather than assuming it.`;
+
+/**
+ * Label reading (SCAN). The model transcribes what is printed and picks out
+ * the fields the app stores. The rules mirror the app's: nothing is guessed,
+ * an unreadable field is null with a low confidence, and the wording is kept.
+ */
+const SCAN_PROMPT = `You are reading a photo of a medicine package, bottle or blister pack for a medication-reminder app. Return ONLY a JSON object, no prose, with exactly this shape:
+
+{
+  "rawText": "every piece of legible printed text on the packaging, in reading order, one line per printed line, wording and numbers preserved exactly (do not translate, do not summarise; keep units, lot numbers and warnings)",
+  "fields": {
+    "name": "the medicine's brand or product name as printed, or null",
+    "dosage": "the strength of ONE unit as printed, e.g. \\"500 mg\\" or \\"10 mg/5 ml\\", or null",
+    "frequency": "how often to take it, only if printed (e.g. \\"Twice daily\\", \\"Every 6 hours\\", \\"As needed\\"), or null",
+    "instructions": "printed directions such as \\"Take with food\\" or a maximum per day, or null",
+    "expirationDate": "the expiry date as YYYY-MM-DD; if only month and year are printed use the last day of that month; or null",
+    "manufacturer": "the manufacturer or marketing company as printed, or null",
+    "activeIngredients": "the active ingredient(s) as printed, or null"
+  },
+  "confidence": { "name": 0-1, "dosage": 0-1, "frequency": 0-1, "instructions": 0-1, "expirationDate": 0-1 },
+  "warnings": ["short plain-language notes about anything unclear, cut off, blurred or hidden, in {language}"]
+}
+
+Rules:
+- Never invent a value. If something is not printed, or you cannot read it clearly, set the field to null and its confidence low. A confidence of 0.9 or more means you can read it clearly; below 0.7 means the user must check it.
+- "dosage" is the strength printed on the pack, never how much to take. "frequency" is only what the label itself says about timing.
+- Do not add medical advice, uses or side effects — only what is printed.
+- If the image does not show a medicine package, return empty rawText, all fields null, all confidences 0, and one warning saying so.`;
+
+const MAX_IMAGE_BASE64 = 8 * 1024 * 1024; // ~6 MB of image
+const MAX_SCAN_BODY_BYTES = MAX_IMAGE_BASE64 + 64 * 1024;
 
 const SAFE_DECLINE =
   'I am not able to help with that question. Please speak to your pharmacist or doctor.\n' +
@@ -130,13 +162,13 @@ function json(res: ServerResponse, status: number, body: unknown): void {
   res.end(JSON.stringify(body));
 }
 
-function readBody(req: IncomingMessage): Promise<string> {
+function readBody(req: IncomingMessage, limit: number = MAX_BODY_BYTES): Promise<string> {
   return new Promise((resolve, reject) => {
     let size = 0;
     const chunks: Buffer[] = [];
     req.on('data', (chunk: Buffer) => {
       size += chunk.length;
-      if (size > MAX_BODY_BYTES) {
+      if (size > limit) {
         reject(new Error('body too large'));
         req.destroy();
         return;
@@ -346,6 +378,107 @@ async function handleAssistant(req: IncomingMessage, res: ServerResponse): Promi
   }
 }
 
+/** Pull the JSON object out of a reply that may be wrapped in a code fence. */
+function extractJson(text: string): unknown {
+  const trimmed = text.trim().replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
+  const start = trimmed.indexOf('{');
+  const end = trimmed.lastIndexOf('}');
+  if (start === -1 || end === -1 || end <= start) throw new Error('no JSON object in reply');
+  return JSON.parse(trimmed.slice(start, end + 1));
+}
+
+const SCAN_FIELDS = ['name', 'dosage', 'frequency', 'instructions', 'expirationDate', 'manufacturer', 'activeIngredients'] as const;
+const CONFIDENCE_FIELDS = ['name', 'dosage', 'frequency', 'instructions', 'expirationDate'] as const;
+
+/** Coerce whatever the model returned into the exact shape the app validates. */
+function normaliseScan(raw: unknown) {
+  const r = (typeof raw === 'object' && raw !== null ? raw : {}) as Record<string, unknown>;
+  const fieldsIn = (typeof r.fields === 'object' && r.fields !== null ? r.fields : {}) as Record<string, unknown>;
+  const confIn = (typeof r.confidence === 'object' && r.confidence !== null ? r.confidence : {}) as Record<string, unknown>;
+
+  const text = (v: unknown, max: number) =>
+    typeof v === 'string' && v.trim().length > 0 ? v.trim().slice(0, max) : null;
+  const number01 = (v: unknown) =>
+    typeof v === 'number' && Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 0;
+
+  const fields: Record<string, string | null> = {};
+  for (const key of SCAN_FIELDS) fields[key] = text(fieldsIn[key], key === 'instructions' ? 300 : key === 'activeIngredients' ? 200 : 100);
+  const confidence: Record<string, number> = {};
+  for (const key of CONFIDENCE_FIELDS) confidence[key] = fields[key] === null ? 0 : number01(confIn[key]);
+
+  return {
+    rawText: typeof r.rawText === 'string' ? r.rawText.slice(0, 6000) : '',
+    fields,
+    confidence,
+    warnings: Array.isArray(r.warnings)
+      ? r.warnings.filter((w): w is string => typeof w === 'string').map((w) => w.slice(0, 200)).slice(0, 10)
+      : [],
+  };
+}
+
+async function handleScan(req: IncomingMessage, res: ServerResponse): Promise<void> {
+  if (!provider) {
+    json(res, 500, { error: 'No AI provider is configured on the server' });
+    return;
+  }
+  if (APP_ACCESS_KEY && req.headers['x-app-key'] !== APP_ACCESS_KEY) {
+    json(res, 401, { error: 'Missing or invalid app key' });
+    return;
+  }
+  const ip =
+    (req.headers['x-forwarded-for'] as string | undefined)?.split(',')[0]?.trim() ??
+    req.socket.remoteAddress ??
+    'unknown';
+  if (isRateLimited(ip)) {
+    json(res, 429, { error: 'Too many requests. Please wait a few minutes.' });
+    return;
+  }
+
+  let body: { image?: unknown; mimeType?: unknown; language?: unknown };
+  try {
+    body = JSON.parse(await readBody(req, MAX_SCAN_BODY_BYTES));
+  } catch {
+    json(res, 400, { error: 'Request body must be JSON with a base64 image under 6 MB' });
+    return;
+  }
+  const image = typeof body.image === 'string' ? body.image.replace(/^data:[^,]+,/, '') : '';
+  if (image.length === 0 || image.length > MAX_IMAGE_BASE64 || !/^[A-Za-z0-9+/=\s]+$/.test(image.slice(0, 200))) {
+    json(res, 400, { error: 'image must be base64 (JPEG or PNG) and under 6 MB' });
+    return;
+  }
+  const mimeType = body.mimeType === 'image/png' ? 'image/png' : 'image/jpeg';
+  const language = body.language === 'ar' ? 'Arabic' : 'English';
+
+  try {
+    const reply = await provider.readLabel({
+      imageBase64: image,
+      mimeType,
+      prompt: SCAN_PROMPT.replace('{language}', language),
+    });
+    let parsed: unknown;
+    try {
+      parsed = extractJson(reply);
+    } catch (error) {
+      console.error('Scan reply was not JSON', reply.slice(0, 200));
+      json(res, 502, { error: 'The label reader returned something unexpected. Please try again.', detail: String(error) });
+      return;
+    }
+    json(res, 200, { result: normaliseScan(parsed), provider: provider.name, model: provider.model });
+  } catch (error) {
+    if (error instanceof ProviderError) {
+      console.error('Scan provider error', error.provider, error.status, error.message);
+      if (error.status === 501) {
+        json(res, 501, { error: 'Label scanning needs the Gemini or Claude provider.', detail: error.message });
+        return;
+      }
+      json(res, error.status === 429 ? 429 : 502, { error: 'The label reader is unavailable right now.', detail: error.message });
+      return;
+    }
+    console.error('Unexpected scan error', error);
+    json(res, 500, { error: 'Unexpected server error.', detail: error instanceof Error ? error.message : String(error) });
+  }
+}
+
 const server = createServer(async (req, res) => {
   const url = new URL(req.url ?? '/', 'http://localhost');
 
@@ -367,6 +500,10 @@ const server = createServer(async (req, res) => {
   }
   if (req.method === 'POST' && url.pathname === '/assistant') {
     await handleAssistant(req, res);
+    return;
+  }
+  if (req.method === 'POST' && url.pathname === '/scan') {
+    await handleScan(req, res);
     return;
   }
   json(res, 404, { error: 'Not found' });

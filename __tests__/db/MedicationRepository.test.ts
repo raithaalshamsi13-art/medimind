@@ -138,6 +138,37 @@ describe.each(backends)('$name', ({ make }) => {
       expect(result.value.scanConfidence).toBeCloseTo(0.82);
       expect(result.value.imageUri).toBe('file:///label.jpg');
     });
+
+    it('keeps the scanned label text with the medicine (schema v6)', async () => {
+      const created = await repository.create(ALICE, {
+        ...BASE_INPUT,
+        source: 'SCAN',
+        scanConfidence: 0.9,
+        labelText: 'Paracetamol 500 mg / EXP 2027-04-30',
+      });
+      expect(created.ok).toBe(true);
+      if (!created.ok) return;
+      expect(created.value.labelText).toBe('Paracetamol 500 mg / EXP 2027-04-30');
+
+      const manual = await repository.create(ALICE, { ...BASE_INPUT, name: 'Aspirin' });
+      expect(manual.ok && manual.value.labelText).toBeNull();
+    });
+
+    it('updates only the safety status through setSafetyStatus', async () => {
+      const created = await repository.create(ALICE, BASE_INPUT);
+      expect(created.ok).toBe(true);
+      if (!created.ok) return;
+
+      expect((await repository.setSafetyStatus(ALICE, created.value.id, 'EXPIRING_SOON')).ok).toBe(true);
+      const fetched = await repository.getById(ALICE, created.value.id);
+      expect(fetched.ok && fetched.value.safetyStatus).toBe('EXPIRING_SOON');
+      expect(fetched.ok && fetched.value.name).toBe('Paracetamol');
+
+      const other = await repository.setSafetyStatus(BOB, created.value.id, 'EXPIRED');
+      expect(other.ok).toBe(false);
+      const unchanged = await repository.getById(ALICE, created.value.id);
+      expect(unchanged.ok && unchanged.value.safetyStatus).toBe('EXPIRING_SOON');
+    });
   });
 
   describe('structured fields (schema v2)', () => {

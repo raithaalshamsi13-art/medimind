@@ -13,7 +13,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import { useMemo } from 'react';
-import { Pressable, View } from 'react-native';
+import { Platform, Pressable, View } from 'react-native';
 
 import { Logo } from '@/components/brand/Logo';
 import { MemberContextBanner } from '@/components/family/MemberContextBanner';
@@ -240,28 +240,24 @@ export default function HomeScreen() {
 function ScanHeroCard() {
   const theme = useTheme();
   const { t } = useT();
+  const router = useRouter();
 
   return (
     <View style={{ gap: theme.spacing.sm }}>
       <Pressable
-        disabled
-        onPress={() => {}}
+        onPress={() => router.push('/scan')}
         accessibilityRole="button"
         accessibilityLabel={t('home.scanMedicine')}
         accessibilityHint={t('home.scanHint')}
-        accessibilityState={{ disabled: true }}
-        style={{
+        style={({ pressed }) => ({
           flexDirection: 'row',
           alignItems: 'center',
           gap: theme.spacing.base,
-          backgroundColor: theme.colors.primary,
+          backgroundColor: pressed ? theme.colors.primaryPressed : theme.colors.primary,
           borderRadius: theme.radius.xl,
           padding: theme.spacing.lg,
           minHeight: 108,
-          // Communicates "not yet available" alongside the caption below —
-          // never by colour alone.
-          opacity: 0.75,
-        }}>
+        })}>
         <View
           style={{
             width: 64,
@@ -287,7 +283,7 @@ function ScanHeroCard() {
       </Pressable>
 
       <AppText variant="caption" color="textMuted" align="center">
-        {t('home.scanComing')}
+        {Platform.OS === 'web' ? t('home.scanCaption') : t('home.scanComing')}
       </AppText>
     </View>
   );

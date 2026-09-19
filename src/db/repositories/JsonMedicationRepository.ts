@@ -22,6 +22,7 @@ import type {
   Medication,
   MedicationCreateInput,
   MedicationInput,
+  SafetyStatus,
 } from '@/domain/medication';
 import { isoNow } from '@/lib/datetime';
 import { appError } from '@/lib/errors';
@@ -77,6 +78,7 @@ export class JsonMedicationRepository implements MedicationRepository {
         form: medication.form ?? null,
         conditionIds: Array.isArray(medication.conditionIds) ? medication.conditionIds : [],
         memberId: medication.memberId ?? null,
+        labelText: medication.labelText ?? null,
       })),
     );
   }
@@ -143,6 +145,7 @@ export class JsonMedicationRepository implements MedicationRepository {
       scanConfidence: input.scanConfidence ?? null,
       notes: input.notes,
       imageUri: input.imageUri ?? null,
+      labelText: input.labelText ?? null,
       archived: false,
       createdAt: now,
       updatedAt: now,
@@ -190,6 +193,16 @@ export class JsonMedicationRepository implements MedicationRepository {
     const saved = await this.writeAll(next);
     if (!saved.ok) return fail(saved.error);
     return ok(updated);
+  }
+
+  async setSafetyStatus(userId: string, id: string, status: SafetyStatus): Promise<Result<void>> {
+    const all = await this.readAll();
+    if (!all.ok) return fail(all.error);
+    const index = all.value.findIndex((m) => m.id === id && m.userId === userId);
+    if (index === -1) return fail(appError('NOT_FOUND'));
+    const next = [...all.value];
+    next[index] = { ...all.value[index], safetyStatus: status };
+    return this.writeAll(next);
   }
 
   async remove(userId: string, id: string): Promise<Result<void>> {

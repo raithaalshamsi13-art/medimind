@@ -51,6 +51,7 @@ type MedicationRow = {
   kind: string | null;
   form: string | null;
   member_id: string | null;
+  label_text: string | null;
 };
 
 type LinkRow = { medication_id: string; condition_id: string };
@@ -98,6 +99,7 @@ function mapRow(row: MedicationRow, conditionIds: string[] = []): Medication {
     scanConfidence: row.scan_confidence,
     notes: row.notes,
     imageUri: row.image_uri,
+    labelText: row.label_text,
     // SQLite has no boolean type — 0/1 is stored, enforced by a CHECK.
     archived: row.archived === 1,
     createdAt: row.created_at,
@@ -108,7 +110,7 @@ function mapRow(row: MedicationRow, conditionIds: string[] = []): Medication {
 const SELECT_COLUMNS = `
   id, user_id, name, dosage, instructions, expiration_date, frequency,
   safety_status, source, scan_confidence, notes, image_uri, archived,
-  created_at, updated_at, kind, form, member_id
+  created_at, updated_at, kind, form, member_id, label_text
 `;
 
 /** De-duplicate and drop blanks so a bad caller cannot write junk links. */
@@ -215,6 +217,7 @@ export class SqliteMedicationRepository implements MedicationRepository {
       scanConfidence: input.scanConfidence ?? null,
       notes: input.notes,
       imageUri: input.imageUri ?? null,
+      labelText: input.labelText ?? null,
       archived: false,
       createdAt: now,
       updatedAt: now,
@@ -226,8 +229,8 @@ export class SqliteMedicationRepository implements MedicationRepository {
           `INSERT INTO medications (
              id, user_id, name, dosage, instructions, expiration_date, frequency,
              safety_status, source, scan_confidence, notes, image_uri, archived,
-             created_at, updated_at, kind, form, member_id
-           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+             created_at, updated_at, kind, form, member_id, label_text
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             medication.id,
             medication.userId,
@@ -247,6 +250,7 @@ export class SqliteMedicationRepository implements MedicationRepository {
             medication.kind,
             medication.form,
             medication.memberId,
+            medication.labelText,
           ],
         );
         await this.writeLinks(userId, medication.id, conditionIds);
@@ -302,6 +306,19 @@ export class SqliteMedicationRepository implements MedicationRepository {
       if (!updated.ok) return fail(updated.error);
       if (!updated.value) return fail(appError('NOT_FOUND'));
       return ok(updated.value);
+    } catch (error) {
+      return fail(toAppError(error, 'DATABASE_ERROR'));
+    }
+  }
+
+  async setSafetyStatus(userId: string, id: string, status: SafetyStatus): Promise<Result<void>> {
+    try {
+      const result = await this.db.runAsync(
+        `UPDATE medications SET safety_status = ? WHERE id = ? AND user_id = ?`,
+        [status, id, userId],
+      );
+      if (result.changes === 0) return fail(appError('NOT_FOUND'));
+      return ok(undefined);
     } catch (error) {
       return fail(toAppError(error, 'DATABASE_ERROR'));
     }

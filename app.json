@@ -39,7 +39,20 @@
       ],
       "expo-secure-store",
       "expo-sqlite",
-      "@react-native-community/datetimepicker"
+      "@react-native-community/datetimepicker",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "MediMind uses the camera to read the label on your medicine so it can be added to your list."
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "MediMind reads a photo of a medicine label you choose so it can be added to your list."
+        }
+      ],
+      "expo-notifications"
     ],
     "experiments": {
       "typedRoutes": true,

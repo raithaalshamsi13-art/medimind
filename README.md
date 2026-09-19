@@ -185,14 +185,15 @@ src/
 __tests__/                Jest suites, mirroring src/
 ```
 
-Planned additions, by milestone:
+Feature services, all present:
 
 ```
 src/services/
-├── scanner/              MedicationScannerService + implementations  (M4)
-├── safety/               MedicationSafetyService                     (M4)
-├── notifications/        scheduling, permissions, actions            (M5)
-└── voice/                text-to-speech                              (M6)
+├── scanner/              MedicationScannerService: MockScanner (Demo Mode) + ProxyScanner (server /scan)
+├── notifications/        scheduling, permissions, Taken / Skip / Snooze actions, arrivals
+└── voice/                VoiceService over expo-speech
+src/domain/safety.ts      the safety engine (pure function, runs on save and load)
+src/domain/scan.ts        scan result schema, confidence rules, duplicates, demo readings
 ```
 
 ### The database
@@ -339,9 +340,9 @@ in dark mode.
 | **M1** | Project setup, design system, navigation | ✅ Complete |
 | **M2** | Splash, onboarding, auth, home dashboard, accessibility settings | ✅ Complete |
 | **M3** | SQLite schema + migrations, repositories, medication CRUD, structured manual entry (chips, date picker), health conditions, family profiles (one account, many people) | ✅ Complete |
-| **M4** | Camera, scanner abstraction + mock, scan confirmation, safety engine, demo mode | ⬜ Deferred (after M5) |
+| **M4** | Camera, scanner abstraction + mock + server vision reader, label text panel, auto-add with confirmation, safety engine, demo scenarios | ✅ Complete |
 | **M5** | Suggested reminders, local notifications, dose tracking, missed doses | ✅ Complete |
-| **M6** | Voice alerts, offline sync, settings, accessibility, error handling, tests | ◐ Language (English / Arabic, RTL) done |
+| **M6** | Voice alerts, offline sync, settings, accessibility, error handling, tests | ◐ Language (English / Arabic, RTL), voice alerts + snooze, privacy page done |
 
 ### Ask MediMind (the assistant)
 

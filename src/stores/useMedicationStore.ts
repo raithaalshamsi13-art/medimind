@@ -18,6 +18,7 @@ import type {
   MedicationCreateInput,
   MedicationInput,
 } from '@/domain/medication';
+import { evaluateSafety } from '@/domain/safety';
 import type { AppError } from '@/lib/errors';
 import { toAppError } from '@/lib/errors';
 
@@ -52,12 +53,33 @@ type MedicationState = {
 };
 
 export const useMedicationStore = create<MedicationState>((set, get) => {
+  /**
+   * CHECK: run the safety engine over every medicine and persist any verdict
+   * that changed. Called after every read, so statuses follow the calendar
+   * (a medicine expires overnight) without anyone editing it.
+   */
+  const applySafety = async (userId: string, medications: Medication[]): Promise<Medication[]> => {
+    const repository = await getMedicationRepository();
+    const today = new Date();
+    const next: Medication[] = [];
+    for (const medication of medications) {
+      const { status } = evaluateSafety(medication, today);
+      if (status !== medication.safetyStatus) {
+        await repository.setSafetyStatus(userId, medication.id, status);
+        next.push({ ...medication, safetyStatus: status });
+      } else {
+        next.push(medication);
+      }
+    }
+    return next;
+  };
+
   /** Re-read the list without flipping the main loading flag. */
   const refresh = async (userId: string): Promise<void> => {
     const repository = await getMedicationRepository();
     const result = await repository.listForUser(userId);
     if (result.ok) {
-      set({ medications: result.value });
+      set({ medications: await applySafety(userId, result.value) });
     } else {
       set({ error: result.error });
     }
@@ -83,7 +105,7 @@ export const useMedicationStore = create<MedicationState>((set, get) => {
           return;
         }
         set({
-          medications: result.value,
+          medications: await applySafety(userId, result.value),
           isLoading: false,
           backend: repository.kind,
           isPersistent: repository.isPersistent,
@@ -105,7 +127,8 @@ export const useMedicationStore = create<MedicationState>((set, get) => {
         }
         await refresh(userId);
         set({ isSaving: false });
-        return result.value;
+        // Return the row as it now stands in the list (with its safety verdict).
+        return get().medications.find((m) => m.id === result.value.id) ?? result.value;
       } catch (error) {
         set({ isSaving: false, error: toAppError(error, 'DATABASE_ERROR') });
         return null;

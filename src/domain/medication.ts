@@ -105,6 +105,8 @@ export type Medication = {
   notes: string | null;
   /** Local file URI of the captured label photo. */
   imageUri: string | null;
+  /** Everything legible on the scanned label, as read. Null for manual entries. */
+  labelText: string | null;
   archived: boolean;
   createdAt: string;
   updatedAt: string;
@@ -242,6 +244,7 @@ export type MedicationCreateInput = MedicationInput & {
   source?: MedicationSource;
   scanConfidence?: number | null;
   imageUri?: string | null;
+  labelText?: string | null;
 };
 
 /**

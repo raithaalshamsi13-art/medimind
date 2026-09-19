@@ -33,11 +33,12 @@ import { applyDirection, LANGUAGES, reloadApp, useT, type Language } from '@/i18
 import { confirmAction } from '@/lib/confirm';
 import { isStoragePersistent } from '@/lib/storage';
 import { getNotificationService } from '@/services/notifications';
+import { getVoiceService } from '@/services/voice/VoiceService';
 import { selectUser, useAuthStore } from '@/stores/useAuthStore';
 import { selectSelf, useFamilyStore } from '@/stores/useFamilyStore';
 import { selectMedications, useMedicationStore } from '@/stores/useMedicationStore';
 import { useReminderStore } from '@/stores/useReminderStore';
-import { useSettingsStore, type AppearancePreference } from '@/stores/useSettingsStore';
+import { useSettingsStore, type AlertStyle, type AppearancePreference } from '@/stores/useSettingsStore';
 import { useTheme } from '@/theme/ThemeContext';
 import { PALETTE_LIST, type PaletteId } from '@/theme/palettes';
 
@@ -54,10 +55,6 @@ const LANGUAGE_OPTIONS: readonly ChipOption<Language>[] = LANGUAGES.map((languag
   label: language.nativeLabel,
 }));
 
-const UPCOMING_SETTINGS = [
-  { icon: 'volume-high-outline', key: 'settings.upcoming.voice', milestone: 6 },
-  { icon: 'lock-closed-outline', key: 'settings.upcoming.privacy', milestone: 6 },
-] as const;
 
 export default function SettingsScreen() {
   const theme = useTheme();
@@ -70,6 +67,8 @@ export default function SettingsScreen() {
   const signOut = useAuthStore((state) => state.signOut);
 
   const notificationsEnabled = useSettingsStore((state) => state.notificationsEnabled);
+  const voiceAlertsEnabled = useSettingsStore((state) => state.voiceAlertsEnabled);
+  const alertStyle = useSettingsStore((state) => state.alertStyle);
   const largeText = useSettingsStore((state) => state.largeText);
   const highContrast = useSettingsStore((state) => state.highContrast);
   const appearance = useSettingsStore((state) => state.appearance);
@@ -81,6 +80,12 @@ export default function SettingsScreen() {
   const notificationsAvailable = getNotificationService().isAvailable;
 
   const [needsReload, setNeedsReload] = useState(false);
+
+  const alertStyleOptions: readonly ChipOption<AlertStyle>[] = [
+    { value: 'both', label: t('settings.alertStyle.both'), icon: 'notifications-outline' },
+    { value: 'sound', label: t('settings.alertStyle.sound'), icon: 'musical-note-outline' },
+    { value: 'voice', label: t('settings.alertStyle.voice'), icon: 'volume-high-outline' },
+  ];
 
   const appearanceOptions: readonly Option<AppearancePreference>[] = [
     {
@@ -310,6 +315,48 @@ export default function SettingsScreen() {
           <AppText variant="caption" color="textMuted">
             {t('settings.remindersNote')}
           </AppText>
+
+          {/* ---------- Voice alerts (Phase 13) ---------- */}
+          <Card>
+            <View style={{ gap: theme.spacing.base }}>
+              <ToggleRow
+                icon="volume-high-outline"
+                title={t('settings.voiceTitle')}
+                description={t('settings.voiceDesc')}
+                value={voiceAlertsEnabled}
+                onValueChange={(next) => {
+                  setSetting('voiceAlertsEnabled', next);
+                  if (!next) getVoiceService().stop();
+                }}
+              />
+              {voiceAlertsEnabled ? (
+                <>
+                  <View style={{ height: 1, backgroundColor: theme.colors.border }} />
+                  <View style={{ gap: theme.spacing.sm }}>
+                    <AppText variant="label" color="textMuted">
+                      {t('settings.alertStyle')}
+                    </AppText>
+                    <ChoiceChips
+                      options={alertStyleOptions}
+                      value={alertStyle}
+                      onChange={(next) => next && setSetting('alertStyle', next)}
+                      accessibilityLabel={t('settings.alertStyle')}
+                      allowClear={false}
+                    />
+                  </View>
+                  <Button
+                    label={t('settings.testVoice')}
+                    icon="play-outline"
+                    variant="secondary"
+                    onPress={() => void getVoiceService().speak(t('voice.example'), language)}
+                  />
+                </>
+              ) : null}
+            </View>
+          </Card>
+          <AppText variant="caption" color="textMuted">
+            {t('settings.voiceNote')}
+          </AppText>
         </View>
 
         {/* ---------- My health ---------- */}
@@ -338,29 +385,17 @@ export default function SettingsScreen() {
           </Card>
         </View>
 
-        {/* ---------- Not built yet ---------- */}
+        {/* ---------- Privacy ---------- */}
         <View style={{ gap: theme.spacing.md }}>
           <AppText variant="heading">{t('settings.moreSettings')}</AppText>
-
           <Card>
-            <View style={{ gap: theme.spacing.base }}>
-              {UPCOMING_SETTINGS.map((item) => (
-                <View
-                  key={item.key}
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    gap: theme.spacing.md,
-                    opacity: 0.6,
-                  }}>
-                  <Ionicons name={item.icon} size={22} color={theme.colors.textMuted} />
-                  <AppText variant="body" color="textSecondary" style={{ flex: 1 }}>
-                    {t(item.key)}
-                  </AppText>
-                  <Badge label={t('common.milestone', { n: item.milestone })} tone="neutral" />
-                </View>
-              ))}
-            </View>
+            <Button
+              label={t('settings.privacy')}
+              icon="lock-closed-outline"
+              variant="secondary"
+              onPress={() => router.push('/about/privacy')}
+              accessibilityHint={t('settings.privacyHint')}
+            />
           </Card>
         </View>
 

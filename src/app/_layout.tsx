@@ -14,6 +14,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { useVoiceAnnouncer } from '@/components/voice/useVoiceAnnouncer';
 import { applyDirection } from '@/i18n';
 import { getNotificationService } from '@/services/notifications';
 import { useAuthStore } from '@/stores/useAuthStore';
@@ -130,6 +131,7 @@ function RootNavigator() {
 
   useAuthGate({ isReady, isSignedIn, hasCompletedOnboarding, profileSetupNeeded });
   useNotificationResponses(userId);
+  useVoiceAnnouncer(userId);
 
   // Render nothing while the native splash is still covering the screen.
   if (!isReady) return null;
@@ -152,6 +154,8 @@ function RootNavigator() {
         <Stack.Screen name="(auth)" />
         <Stack.Screen name="profile-setup" />
         <Stack.Screen name="(tabs)" />
+        <Stack.Screen name="scan" />
+        <Stack.Screen name="about" />
       </Stack>
     </>
   );
