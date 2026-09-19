@@ -123,17 +123,18 @@ export const en = {
 
   // -------------------------------------------------------- health profile
   'profile.dateOfBirth': 'Date of birth',
-  'profile.dateOfBirthHelper': 'Used to show {possessive} age. Optional.',
-  'profile.your': 'your',
-  'profile.their': 'their',
+  'profile.dateOfBirthHelperYour': 'Used to show your age. Optional.',
+  'profile.dateOfBirthHelperTheir': 'Used to show their age. Optional.',
   'profile.gender': 'Gender',
   'profile.heightCm': 'Height (cm)',
   'profile.heightPlaceholder': 'e.g. 170',
   'profile.weightKg': 'Weight (kg)',
   'profile.weightPlaceholder': 'e.g. 70',
   'profile.bloodType': 'Blood type',
-  'profile.note':
-    'These details are saved on this device under {possessive} profile. The assistant may mention that one of them could be relevant to a medicine, but MediMind never works out a dose from them or decides whether a medicine is suitable — a pharmacist or doctor does that.',
+  'profile.noteYour':
+    'These details are saved on this device under your profile. The assistant may mention that one of them could be relevant to a medicine, but MediMind never works out a dose from them or decides whether a medicine is suitable — a pharmacist or doctor does that.',
+  'profile.noteTheir':
+    'These details are saved on this device under their profile. The assistant may mention that one of them could be relevant to a medicine, but MediMind never works out a dose from them or decides whether a medicine is suitable — a pharmacist or doctor does that.',
   'profile.age': 'Age',
   'profile.height': 'Height',
   'profile.weight': 'Weight',

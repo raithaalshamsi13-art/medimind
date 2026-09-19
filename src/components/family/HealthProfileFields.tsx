@@ -49,7 +49,6 @@ export function HealthProfileFields({
     value: bloodType,
     label: bloodTypeLabelT(t, bloodType),
   }));
-  const poss = possessive === 'your' ? t('profile.your') : t('profile.their');
   const onChange = <K extends Field>(field: K, value: HealthProfileFormValues[K]) =>
     emit({ [field]: value } as Partial<HealthProfileFormValues>);
 
@@ -60,7 +59,7 @@ export function HealthProfileFields({
         value={values.dateOfBirth}
         onChange={(dateOfBirth) => onChange('dateOfBirth', dateOfBirth)}
         error={errors.dateOfBirth}
-        helper={t('profile.dateOfBirthHelper', { possessive: poss })}
+        helper={possessive === 'your' ? t('profile.dateOfBirthHelperYour') : t('profile.dateOfBirthHelperTheir')}
         maximumDate={new Date()}
       />
 
@@ -110,7 +109,7 @@ export function HealthProfileFields({
       </View>
 
       <AppText variant="caption" color="textMuted">
-        {t('profile.note', { possessive: poss })}
+        {possessive === 'your' ? t('profile.noteYour') : t('profile.noteTheir')}
       </AppText>
     </View>
   );
