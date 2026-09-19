@@ -16,16 +16,16 @@ import { MemberAvatar } from '@/components/family/MemberAvatar';
 import { MedicationCard } from '@/components/medication/MedicationCard';
 import { AppText, Badge, Button, Card, InlineMessage, Screen, TextLink } from '@/components/ui';
 import { expiryStatus } from '@/domain/expiry';
+import { ageOf, formatHeight, formatWeight } from '@/domain/familyMember';
+import { useT } from '@/i18n';
 import {
-  ageOf,
-  bloodTypeLabel,
-  formatHeight,
-  formatWeight,
-  GENDER_LABELS,
-  possessive,
-  relationshipLabel,
-} from '@/domain/familyMember';
-import { conditionDisplayName } from '@/domain/healthCondition';
+  bloodTypeLabelT,
+  conditionNameT,
+  genderLabel,
+  possessiveT,
+  relationshipLabelT,
+  tCount,
+} from '@/i18n/labels';
 import { confirmAction } from '@/lib/confirm';
 import { selectUser, useAuthStore } from '@/stores/useAuthStore';
 import {
@@ -47,6 +47,7 @@ const PREVIEW_LIMIT = 3;
 
 export default function FamilyMemberScreen() {
   const theme = useTheme();
+  const { t } = useT();
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const user = useAuthStore(selectUser);
@@ -87,10 +88,10 @@ export default function FamilyMemberScreen() {
         <View style={{ gap: theme.spacing.lg }}>
           <InlineMessage
             tone="warning"
-            title="Family member not found"
-            message="This profile may have been removed."
+            title={t('family.notFoundTitle')}
+            message={t('family.notFoundBody')}
           />
-          <Button label="Back to Family" onPress={() => router.back()} />
+          <Button label={t('family.backToFamily')} onPress={() => router.back()} />
         </View>
       </Screen>
     );
@@ -109,19 +110,17 @@ export default function FamilyMemberScreen() {
     const medicineCount = medications.length;
     const conditionCount = conditions.length;
     const parts = [
-      medicineCount > 0 ? `${medicineCount} ${medicineCount === 1 ? 'medicine' : 'medicines'}` : null,
-      conditionCount > 0
-        ? `${conditionCount} ${conditionCount === 1 ? 'health condition' : 'health conditions'}`
-        : null,
+      medicineCount > 0 ? tCount(t, 'common.medicinesCount', medicineCount) : null,
+      conditionCount > 0 ? tCount(t, 'family.healthConditionsN', conditionCount) : null,
     ].filter(Boolean);
 
     const confirmed = await confirmAction({
-      title: `Remove ${member.name}?`,
+      title: t('family.removeTitle', { name: member.name }),
       message:
         parts.length > 0
-          ? `This also deletes their ${parts.join(' and ')}. This cannot be undone.`
-          : 'Nothing has been recorded for them yet. This cannot be undone.',
-      confirmLabel: 'Remove',
+          ? t('family.removeBodyData', { items: parts.join(` ${t('common.and')} `) })
+          : t('family.removeBodyEmpty'),
+      confirmLabel: t('common.remove'),
       destructive: true,
     });
     if (!confirmed) return;
@@ -143,10 +142,10 @@ export default function FamilyMemberScreen() {
           <View style={{ flex: 1, gap: theme.spacing.xs }}>
             <AppText variant="title">{member.name}</AppText>
             <AppText variant="body" color="textSecondary">
-              {member.isSelf ? 'Me' : relationshipLabel(member)}
-              {age !== null ? ` · ${age} years old` : ''}
+              {member.isSelf ? t('common.me') : relationshipLabelT(t, member)}
+              {age !== null ? ` · ${t('common.yearsOld', { age })}` : ''}
             </AppText>
-            {isActive ? <Badge label="Managing now" tone="info" icon="checkmark-circle" /> : null}
+            {isActive ? <Badge label={t('family.managingNow')} tone="info" icon="checkmark-circle" /> : null}
           </View>
         </View>
 
@@ -154,19 +153,18 @@ export default function FamilyMemberScreen() {
 
         {/* ---------- Health profile ---------- */}
         <View style={{ gap: theme.spacing.md }}>
-          <AppText variant="heading">{possessive(member, 'health profile')}</AppText>
+          <AppText variant="heading">{possessiveT(t, member, 'healthProfile')}</AppText>
           <Card>
             <View style={{ gap: theme.spacing.md }}>
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.lg }}>
-                <ProfileFact label="Age" value={age !== null ? `${age} years` : null} />
-                <ProfileFact label="Gender" value={member.gender ? GENDER_LABELS[member.gender] : null} />
-                <ProfileFact label="Height" value={formatHeight(member.heightCm)} />
-                <ProfileFact label="Weight" value={formatWeight(member.weightKg)} />
-                <ProfileFact label="Blood type" value={member.bloodType ? bloodTypeLabel(member.bloodType) : null} />
+                <ProfileFact label={t('profile.age')} value={age !== null ? t('common.years', { age }) : null} />
+                <ProfileFact label={t('profile.gender')} value={member.gender ? genderLabel(t, member.gender) : null} />
+                <ProfileFact label={t('profile.height')} value={formatHeight(member.heightCm)} />
+                <ProfileFact label={t('profile.weight')} value={formatWeight(member.weightKg)} />
+                <ProfileFact label={t('profile.bloodType')} value={member.bloodType ? bloodTypeLabelT(t, member.bloodType) : null} />
               </View>
               <AppText variant="caption" color="textMuted">
-                Shared with the assistant as context only. MediMind never works out a dose or
-                decides whether a medicine is suitable from these.
+                {t('family.profileNote')}
               </AppText>
             </View>
           </Card>
@@ -174,24 +172,24 @@ export default function FamilyMemberScreen() {
 
         {/* ---------- Overview ---------- */}
         <View style={{ flexDirection: 'row', gap: theme.spacing.md }}>
-          <StatTile icon="medkit-outline" value={medications.length} label="Medicines" />
+          <StatTile icon="medkit-outline" value={medications.length} label={t('family.statMedicines')} />
           <StatTile
             icon="time-outline"
             value={attention.length}
-            label="Expired or expiring"
+            label={t('family.statExpiring')}
             tone={attention.length > 0 ? 'warning' : 'normal'}
           />
-          <StatTile icon="heart-outline" value={conditions.length} label="Conditions" />
+          <StatTile icon="heart-outline" value={conditions.length} label={t('family.statConditions')} />
         </View>
 
         {/* ---------- Medicines ---------- */}
         <View style={{ gap: theme.spacing.md }}>
-          <AppText variant="heading">{possessive(member, 'medicines')}</AppText>
+          <AppText variant="heading">{possessiveT(t, member, 'medicines')}</AppText>
 
           {recent.length === 0 ? (
             <Card>
               <AppText variant="body" color="textSecondary" align="center">
-                No medicines recorded for {member.isSelf ? 'you' : member.name} yet.
+                {member.isSelf ? t('family.noMedicinesForYou') : t('family.noMedicinesFor', { name: member.name })}
               </AppText>
             </Card>
           ) : (
@@ -210,13 +208,13 @@ export default function FamilyMemberScreen() {
 
           {medications.length > recent.length ? (
             <TextLink
-              label={`See all ${medications.length} medicines`}
+              label={t('family.seeAllMedicines', { count: medications.length })}
               onPress={() => void manageThen(() => router.push('/medications'))}
             />
           ) : null}
 
           <Button
-            label={`Add medicine for ${member.isSelf ? 'me' : member.name}`}
+            label={member.isSelf ? t('family.addMedicineForMe') : t('family.addMedicineFor', { name: member.name })}
             icon="add"
             onPress={() =>
               void manageThen(() =>
@@ -228,12 +226,12 @@ export default function FamilyMemberScreen() {
 
         {/* ---------- Health conditions ---------- */}
         <View style={{ gap: theme.spacing.md }}>
-          <AppText variant="heading">{possessive(member, 'health conditions')}</AppText>
+          <AppText variant="heading">{possessiveT(t, member, 'healthConditions')}</AppText>
           <Card>
             <View style={{ gap: theme.spacing.md }}>
               {conditions.length === 0 ? (
                 <AppText variant="body" color="textSecondary">
-                  None recorded yet.
+                  {t('family.noneRecordedYet')}
                 </AppText>
               ) : (
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.sm }}>
@@ -242,8 +240,8 @@ export default function FamilyMemberScreen() {
                       key={condition.id}
                       label={
                         condition.reading
-                          ? `${conditionDisplayName(condition)} · ${condition.reading}`
-                          : conditionDisplayName(condition)
+                          ? `${conditionNameT(t, condition)} · ${condition.reading}`
+                          : conditionNameT(t, condition)
                       }
                       tone="info"
                       icon="heart-outline"
@@ -252,7 +250,7 @@ export default function FamilyMemberScreen() {
                 </View>
               )}
               <Button
-                label="Manage health conditions"
+                label={t('family.manageConditions')}
                 icon="heart-outline"
                 variant="secondary"
                 onPress={() =>
@@ -267,14 +265,21 @@ export default function FamilyMemberScreen() {
 
         {/* ---------- Schedule (Milestone 5) ---------- */}
         <View style={{ gap: theme.spacing.md }}>
-          <AppText variant="heading">{possessive(member, 'schedule')}</AppText>
+          <AppText variant="heading">{possessiveT(t, member, 'schedule')}</AppText>
           <Card>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
-              <Ionicons name="calendar-outline" size={24} color={theme.colors.textMuted} />
-              <AppText variant="body" color="textSecondary" style={{ flex: 1 }}>
-                Reminders and dose tracking arrive in Milestone 5, per person.
-              </AppText>
-              <Badge label="Milestone 5" tone="neutral" />
+            <View style={{ gap: theme.spacing.md }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
+                <Ionicons name="calendar-outline" size={24} color={theme.colors.primary} />
+                <AppText variant="body" color="textSecondary" style={{ flex: 1 }}>
+                  {t('family.scheduleBody')}
+                </AppText>
+              </View>
+              <Button
+                label={t('family.viewSchedule')}
+                icon="calendar-outline"
+                variant="secondary"
+                onPress={() => void manageThen(() => router.push('/schedule'))}
+              />
             </View>
           </Card>
         </View>
@@ -283,21 +288,21 @@ export default function FamilyMemberScreen() {
         <View style={{ gap: theme.spacing.md }}>
           {!isActive ? (
             <Button
-              label={`Switch to managing ${member.isSelf ? 'my' : `${member.name}’s`} medicines`}
+              label={member.isSelf ? t('family.switchToMine') : t('family.switchTo', { name: member.name })}
               icon="swap-horizontal"
               variant="secondary"
               onPress={() => void setActiveMember(user.id, member.id)}
             />
           ) : null}
           <Button
-            label="Edit profile"
+            label={t('family.editProfile')}
             icon="create-outline"
             variant="secondary"
             onPress={() => router.push({ pathname: '/family/edit/[id]', params: { id: member.id } })}
           />
           {member.isSelf ? null : (
             <Button
-              label="Remove family member"
+              label={t('family.removeMember')}
               icon="trash-outline"
               variant="danger"
               onPress={() => void handleRemove()}
@@ -312,13 +317,14 @@ export default function FamilyMemberScreen() {
 
 function ProfileFact({ label, value }: { label: string; value: string | null }) {
   const theme = useTheme();
+  const { t } = useT();
   return (
     <View style={{ gap: theme.spacing.xxs, minWidth: 96 }}>
       <AppText variant="label" color="textMuted">
         {label.toUpperCase()}
       </AppText>
       <AppText variant="body" color={value ? 'text' : 'textMuted'} style={value ? undefined : { fontStyle: 'italic' }}>
-        {value ?? 'Not recorded'}
+        {value ?? t('common.notRecorded')}
       </AppText>
     </View>
   );

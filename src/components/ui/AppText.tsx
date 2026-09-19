@@ -8,6 +8,7 @@
 
 import { Text, type TextProps, type TextStyle } from 'react-native';
 
+import { useT } from '@/i18n';
 import type { ColorTokens } from '@/theme/colors';
 import { useTheme } from '@/theme/ThemeContext';
 import type { TypeVariant } from '@/theme/typography';
@@ -31,6 +32,7 @@ export function AppText({
 }: AppTextProps) {
   const theme = useTheme();
   const spec = theme.type[variant];
+  const { isRTL } = useT();
 
   return (
     <Text
@@ -41,9 +43,11 @@ export function AppText({
           fontSize: spec.fontSize,
           lineHeight: spec.lineHeight,
           fontWeight: weight ?? spec.fontWeight,
-          letterSpacing: spec.letterSpacing,
+          letterSpacing: isRTL ? 0 : spec.letterSpacing,
           color: theme.colors[color],
           textAlign: align,
+          // Arabic reads right-to-left even before the layout has flipped.
+          writingDirection: isRTL ? 'rtl' : 'ltr',
         },
         style,
       ]}

@@ -54,6 +54,7 @@ export class ProxyAssistant implements AssistantService {
         signal: controller.signal,
         body: JSON.stringify({
           question: request.question,
+          language: request.language,
           history: request.history.slice(-MAX_HISTORY_TURNS),
           medications: request.medications,
           // Age, gender, height, weight, blood type, conditions — no name,

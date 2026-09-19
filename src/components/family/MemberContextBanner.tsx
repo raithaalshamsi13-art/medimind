@@ -12,7 +12,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { Pressable, View } from 'react-native';
 
 import { AppText } from '@/components/ui';
-import { relationshipLabel, type FamilyMember } from '@/domain/familyMember';
+import type { FamilyMember } from '@/domain/familyMember';
+import { useT } from '@/i18n';
+import { relationshipLabelT } from '@/i18n/labels';
 import { useTheme } from '@/theme/ThemeContext';
 
 import { MemberAvatar } from './MemberAvatar';
@@ -27,6 +29,7 @@ export type MemberContextBannerProps = {
 
 export function MemberContextBanner({ member, prefix, onChange }: MemberContextBannerProps) {
   const theme = useTheme();
+  const { t } = useT();
 
   const content = (
     <>
@@ -37,13 +40,13 @@ export function MemberContextBanner({ member, prefix, onChange }: MemberContextB
         </AppText>
         <AppText variant="subheading">
           {member.name}
-          {member.isSelf ? '' : ` · ${relationshipLabel(member)}`}
+          {member.isSelf ? '' : ` · ${relationshipLabelT(t, member)}`}
         </AppText>
       </View>
       {onChange ? (
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.xs }}>
           <AppText variant="label" color="primary">
-            Change
+            {t('common.change')}
           </AppText>
           <Ionicons name="swap-horizontal" size={20} color={theme.colors.primary} />
         </View>
@@ -76,7 +79,7 @@ export function MemberContextBanner({ member, prefix, onChange }: MemberContextB
     <Pressable
       onPress={onChange}
       accessibilityRole="button"
-      accessibilityLabel={`${prefix} ${member.name}. Change family member`}
+      accessibilityLabel={`${prefix} ${member.name}. ${t('member.changeHint')}`}
       style={({ pressed }) => [style, pressed && { backgroundColor: theme.colors.surfaceAlt }]}>
       {content}
     </Pressable>

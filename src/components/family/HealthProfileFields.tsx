@@ -12,26 +12,17 @@ import { View } from 'react-native';
 import { AppText, ChoiceChips, DateField, TextField, type ChipOption } from '@/components/ui';
 import {
   BLOOD_TYPES,
-  bloodTypeLabel,
-  GENDER_LABELS,
   GENDERS,
   type BloodType,
   type Gender,
   type HealthProfileFormValues,
 } from '@/domain/familyMember';
+import { useT } from '@/i18n';
+import { bloodTypeLabelT, genderLabel, localizeMessage } from '@/i18n/labels';
 import { useTheme } from '@/theme/ThemeContext';
 
 type Field = keyof HealthProfileFormValues;
 
-const GENDER_OPTIONS: readonly ChipOption<Gender>[] = GENDERS.map((gender) => ({
-  value: gender,
-  label: GENDER_LABELS[gender],
-}));
-
-const BLOOD_TYPE_OPTIONS: readonly ChipOption<BloodType>[] = BLOOD_TYPES.map((bloodType) => ({
-  value: bloodType,
-  label: bloodTypeLabel(bloodType),
-}));
 
 export type HealthProfileFieldsProps = {
   values: HealthProfileFormValues;
@@ -49,47 +40,57 @@ export function HealthProfileFields({
   possessive = 'your',
 }: HealthProfileFieldsProps) {
   const theme = useTheme();
+  const { t } = useT();
+  const genderOptions: readonly ChipOption<Gender>[] = GENDERS.map((gender) => ({
+    value: gender,
+    label: genderLabel(t, gender),
+  }));
+  const bloodTypeOptions: readonly ChipOption<BloodType>[] = BLOOD_TYPES.map((bloodType) => ({
+    value: bloodType,
+    label: bloodTypeLabelT(t, bloodType),
+  }));
+  const poss = possessive === 'your' ? t('profile.your') : t('profile.their');
   const onChange = <K extends Field>(field: K, value: HealthProfileFormValues[K]) =>
     emit({ [field]: value } as Partial<HealthProfileFormValues>);
 
   return (
     <View style={{ gap: theme.spacing.lg }}>
       <DateField
-        label="Date of birth"
+        label={t('profile.dateOfBirth')}
         value={values.dateOfBirth}
         onChange={(dateOfBirth) => onChange('dateOfBirth', dateOfBirth)}
         error={errors.dateOfBirth}
-        helper={`Used to show ${possessive} age. Optional.`}
+        helper={t('profile.dateOfBirthHelper', { possessive: poss })}
         maximumDate={new Date()}
       />
 
       <View style={{ gap: theme.spacing.sm }}>
         <AppText variant="label" color={errors.gender ? 'dangerText' : 'textSecondary'}>
-          Gender
+          {t('profile.gender')}
         </AppText>
         <ChoiceChips
-          options={GENDER_OPTIONS}
+          options={genderOptions}
           value={values.gender || null}
           onChange={(gender) => onChange('gender', gender ?? '')}
-          accessibilityLabel="Gender"
+          accessibilityLabel={t('profile.gender')}
         />
       </View>
 
       <View style={{ flexDirection: 'row', gap: theme.spacing.md }}>
         <TextField
-          label="Height (cm)"
+          label={t('profile.heightCm')}
           value={values.heightCm}
           onChangeText={(heightCm) => onChange('heightCm', heightCm)}
-          placeholder="e.g. 170"
+          placeholder={t('profile.heightPlaceholder')}
           keyboardType="decimal-pad"
           error={errors.heightCm}
           style={{ flex: 1 }}
         />
         <TextField
-          label="Weight (kg)"
+          label={t('profile.weightKg')}
           value={values.weightKg}
           onChangeText={(weightKg) => onChange('weightKg', weightKg)}
-          placeholder="e.g. 70"
+          placeholder={t('profile.weightPlaceholder')}
           keyboardType="decimal-pad"
           error={errors.weightKg}
           style={{ flex: 1 }}
@@ -98,21 +99,18 @@ export function HealthProfileFields({
 
       <View style={{ gap: theme.spacing.sm }}>
         <AppText variant="label" color={errors.bloodType ? 'dangerText' : 'textSecondary'}>
-          Blood type
+          {t('profile.bloodType')}
         </AppText>
         <ChoiceChips
-          options={BLOOD_TYPE_OPTIONS}
+          options={bloodTypeOptions}
           value={values.bloodType || null}
           onChange={(bloodType) => onChange('bloodType', bloodType ?? '')}
-          accessibilityLabel="Blood type"
+          accessibilityLabel={t('profile.bloodType')}
         />
       </View>
 
       <AppText variant="caption" color="textMuted">
-        These details are saved on this device under {possessive === 'your' ? 'your' : 'their'}{' '}
-        profile. The assistant may mention that one of them could be relevant to a medicine, but
-        MediMind never works out a dose from them or decides whether a medicine is suitable — a
-        pharmacist or doctor does that.
+        {t('profile.note', { possessive: poss })}
       </AppText>
     </View>
   );

@@ -8,16 +8,18 @@
 
 import { Stack } from 'expo-router';
 
+import { useT } from '@/i18n';
 import { useTheme } from '@/theme/ThemeContext';
 
 export default function MedicationLayout() {
   const theme = useTheme();
+  const { t } = useT();
 
   return (
     <Stack
       screenOptions={{
         headerShown: true,
-        headerBackTitle: 'Back',
+        headerBackTitle: t('common.goBack'),
         contentStyle: { backgroundColor: theme.colors.background },
         headerStyle: { backgroundColor: theme.colors.surface },
         headerTintColor: theme.colors.primary,
@@ -27,9 +29,9 @@ export default function MedicationLayout() {
           fontSize: theme.type.subheading.fontSize,
         },
       }}>
-      <Stack.Screen name="add" options={{ title: 'Add medicine' }} />
-      <Stack.Screen name="[id]" options={{ title: 'Medicine' }} />
-      <Stack.Screen name="edit/[id]" options={{ title: 'Edit medicine' }} />
+      <Stack.Screen name="add" options={{ title: t('header.addMedicine') }} />
+      <Stack.Screen name="[id]" options={{ title: t('header.medicine') }} />
+      <Stack.Screen name="edit/[id]" options={{ title: t('header.editMedicine') }} />
     </Stack>
   );
 }

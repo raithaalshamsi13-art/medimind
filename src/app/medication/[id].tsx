@@ -15,15 +15,18 @@ import { View } from 'react-native';
 import { medicationIcon } from '@/components/medication/formIcons';
 import { AppText, Badge, Button, Card, InlineMessage, Screen, type BadgeTone } from '@/components/ui';
 import { expiryStatus, type ExpiryState } from '@/domain/expiry';
-import { conditionDisplayName } from '@/domain/healthCondition';
-import { describeDays, describeTimes } from '@/domain/reminder';
+import type { Medication } from '@/domain/medication';
+import { useT } from '@/i18n';
 import {
-  MEDICATION_FORM_LABELS,
-  MEDICATION_KIND_LABELS,
-  SAFETY_STATUS_LABELS,
-  UNKNOWN_FIELD_TEXT,
-  type Medication,
-} from '@/domain/medication';
+  conditionNameT,
+  describeDaysT,
+  describeTimesT,
+  expiryLabelT,
+  frequencyDisplayT,
+  kindLabel,
+  medicationFormLabel,
+  safetyStatusLabel,
+} from '@/i18n/labels';
 import { confirmAction } from '@/lib/confirm';
 import { formatIsoDate } from '@/lib/datetime';
 import { selectUser, useAuthStore } from '@/stores/useAuthStore';
@@ -41,6 +44,7 @@ const EXPIRY_TONES: Record<ExpiryState, BadgeTone> = {
 
 export default function MedicationDetailScreen() {
   const theme = useTheme();
+  const { t } = useT();
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
 
@@ -74,10 +78,9 @@ export default function MedicationDetailScreen() {
 
     // confirmAction works in the browser too; Alert.alert silently does not.
     const confirmed = await confirmAction({
-      title: `Delete ${medication.name}?`,
-      message:
-        'This removes the medicine and any reminders you have set for it. It cannot be undone.',
-      confirmLabel: 'Delete',
+      title: t('detail.deleteTitle', { name: medication.name }),
+      message: t('detail.deleteBody'),
+      confirmLabel: t('common.delete'),
       destructive: true,
     });
     if (!confirmed) return;
@@ -98,10 +101,10 @@ export default function MedicationDetailScreen() {
         <View style={{ gap: theme.spacing.lg }}>
           <InlineMessage
             tone="warning"
-            title="Medicine not found"
-            message="This medicine may have been deleted. Go back to your list to see what is saved."
+            title={t('detail.notFoundTitle')}
+            message={t('detail.notFoundBody')}
           />
-          <Button label="Back to my medicines" onPress={() => router.back()} />
+          <Button label={t('detail.backToList')} onPress={() => router.back()} />
         </View>
       </Screen>
     );
@@ -135,25 +138,25 @@ export default function MedicationDetailScreen() {
               status. Until then it stays hidden rather than showing
               "Not checked yet" on every medicine. */}
           {medication.safetyStatus === 'UNKNOWN' ? null : (
-            <Badge label={SAFETY_STATUS_LABELS[medication.safetyStatus]} tone="neutral" />
+            <Badge label={safetyStatusLabel(t, medication.safetyStatus)} tone="neutral" />
           )}
 
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.sm }}>
             {owner ? (
               <Badge
-                label={owner.isSelf ? 'My medicine' : `${owner.name}’s medicine`}
+                label={owner.isSelf ? t('detail.myMedicine') : t('detail.personsMedicine', { name: owner.name })}
                 tone="info"
                 icon="people-outline"
               />
             ) : null}
             <Badge
-              label={medication.source === 'SCAN' ? 'Added by scanning' : 'Added by hand'}
+              label={medication.source === 'SCAN' ? t('detail.addedByScanning') : t('detail.addedByHand')}
               tone="neutral"
               icon={medication.source === 'SCAN' ? 'camera-outline' : 'create-outline'}
             />
             {expiry && expiry.state !== 'OK' ? (
               <Badge
-                label={expiry.label}
+                label={expiryLabelT(t, expiry)}
                 tone={EXPIRY_TONES[expiry.state]}
                 icon={expiry.state === 'EXPIRED' ? 'alert-circle' : 'time-outline'}
               />
@@ -164,8 +167,8 @@ export default function MedicationDetailScreen() {
         {expiry?.state === 'EXPIRED' ? (
           <InlineMessage
             tone="danger"
-            title="This medicine has expired"
-            message="Do not take it. Ask a pharmacist how to dispose of it and whether you need a replacement."
+            title={t('detail.expiredTitle')}
+            message={t('detail.expiredBody')}
           />
         ) : null}
 
@@ -173,23 +176,23 @@ export default function MedicationDetailScreen() {
         <Card>
           <View style={{ gap: theme.spacing.lg }}>
             <DetailRow
-              label="Type"
-              value={medication.kind ? MEDICATION_KIND_LABELS[medication.kind] : null}
-              emptyText="Not chosen"
+              label={t('detail.type')}
+              value={medication.kind ? kindLabel(t, medication.kind) : null}
+              emptyText={t('common.notChosen')}
             />
             <DetailRow
-              label="Form"
-              value={medication.form ? MEDICATION_FORM_LABELS[medication.form] : null}
-              emptyText="Not chosen"
+              label={t('detail.form')}
+              value={medication.form ? medicationFormLabel(t, medication.form) : null}
+              emptyText={t('common.notChosen')}
             />
-            <DetailRow label="Dosage" value={medication.dosage} />
-            <DetailRow label="How often" value={medication.frequency} />
+            <DetailRow label={t('detail.dosage')} value={medication.dosage} />
+            <DetailRow label={t('detail.howOften')} value={frequencyDisplayT(t, medication.frequency)} />
             <DetailRow
-              label="Expiry date"
+              label={t('detail.expiryDate')}
               value={medication.expirationDate ? formatIsoDate(medication.expirationDate) : null}
             />
-            <DetailRow label="Instructions" value={medication.instructions} />
-            <DetailRow label="Notes" value={medication.notes} emptyText="No notes" />
+            <DetailRow label={t('detail.instructions')} value={medication.instructions} />
+            <DetailRow label={t('detail.notes')} value={medication.notes} emptyText={t('detail.noNotes')} />
           </View>
         </Card>
 
@@ -197,11 +200,11 @@ export default function MedicationDetailScreen() {
         <Card>
           <View style={{ gap: theme.spacing.md }}>
             <AppText variant="label" color="textMuted">
-              RELATED HEALTH CONDITIONS
+              {t('detail.relatedConditions')}
             </AppText>
             {linkedConditions.length === 0 ? (
               <AppText variant="body" color="textMuted" style={{ fontStyle: 'italic' }}>
-                None linked
+                {t('detail.noneLinked')}
               </AppText>
             ) : (
               <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.sm }}>
@@ -210,8 +213,8 @@ export default function MedicationDetailScreen() {
                     key={condition.id}
                     label={
                       condition.reading
-                        ? `${conditionDisplayName(condition)} · ${condition.reading}`
-                        : conditionDisplayName(condition)
+                        ? `${conditionNameT(t, condition)} · ${condition.reading}`
+                        : conditionNameT(t, condition)
                     }
                     tone="info"
                     icon="heart-outline"
@@ -233,33 +236,33 @@ export default function MedicationDetailScreen() {
               />
               <View style={{ flex: 1, gap: theme.spacing.xxs }}>
                 <AppText variant="label" color="textMuted">
-                  REMINDER
+                  {t('detail.reminder')}
                 </AppText>
                 {reminder ? (
                   <>
                     <AppText variant="bodyLarge">
-                      {describeTimes(reminder.times)}
+                      {describeTimesT(t, reminder.times)}
                     </AppText>
                     <AppText variant="caption" color="textSecondary">
-                      {describeDays(reminder)}
+                      {describeDaysT(t, reminder)}
                       {reminder.doseLabel ? ` · ${reminder.doseLabel}` : ''}
-                      {reminder.enabled ? '' : ' · paused'}
+                      {reminder.enabled ? '' : ` · ${t('detail.paused')}`}
                     </AppText>
                   </>
                 ) : expiry?.state === 'EXPIRED' ? (
                   <AppText variant="body" color="textMuted" style={{ fontStyle: 'italic' }}>
-                    Not available for an expired medicine
+                    {t('detail.reminderExpired')}
                   </AppText>
                 ) : (
                   <AppText variant="body" color="textMuted" style={{ fontStyle: 'italic' }}>
-                    No reminder set
+                    {t('detail.noReminder')}
                   </AppText>
                 )}
               </View>
             </View>
             {expiry?.state === 'EXPIRED' && !reminder ? null : (
               <Button
-                label={reminder ? 'Edit reminder' : 'Set a reminder'}
+                label={reminder ? t('detail.editReminder') : t('detail.setReminder')}
                 icon={reminder ? 'create-outline' : 'alarm-outline'}
                 variant="secondary"
                 onPress={() =>
@@ -273,23 +276,23 @@ export default function MedicationDetailScreen() {
         {/* ---------- Actions ---------- */}
         <View style={{ gap: theme.spacing.md }}>
           <Button
-            label="Edit medicine"
+            label={t('detail.editMedicine')}
             icon="create-outline"
             onPress={() =>
               router.push({ pathname: '/medication/edit/[id]', params: { id: medication.id } })
             }
           />
           <Button
-            label="Ask about this medicine"
+            label={t('detail.askAbout')}
             icon="chatbubble-ellipses-outline"
             variant="secondary"
             onPress={() =>
               router.push({ pathname: '/assistant', params: { medicationId: medication.id } })
             }
-            accessibilityHint="Opens the assistant with questions about this medicine"
+            accessibilityHint={t('detail.askAboutHint')}
           />
           <Button
-            label="Delete medicine"
+            label={t('detail.deleteMedicine')}
             icon="trash-outline"
             variant="danger"
             onPress={() => void confirmDelete()}
@@ -313,13 +316,15 @@ export default function MedicationDetailScreen() {
 function DetailRow({
   label,
   value,
-  emptyText = UNKNOWN_FIELD_TEXT,
+  emptyText,
 }: {
   label: string;
   value: string | null;
   emptyText?: string;
 }) {
   const theme = useTheme();
+  const { t } = useT();
+  const fallback = emptyText ?? t('common.couldNotBeDetermined');
   const isUnknown = value === null || value.length === 0;
 
   return (
@@ -332,7 +337,7 @@ function DetailRow({
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.xs }}>
           <Ionicons name="help-circle-outline" size={18} color={theme.colors.textMuted} />
           <AppText variant="body" color="textMuted" style={{ fontStyle: 'italic' }}>
-            {emptyText}
+            {fallback}
           </AppText>
         </View>
       ) : (
@@ -344,14 +349,15 @@ function DetailRow({
 
 function MedicationMeta({ medication }: { medication: Medication }) {
   const theme = useTheme();
+  const { t } = useT();
 
   return (
     <View style={{ gap: theme.spacing.xs }}>
       <AppText variant="caption" color="textMuted">
-        Added {formatIsoDate(medication.createdAt.slice(0, 10))}
+        {t('detail.added', { date: formatIsoDate(medication.createdAt.slice(0, 10)) })}
       </AppText>
       <AppText variant="caption" color="textMuted">
-        Last updated {formatIsoDate(medication.updatedAt.slice(0, 10))}
+        {t('detail.lastUpdated', { date: formatIsoDate(medication.updatedAt.slice(0, 10)) })}
       </AppText>
     </View>
   );

@@ -13,8 +13,6 @@
 import { create } from 'zustand';
 
 import {
-  ASSISTANT_INTRO,
-  HIGH_RISK_REPLIES,
   MAX_QUESTION_LENGTH,
   screenQuestion,
   toMedicationContext,
@@ -28,6 +26,7 @@ import { isoNow } from '@/lib/datetime';
 import { customError, type AppError } from '@/lib/errors';
 import { newId } from '@/lib/ids';
 import { getAssistantService } from '@/services/assistant';
+import { tNow, type Language } from '@/i18n';
 
 type AssistantState = {
   messages: AssistantMessage[];
@@ -41,6 +40,7 @@ type AssistantState = {
     medications: Medication[],
     person: PersonContext | null,
     preferAi: boolean,
+    language: Language,
   ) => Promise<void>;
   reset: () => void;
   clearError: () => void;
@@ -55,10 +55,8 @@ function message(
   return { id: newId(), role, text, source, note, createdAt: isoNow() };
 }
 
-const OFFLINE_FALLBACK_NOTE =
-  'The AI could not be reached, so this answer comes from the offline assistant, which only reads your records back.';
 
-const initialMessages = (): AssistantMessage[] => [message('assistant', ASSISTANT_INTRO, 'offline')];
+const initialMessages = (): AssistantMessage[] => [message('assistant', tNow('assistant.intro'), 'offline')];
 
 export const useAssistantStore = create<AssistantState>((set, get) => ({
   messages: initialMessages(),
@@ -66,16 +64,13 @@ export const useAssistantStore = create<AssistantState>((set, get) => ({
   error: null,
   lastSource: null,
 
-  ask: async (rawQuestion, medications, person, preferAi) => {
+  ask: async (rawQuestion, medications, person, preferAi, language) => {
     const question = rawQuestion.trim();
     if (question.length === 0 || get().isThinking) return;
 
     if (question.length > MAX_QUESTION_LENGTH) {
       set({
-        error: customError(
-          'MISSING_FIELD',
-          `Please keep your question under ${MAX_QUESTION_LENGTH} characters.`,
-        ),
+        error: customError('MISSING_FIELD', tNow('assistant.tooLong', { max: MAX_QUESTION_LENGTH })),
       });
       return;
     }
@@ -96,7 +91,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => ({
     const screen = screenQuestion(question);
     if (screen.level === 'high') {
       set({
-        messages: [...get().messages, message('assistant', HIGH_RISK_REPLIES[screen.reason], 'offline')],
+        messages: [...get().messages, message('assistant', tNow(`assistant.risk.${screen.reason}`), 'offline')],
         isThinking: false,
         lastSource: 'offline',
       });
@@ -108,6 +103,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => ({
       history,
       medications: medications.filter((m) => !m.archived).map((m) => toMedicationContext(m)),
       person,
+      language,
     };
 
     const service = getAssistantService(preferAi);
@@ -120,7 +116,7 @@ export const useAssistantStore = create<AssistantState>((set, get) => ({
       const fallback = await getAssistantService(false).ask(request);
       if (fallback.ok) {
         result = fallback;
-        note = OFFLINE_FALLBACK_NOTE;
+        note = language === 'en' ? tNow('assistant.offlineFallbackNote') : `${tNow('assistant.offlineFallbackNote')} ${tNow('assistant.offlineEnglishNote')}`;
       }
     }
 

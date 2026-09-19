@@ -22,23 +22,20 @@ import {
   type ChipOption,
 } from '@/components/ui';
 import {
-  CONDITION_PRESETS,
-  conditionPreset,
+  CONDITION_TYPES,
   healthConditionInputSchema,
   type ConditionType,
   type HealthConditionFormValues,
   type HealthConditionInput,
 } from '@/domain/healthCondition';
+import { useT } from '@/i18n';
+import { conditionHintT, conditionTypeLabel, localizeMessage } from '@/i18n/labels';
 import type { AppError } from '@/lib/errors';
 import { fieldErrorsOf } from '@/lib/validation';
 import { useTheme } from '@/theme/ThemeContext';
 
 type Field = keyof HealthConditionFormValues;
 
-const TYPE_OPTIONS: readonly ChipOption<ConditionType>[] = CONDITION_PRESETS.map((preset) => ({
-  value: preset.type,
-  label: preset.label,
-}));
 
 export type HealthConditionEditorProps = {
   initialValues: HealthConditionFormValues;
@@ -58,6 +55,11 @@ export function HealthConditionEditor({
   error,
 }: HealthConditionEditorProps) {
   const theme = useTheme();
+  const { t } = useT();
+  const typeOptions: readonly ChipOption<ConditionType>[] = CONDITION_TYPES.map((type) => ({
+    value: type,
+    label: conditionTypeLabel(t, type),
+  }));
   const [values, setValues] = useState<HealthConditionFormValues>(initialValues);
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<Field, string>>>({});
 
@@ -81,7 +83,7 @@ export function HealthConditionEditor({
     onSubmit(parsed.data);
   };
 
-  const preset = values.type ? conditionPreset(values.type) : null;
+  const readingHint = values.type ? conditionHintT(t, values.type) : null;
 
   return (
     <View style={{ gap: theme.spacing.lg }}>
@@ -89,47 +91,47 @@ export function HealthConditionEditor({
 
       <View style={{ gap: theme.spacing.sm }}>
         <AppText variant="label" color={fieldErrors.type ? 'dangerText' : 'textSecondary'}>
-          Condition
+          {t('conditionEditor.condition')}
         </AppText>
         <ChoiceChips
-          options={TYPE_OPTIONS}
+          options={typeOptions}
           value={values.type || null}
           onChange={(type) => setField('type', type ?? '')}
-          accessibilityLabel="Condition"
+          accessibilityLabel={t('conditionEditor.condition')}
           allowClear={false}
         />
         {fieldErrors.type ? (
           <AppText variant="caption" color="dangerText">
-            {fieldErrors.type}
+            {localizeMessage(fieldErrors.type)}
           </AppText>
         ) : null}
       </View>
 
       {values.type === 'OTHER' ? (
         <TextField
-          label="Name of the condition"
+          label={t('conditionEditor.name')}
           value={values.customName}
           onChangeText={(text) => setField('customName', text)}
-          placeholder="e.g. Migraine"
+          placeholder={t('conditionEditor.namePlaceholder')}
           error={fieldErrors.customName}
           autoCapitalize="sentences"
         />
       ) : null}
 
       <TextField
-        label="Latest reading (optional)"
+        label={t('conditionEditor.reading')}
         value={values.reading}
         onChangeText={(text) => setField('reading', text)}
-        placeholder={preset?.readingHint ?? 'e.g. a value from your monitor'}
+        placeholder={readingHint ?? t('conditionEditor.readingPlaceholder')}
         error={fieldErrors.reading}
-        helper="Write it exactly as your monitor or letter shows it. MediMind does not judge readings."
+        helper={t('conditionEditor.readingHelper')}
       />
 
       <TextField
-        label="Notes (optional)"
+        label={t('conditionEditor.notes')}
         value={values.notes}
         onChangeText={(text) => setField('notes', text)}
-        placeholder="e.g. Checked by the nurse every 3 months"
+        placeholder={t('conditionEditor.notesPlaceholder')}
         error={fieldErrors.notes}
         autoCapitalize="sentences"
         multiline
@@ -137,7 +139,7 @@ export function HealthConditionEditor({
 
       <View style={{ gap: theme.spacing.md }}>
         <Button label={submitLabel} onPress={handleSubmit} loading={isSubmitting} icon="checkmark" />
-        <Button label="Cancel" onPress={onCancel} variant="secondary" disabled={isSubmitting} />
+        <Button label={t('common.cancel')} onPress={onCancel} variant="secondary" disabled={isSubmitting} />
       </View>
     </View>
   );

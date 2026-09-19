@@ -12,11 +12,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { View } from 'react-native';
 
 import { AppText, Badge, Card } from '@/components/ui';
-import {
-  SAFETY_STATUS_LABELS,
-  type Medication,
-  type SafetyStatus,
-} from '@/domain/medication';
+import type { Medication, SafetyStatus } from '@/domain/medication';
+import { useT } from '@/i18n';
+import { safetyStatusLabel } from '@/i18n/labels';
 import { formatIsoDate } from '@/lib/datetime';
 import { useTheme } from '@/theme/ThemeContext';
 
@@ -39,6 +37,7 @@ export type MedicationCardProps = {
 
 export function MedicationCard({ medication, onPress }: MedicationCardProps) {
   const theme = useTheme();
+  const { t } = useT();
 
   // "500 mg · Twice daily", skipping whichever part is unknown.
   const subtitle = [medication.dosage, medication.frequency].filter(Boolean).join(' · ');
@@ -47,7 +46,7 @@ export function MedicationCard({ medication, onPress }: MedicationCardProps) {
     <Card
       onPress={onPress}
       accessibilityLabel={medication.name}
-      accessibilityHint="Opens the medicine details">
+      accessibilityHint={t('medicines.card.hint')}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
         <View
           style={{
@@ -74,17 +73,17 @@ export function MedicationCard({ medication, onPress }: MedicationCardProps) {
 
           {medication.expirationDate ? (
             <AppText variant="caption" color="textMuted">
-              Expires {formatIsoDate(medication.expirationDate)}
+              {t('medicines.card.expires', { date: formatIsoDate(medication.expirationDate) })}
             </AppText>
           ) : (
             <AppText variant="caption" color="textMuted">
-              No expiry date recorded
+              {t('medicines.card.noExpiry')}
             </AppText>
           )}
 
           {medication.safetyStatus === 'UNKNOWN' ? null : (
             <Badge
-              label={SAFETY_STATUS_LABELS[medication.safetyStatus]}
+              label={safetyStatusLabel(t, medication.safetyStatus)}
               tone={SAFETY_TONES[medication.safetyStatus]}
             />
           )}

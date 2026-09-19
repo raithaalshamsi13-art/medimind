@@ -11,7 +11,9 @@ import { Ionicons } from '@expo/vector-icons';
 import { View } from 'react-native';
 
 import { AppText, Badge, Button, Card, type BadgeTone } from '@/components/ui';
-import { DOSE_STATUS_LABELS, scheduledDate, type Dose, type DoseStatus } from '@/domain/reminder';
+import { scheduledDate, type Dose, type DoseStatus } from '@/domain/reminder';
+import { useT } from '@/i18n';
+import { doseStatusLabel } from '@/i18n/labels';
 import { formatClockTime } from '@/lib/datetime';
 import { useTheme } from '@/theme/ThemeContext';
 
@@ -41,6 +43,7 @@ export type DoseRowProps = {
 
 export function DoseRow({ dose, medicationName, doseLabel, canAct, isSaving, onMark }: DoseRowProps) {
   const theme = useTheme();
+  const { t } = useT();
   const time = formatClockTime(scheduledDate(dose.scheduledAt));
   const done = dose.status === 'TAKEN' || dose.status === 'SKIPPED';
 
@@ -61,13 +64,13 @@ export function DoseRow({ dose, medicationName, doseLabel, canAct, isSaving, onM
               </AppText>
             ) : null}
           </View>
-          <Badge label={DOSE_STATUS_LABELS[dose.status]} tone={TONES[dose.status]} icon={ICONS[dose.status]} />
+          <Badge label={doseStatusLabel(t, dose.status)} tone={TONES[dose.status]} icon={ICONS[dose.status]} />
         </View>
 
         {canAct ? (
           done ? (
             <Button
-              label="Undo"
+              label={t('common.undo')}
               icon="arrow-undo-outline"
               variant="ghost"
               fullWidth={false}
@@ -77,14 +80,14 @@ export function DoseRow({ dose, medicationName, doseLabel, canAct, isSaving, onM
           ) : (
             <View style={{ flexDirection: 'row', gap: theme.spacing.md }}>
               <Button
-                label="Taken"
+                label={t('dose.taken')}
                 icon="checkmark"
                 onPress={() => onMark('TAKEN')}
                 disabled={isSaving}
                 style={{ flex: 1 }}
               />
               <Button
-                label="Skip"
+                label={t('dose.skip')}
                 icon="remove-circle-outline"
                 variant="secondary"
                 onPress={() => onMark('SKIPPED')}
@@ -99,7 +102,7 @@ export function DoseRow({ dose, medicationName, doseLabel, canAct, isSaving, onM
           <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: theme.spacing.xs }}>
             <Ionicons name="information-circle-outline" size={16} color={theme.colors.textMuted} style={{ marginTop: 2 }} />
             <AppText variant="caption" color="textMuted" style={{ flex: 1 }}>
-              If you did take it, mark it Taken. Otherwise follow the label — do not take a double dose.
+              {t('dose.missedNote')}
             </AppText>
           </View>
         ) : null}

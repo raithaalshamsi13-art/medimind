@@ -8,6 +8,8 @@
 
 import { format, parseISO } from 'date-fns';
 
+import { getDateLocale, tNow } from '@/i18n';
+
 /** Current instant as an ISO-8601 string, e.g. "2026-09-03T14:05:00.000Z". */
 export function isoNow(): string {
   return new Date().toISOString();
@@ -21,14 +23,14 @@ export function isoToday(): string {
 /** Time-of-day greeting for the dashboard. */
 export function greetingFor(date: Date = new Date()): string {
   const hour = date.getHours();
-  if (hour < 12) return 'Good morning';
-  if (hour < 17) return 'Good afternoon';
-  return 'Good evening';
+  if (hour < 12) return tNow('home.goodMorning');
+  if (hour < 17) return tNow('home.goodAfternoon');
+  return tNow('home.goodEvening');
 }
 
 /** "Thursday, 3 September" — used as the dashboard subheading. */
 export function formatFullDate(date: Date = new Date()): string {
-  return format(date, 'EEEE, d MMMM');
+  return format(date, 'EEEE, d MMMM', { locale: getDateLocale() });
 }
 
 /**
@@ -40,7 +42,7 @@ export function formatIsoDate(value: string): string {
   try {
     const parsed = parseISO(value);
     if (Number.isNaN(parsed.getTime())) return value;
-    return format(parsed, 'd MMM yyyy');
+    return format(parsed, 'd MMM yyyy', { locale: getDateLocale() });
   } catch {
     return value;
   }
@@ -52,7 +54,15 @@ export function formatClockTime(value: Date | string): string {
     const [hours, minutes] = value.split(':').map(Number);
     const date = new Date();
     date.setHours(hours ?? 0, minutes ?? 0, 0, 0);
-    return format(date, 'h:mm a');
+    return clock(date);
   }
-  return format(value, 'h:mm a');
+  return clock(value);
+}
+
+/** "8:00 PM" / "8:00 م" — Western digits in both languages, like the labels. */
+function clock(date: Date): string {
+  const hour12 = ((date.getHours() + 11) % 12) + 1;
+  const minutes = String(date.getMinutes()).padStart(2, '0');
+  const suffix = date.getHours() < 12 ? tNow('time.am') : tNow('time.pm');
+  return `${hour12}:${minutes} ${suffix}`;
 }

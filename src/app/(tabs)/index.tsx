@@ -19,8 +19,8 @@ import { Logo } from '@/components/brand/Logo';
 import { MemberContextBanner } from '@/components/family/MemberContextBanner';
 import { MedicationCard } from '@/components/medication/MedicationCard';
 import { AppText, Button, Card, Screen, TextLink } from '@/components/ui';
-import { MEDICAL_DISCLAIMER_SHORT } from '@/config/constants';
-import { possessive } from '@/domain/familyMember';
+import { useT } from '@/i18n';
+import { possessiveT, tCount } from '@/i18n/labels';
 import { localDateKey, scheduledDate } from '@/domain/reminder';
 import { firstNameOf } from '@/domain/user';
 import { formatClockTime, formatFullDate, greetingFor } from '@/lib/datetime';
@@ -41,6 +41,7 @@ const DASHBOARD_PREVIEW_LIMIT = 3;
 
 export default function HomeScreen() {
   const theme = useTheme();
+  const { t } = useT();
   const router = useRouter();
   const user = useAuthStore(selectUser);
 
@@ -76,7 +77,7 @@ export default function HomeScreen() {
   const nextDose = todayDoses.find((d) => d.status === 'UPCOMING') ?? null;
   const nextDoseLabel = nextDose
     ? `${formatClockTime(scheduledDate(nextDose.scheduledAt))} · ${
-        medications.find((m) => m.id === nextDose.medicationId)?.name ?? 'Medicine'
+        medications.find((m) => m.id === nextDose.medicationId)?.name ?? t('common.medicine')
       }`
     : '';
 
@@ -108,7 +109,7 @@ export default function HomeScreen() {
         {member && !member.isSelf ? (
           <MemberContextBanner
             member={member}
-            prefix="Showing medicines for"
+            prefix={t('home.showingMedicinesFor')}
             onChange={() => router.push('/family')}
           />
         ) : null}
@@ -121,32 +122,32 @@ export default function HomeScreen() {
           <StatCard
             icon="medkit-outline"
             value={medicationCount}
-            label={medicationCount === 1 ? 'Medicine saved' : 'Medicines saved'}
+            label={tCount(t, 'home.medicineSaved', medicationCount)}
           />
           <StatCard
             icon="checkmark-done-outline"
             value={takenToday}
-            label={todayDoses.length > 0 ? `of ${todayDoses.length} doses taken today` : 'Doses taken today'}
+            label={todayDoses.length > 0 ? t('home.ofDosesTakenToday', { count: todayDoses.length }) : t('home.dosesTakenToday')}
           />
         </View>
 
         {/* ---------- Next dose ---------- */}
         <Card
           onPress={() => router.push('/schedule')}
-          accessibilityLabel={nextDose ? `Next dose: ${nextDoseLabel}` : 'Open the schedule'}
-          accessibilityHint="Opens the schedule">
+          accessibilityLabel={nextDose ? `${t('home.nextDose')}: ${nextDoseLabel}` : t('home.opensSchedule')}
+          accessibilityHint={t('home.opensSchedule')}>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
             <Ionicons name="alarm-outline" size={26} color={theme.colors.primary} />
             <View style={{ flex: 1, gap: theme.spacing.xxs }}>
               <AppText variant="label" color="textMuted">
-                NEXT DOSE
+                {t('home.nextDose')}
               </AppText>
               <AppText variant="subheading">
                 {nextDose
                   ? nextDoseLabel
                   : todayDoses.length > 0
-                    ? 'All done for today'
-                    : 'No reminders set yet'}
+                    ? t('home.allDoneToday')
+                    : t('home.noRemindersYet')}
               </AppText>
             </View>
             <Ionicons name="chevron-forward" size={22} color={theme.colors.textMuted} />
@@ -155,7 +156,7 @@ export default function HomeScreen() {
 
         {/* ---------- Your medicines ---------- */}
         <View style={{ gap: theme.spacing.md }}>
-          <AppText variant="heading">{member ? possessive(member, 'medicines') : 'Your medicines'}</AppText>
+          <AppText variant="heading">{member ? possessiveT(t, member, 'medicines') : t('home.yourMedicines')}</AppText>
 
           {medicationCount === 0 ? (
             <Card>
@@ -167,14 +168,13 @@ export default function HomeScreen() {
                 }}>
                 <Ionicons name="calendar-clear-outline" size={40} color={theme.colors.textMuted} />
                 <AppText variant="subheading" align="center">
-                  Nothing saved yet
+                  {t('home.nothingSavedYet')}
                 </AppText>
                 <AppText variant="body" color="textSecondary" align="center">
-                  Add a medicine by hand to get started. Once scanning is available, MediMind will
-                  read the label for you and suggest a reminder to confirm.
+                  {t('home.nothingSavedBody')}
                 </AppText>
                 <Button
-                  label="Add medicine manually"
+                  label={t('home.addManually')}
                   icon="create-outline"
                   variant="secondary"
                   onPress={() =>
@@ -183,7 +183,7 @@ export default function HomeScreen() {
                       params: member ? { memberId: member.id } : {},
                     })
                   }
-                  accessibilityHint="Opens a form to type in a medicine"
+                  accessibilityHint={t('home.addManuallyHint')}
                 />
               </View>
             </Card>
@@ -201,13 +201,13 @@ export default function HomeScreen() {
 
               {medicationCount > recent.length ? (
                 <TextLink
-                  label={`See all ${medicationCount} medicines`}
+                  label={t('home.seeAll', { count: medicationCount })}
                   onPress={() => router.push('/medications')}
                 />
               ) : null}
 
               <Button
-                label="Add medicine"
+                label={t('home.addMedicine')}
                 icon="add"
                 variant="secondary"
                 onPress={() =>
@@ -225,7 +225,7 @@ export default function HomeScreen() {
         <View style={{ flexDirection: 'row', gap: theme.spacing.sm }}>
           <Ionicons name="information-circle-outline" size={18} color={theme.colors.textMuted} />
           <AppText variant="caption" color="textMuted" style={{ flex: 1 }}>
-            {MEDICAL_DISCLAIMER_SHORT}
+            {t('disclaimer.short')}
           </AppText>
         </View>
       </View>
@@ -239,6 +239,7 @@ export default function HomeScreen() {
  */
 function ScanHeroCard() {
   const theme = useTheme();
+  const { t } = useT();
 
   return (
     <View style={{ gap: theme.spacing.sm }}>
@@ -246,8 +247,8 @@ function ScanHeroCard() {
         disabled
         onPress={() => {}}
         accessibilityRole="button"
-        accessibilityLabel="Scan medicine"
-        accessibilityHint="Camera label scanning is added in Milestone 4"
+        accessibilityLabel={t('home.scanMedicine')}
+        accessibilityHint={t('home.scanHint')}
         accessibilityState={{ disabled: true }}
         style={{
           flexDirection: 'row',
@@ -275,10 +276,10 @@ function ScanHeroCard() {
 
         <View style={{ flex: 1, gap: theme.spacing.xs }}>
           <AppText variant="heading" style={{ color: theme.colors.primaryText }}>
-            Scan Medicine
+            {t('home.scanMedicine')}
           </AppText>
           <AppText variant="body" style={{ color: theme.colors.primaryText, opacity: 0.9 }}>
-            Read the label and check it is safe
+            {t('home.scanSubtitle')}
           </AppText>
         </View>
 
@@ -286,7 +287,7 @@ function ScanHeroCard() {
       </Pressable>
 
       <AppText variant="caption" color="textMuted" align="center">
-        Camera and AI label reading arrive in Milestone 4.
+        {t('home.scanComing')}
       </AppText>
     </View>
   );

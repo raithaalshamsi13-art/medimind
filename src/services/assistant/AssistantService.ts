@@ -30,6 +30,8 @@ export type AssistantRequest = {
   medications: MedicationContext[];
   /** That member's health profile, as context only. Null when unknown. */
   person: PersonContext | null;
+  /** The app language — the AI replies in it. */
+  language: 'en' | 'ar';
 };
 
 export interface AssistantService {

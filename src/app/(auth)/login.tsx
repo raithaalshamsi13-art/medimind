@@ -26,12 +26,14 @@ import { signInSchema } from '@/domain/user';
 import { fieldErrorsOf } from '@/lib/validation';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { useSettingsStore } from '@/stores/useSettingsStore';
+import { useT } from '@/i18n';
 import { useTheme } from '@/theme/ThemeContext';
 
 type LoginField = 'email' | 'password';
 
 export default function LoginScreen() {
   const theme = useTheme();
+  const { t } = useT();
   const router = useRouter();
 
   const signIn = useAuthStore((state) => state.signIn);
@@ -70,15 +72,15 @@ export default function LoginScreen() {
     <Screen scroll keyboardAvoiding>
       <View style={{ gap: theme.spacing.xl, paddingTop: theme.spacing.xxl }}>
         <AuthHeader
-          title="Welcome back"
-          subtitle="Log in to see today's medicines and reminders."
+          title={t('auth.login.title')}
+          subtitle={t('auth.login.subtitle')}
         />
 
         {error ? <InlineMessage tone="danger" message={error.message} /> : null}
 
         <View style={{ gap: theme.spacing.base }}>
           <TextField
-            label="Email"
+            label={t('auth.email')}
             value={email}
             onChangeText={setEmail}
             placeholder="name@example.com"
@@ -90,10 +92,10 @@ export default function LoginScreen() {
           />
 
           <TextField
-            label="Password"
+            label={t('auth.password')}
             value={password}
             onChangeText={setPassword}
-            placeholder="Your password"
+            placeholder={t('auth.login.passwordPlaceholder')}
             error={fieldErrors.password}
             secure
             autoComplete="current-password"
@@ -104,18 +106,18 @@ export default function LoginScreen() {
         </View>
 
         <Button
-          label="Log in"
+          label={t('auth.login.button')}
           onPress={onSubmit}
           loading={isSubmitting}
           size="large"
-          accessibilityHint="Signs you in and opens your dashboard"
+          accessibilityHint={t('auth.login.buttonHint')}
         />
 
         <View style={{ alignItems: 'center', gap: theme.spacing.xs }}>
           <AppText variant="body" color="textSecondary">
-            New to MediMind?
+            {t('auth.login.newHere')}
           </AppText>
-          <TextLink label="Create an account" onPress={() => router.push('/signup')} />
+          <TextLink label={t('auth.login.createAccount')} onPress={() => router.push('/signup')} />
         </View>
 
         {/* ---------- Demo account (Phase 19) ----------
@@ -125,25 +127,25 @@ export default function LoginScreen() {
         {demoMode ? (
           <Card>
             <View style={{ gap: theme.spacing.md }}>
-              <Badge label="Demo mode" tone="info" icon="flask-outline" />
+              <Badge label={t('auth.login.demoMode')} tone="info" icon="flask-outline" />
               <AppText variant="body" color="textSecondary">
-                For demonstrations, a ready-made account is available on this device.
+                {t('auth.login.demoBody')}
               </AppText>
               <View style={{ gap: theme.spacing.xxs }}>
                 <AppText variant="caption" color="textMuted">
-                  Email: {DEMO_ACCOUNT.email}
+                  {t('auth.login.demoEmail', { email: DEMO_ACCOUNT.email })}
                 </AppText>
                 <AppText variant="caption" color="textMuted">
-                  Password: {DEMO_ACCOUNT.password}
+                  {t('auth.login.demoPassword', { password: DEMO_ACCOUNT.password })}
                 </AppText>
               </View>
               <Button
-                label="Use demo account"
+                label={t('auth.login.useDemo')}
                 icon="person-circle-outline"
                 variant="secondary"
                 onPress={() => void signInAsDemo()}
                 loading={isSubmitting}
-                accessibilityHint="Signs in as the demo user, creating it if this is the first time"
+                accessibilityHint={t('auth.login.useDemoHint')}
               />
             </View>
           </Card>
@@ -151,8 +153,7 @@ export default function LoginScreen() {
 
         {isLocalOnly ? (
           <AppText variant="caption" color="textMuted" align="center">
-            Your account is stored securely on this device only. Cloud sync is added later in
-            development.
+            {t('auth.login.localOnly')}
           </AppText>
         ) : null}
       </View>

@@ -13,15 +13,15 @@ import { Pressable, View } from 'react-native';
 import { AppText, Button, ChoiceChips, InlineMessage, TextField, type ChipOption } from '@/components/ui';
 import {
   ADDABLE_RELATIONSHIPS,
-  AVATAR_COLOR_LABELS,
   AVATAR_COLORS,
   familyMemberInputSchema,
-  RELATIONSHIP_LABELS,
   type AvatarColor,
   type FamilyMemberFormValues,
   type FamilyMemberInput,
   type Relationship,
 } from '@/domain/familyMember';
+import { useT } from '@/i18n';
+import { avatarColorLabel, localizeMessage, relationshipLabelT } from '@/i18n/labels';
 import type { AppError } from '@/lib/errors';
 import { fieldErrorsOf } from '@/lib/validation';
 import { useTheme } from '@/theme/ThemeContext';
@@ -31,9 +31,6 @@ import { MemberAvatar } from './MemberAvatar';
 
 type Field = keyof FamilyMemberFormValues;
 
-const RELATIONSHIP_OPTIONS: readonly ChipOption<Relationship>[] = ADDABLE_RELATIONSHIPS.map(
-  (relationship) => ({ value: relationship, label: RELATIONSHIP_LABELS[relationship] }),
-);
 
 export type FamilyMemberFormProps = {
   initialValues: FamilyMemberFormValues;
@@ -56,6 +53,10 @@ export function FamilyMemberForm({
   error,
 }: FamilyMemberFormProps) {
   const theme = useTheme();
+  const { t } = useT();
+  const relationshipOptions: readonly ChipOption<Relationship>[] = ADDABLE_RELATIONSHIPS.map(
+    (relationship) => ({ value: relationship, label: relationshipLabelT(t, { relationship, customRelationship: null }) }),
+  );
   const [values, setValues] = useState<FamilyMemberFormValues>(initialValues);
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<Field, string>>>({});
 
@@ -89,45 +90,45 @@ export function FamilyMemberForm({
       <View style={{ alignItems: 'center', gap: theme.spacing.sm }}>
         <MemberAvatar member={{ name: values.name || '?', avatarColor: values.avatarColor }} size={72} />
         <AppText variant="caption" color="textMuted">
-          Preview
+          {t('familyForm.preview')}
         </AppText>
       </View>
 
       <View style={{ gap: theme.spacing.lg }}>
-        <AppText variant="heading">{isSelf ? 'About you' : 'Who they are'}</AppText>
+        <AppText variant="heading">{isSelf ? t('familyForm.aboutYou') : t('familyForm.whoTheyAre')}</AppText>
 
         <TextField
-          label="Name"
+          label={t('familyForm.name')}
           value={values.name}
           onChangeText={(name) => setField('name', name)}
-          placeholder={isSelf ? 'Your name' : 'e.g. Fatima'}
+          placeholder={isSelf ? t('familyForm.yourName') : t('familyForm.namePlaceholder')}
           error={fieldErrors.name}
           autoCapitalize="words"
-          helper="Shown on the profile and on every medicine screen."
+          helper={t('familyForm.nameHelper')}
         />
 
         {isSelf ? (
           <View style={{ gap: theme.spacing.xs }}>
             <AppText variant="label" color="textSecondary">
-              Relationship
+              {t('familyForm.relationship')}
             </AppText>
-            <AppText variant="body">Me — this is your own profile.</AppText>
+            <AppText variant="body">{t('familyForm.meOwnProfile')}</AppText>
           </View>
         ) : (
           <View style={{ gap: theme.spacing.sm }}>
             <AppText variant="label" color={fieldErrors.relationship ? 'dangerText' : 'textSecondary'}>
-              Relationship to you
+              {t('familyForm.relationshipToYou')}
             </AppText>
             <ChoiceChips
-              options={RELATIONSHIP_OPTIONS}
+              options={relationshipOptions}
               value={values.relationship || null}
               onChange={(relationship) => setField('relationship', relationship ?? '')}
-              accessibilityLabel="Relationship"
+              accessibilityLabel={t('familyForm.relationship')}
               allowClear={false}
             />
             {fieldErrors.relationship ? (
               <AppText variant="caption" color="dangerText">
-                {fieldErrors.relationship}
+                {localizeMessage(fieldErrors.relationship)}
               </AppText>
             ) : null}
           </View>
@@ -135,10 +136,10 @@ export function FamilyMemberForm({
 
         {values.relationship === 'OTHER' && !isSelf ? (
           <TextField
-            label="How are they related to you?"
+            label={t('familyForm.howRelated')}
             value={values.customRelationship}
             onChangeText={(customRelationship) => setField('customRelationship', customRelationship)}
-            placeholder="e.g. Aunt, Neighbour, Friend"
+            placeholder={t('familyForm.howRelatedPlaceholder')}
             error={fieldErrors.customRelationship}
             autoCapitalize="sentences"
           />
@@ -146,7 +147,7 @@ export function FamilyMemberForm({
 
         <View style={{ gap: theme.spacing.sm }}>
           <AppText variant="label" color="textSecondary">
-            Avatar colour
+            {t('familyForm.avatarColour')}
           </AppText>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: theme.spacing.md }}>
             {AVATAR_COLORS.map((color) => (
@@ -164,9 +165,9 @@ export function FamilyMemberForm({
 
       <View style={{ gap: theme.spacing.lg }}>
         <View style={{ gap: theme.spacing.xxs }}>
-          <AppText variant="heading">Health profile</AppText>
+          <AppText variant="heading">{t('familyForm.healthProfile')}</AppText>
           <AppText variant="caption" color="textSecondary">
-            All optional. Fill in what you know.
+            {t('familyForm.allOptional')}
           </AppText>
         </View>
         <HealthProfileFields
@@ -183,7 +184,7 @@ export function FamilyMemberForm({
 
       <View style={{ gap: theme.spacing.md }}>
         <Button label={submitLabel} onPress={handleSubmit} loading={isSubmitting} icon="checkmark" size="large" />
-        <Button label="Cancel" onPress={onCancel} variant="secondary" disabled={isSubmitting} />
+        <Button label={t('common.cancel')} onPress={onCancel} variant="secondary" disabled={isSubmitting} />
       </View>
     </View>
   );
@@ -201,12 +202,13 @@ function ColorSwatch({
   onPress: () => void;
 }) {
   const theme = useTheme();
+  const { t } = useT();
   return (
     <Pressable
       onPress={onPress}
       accessibilityRole="radio"
       accessibilityState={{ selected, checked: selected }}
-      accessibilityLabel={AVATAR_COLOR_LABELS[color]}
+      accessibilityLabel={avatarColorLabel(t, color)}
       style={({ pressed }) => ({
         alignItems: 'center',
         gap: theme.spacing.xs,
@@ -219,7 +221,7 @@ function ColorSwatch({
       })}>
       <MemberAvatar member={{ name, avatarColor: color }} size={44} />
       <AppText variant="caption" color={selected ? 'primary' : 'textSecondary'} weight={selected ? '700' : '500'}>
-        {AVATAR_COLOR_LABELS[color]}
+        {avatarColorLabel(t, color)}
       </AppText>
     </Pressable>
   );

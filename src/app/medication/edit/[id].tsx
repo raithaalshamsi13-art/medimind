@@ -20,10 +20,12 @@ import { selectUser, useAuthStore } from '@/stores/useAuthStore';
 import { forMember, memberById, selectMembers, useFamilyStore } from '@/stores/useFamilyStore';
 import { selectConditions, useHealthConditionStore } from '@/stores/useHealthConditionStore';
 import { useMedicationStore } from '@/stores/useMedicationStore';
+import { useT } from '@/i18n';
 import { useTheme } from '@/theme/ThemeContext';
 
 export default function EditMedicationScreen() {
   const theme = useTheme();
+  const { t } = useT();
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
 
@@ -68,10 +70,10 @@ export default function EditMedicationScreen() {
         <View style={{ gap: theme.spacing.lg }}>
           <InlineMessage
             tone="warning"
-            title="Medicine not found"
-            message="This medicine may have been deleted while you were editing it."
+            title={t('detail.notFoundTitle')}
+            message={t('detail.notFoundEditing')}
           />
-          <Button label="Go back" onPress={() => router.back()} />
+          <Button label={t('common.goBack')} onPress={() => router.back()} />
         </View>
       </Screen>
     );
@@ -80,10 +82,10 @@ export default function EditMedicationScreen() {
   return (
     <Screen scroll keyboardAvoiding>
       <View style={{ gap: theme.spacing.lg }}>
-        {member ? <MemberContextBanner member={member} prefix="Editing medicine for" /> : null}
+        {member ? <MemberContextBanner member={member} prefix={t('form.editingFor')} /> : null}
         <MedicationForm
           initialValues={toFormValues(medication)}
-          submitLabel="Save changes"
+          submitLabel={t('common.saveChanges')}
           isSubmitting={isSaving}
           onSubmit={handleSubmit}
           onCancel={() => router.back()}

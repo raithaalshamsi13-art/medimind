@@ -36,6 +36,8 @@ export type SettingsFlags = {
   paletteId: PaletteId;
   /** User has read and accepted the assistant's "not medical advice" notice. */
   assistantDisclaimerAcknowledged: boolean;
+  /** UI language. Arabic also switches the layout to right-to-left. */
+  language: 'en' | 'ar';
 };
 
 const defaultFlags: SettingsFlags = {
@@ -48,6 +50,7 @@ const defaultFlags: SettingsFlags = {
   appearance: 'system',
   paletteId: DEFAULT_PALETTE_ID,
   assistantDisclaimerAcknowledged: false,
+  language: 'en',
 };
 
 /** Keys whose value is a boolean — all of them today, kept honest by types. */
@@ -78,15 +81,20 @@ function pickFlags(state: SettingsFlags): SettingsFlags {
     appearance: state.appearance,
     paletteId: state.paletteId,
     assistantDisclaimerAcknowledged: state.assistantDisclaimerAcknowledged,
+    language: state.language,
   };
 }
 
 /** Guard against a stored palette id that no longer exists in the app. */
 function sanitise(values: Partial<SettingsFlags>): Partial<SettingsFlags> {
-  if (values.paletteId && !PALETTES[values.paletteId]) {
-    return { ...values, paletteId: DEFAULT_PALETTE_ID };
+  let next = values;
+  if (next.paletteId && !PALETTES[next.paletteId]) {
+    next = { ...next, paletteId: DEFAULT_PALETTE_ID };
   }
-  return values;
+  if (next.language !== undefined && next.language !== 'en' && next.language !== 'ar') {
+    next = { ...next, language: 'en' };
+  }
+  return next;
 }
 
 export const useSettingsStore = create<SettingsState>((set, get) => {

@@ -18,6 +18,8 @@ import { format, parseISO } from 'date-fns';
 import { useState } from 'react';
 import { Platform, Pressable, View, type ViewStyle } from 'react-native';
 
+import { getDateLocale, useT } from '@/i18n';
+import { localizeMessage } from '@/i18n/labels';
 import { useTheme } from '@/theme/ThemeContext';
 
 import { AppText } from './AppText';
@@ -53,11 +55,12 @@ export function DateField({
   style,
 }: DateFieldProps) {
   const theme = useTheme();
+  const { t, language } = useT();
   const [isPickerOpen, setIsPickerOpen] = useState(false);
 
   const selected = toDate(value);
   const hasError = Boolean(error);
-  const display = selected ? format(selected, 'd MMM yyyy') : 'Choose a date';
+  const display = selected ? format(selected, 'd MMM yyyy', { locale: getDateLocale() }) : t('ui.chooseDate');
 
   const handlePicked = (event: DateTimePickerEvent, picked?: Date) => {
     // Android fires "dismissed" when the dialog is cancelled; iOS's inline
@@ -77,8 +80,8 @@ export function DateField({
       <Pressable
         onPress={() => setIsPickerOpen((open) => !open)}
         accessibilityRole="button"
-        accessibilityLabel={`${label}: ${selected ? display : 'not set'}`}
-        accessibilityHint="Opens a calendar to choose the date"
+        accessibilityLabel={`: `}
+        accessibilityHint={t('ui.dateHint')}
         accessibilityState={{ expanded: isPickerOpen }}
         style={({ pressed }) => ({
           flexDirection: 'row',
@@ -120,10 +123,11 @@ export function DateField({
             maximumDate={maximumDate}
             accentColor={theme.colors.primary}
             themeVariant={theme.scheme}
+            locale={language === 'ar' ? 'ar' : 'en-GB'}
           />
           {Platform.OS === 'ios' ? (
             <Button
-              label="Done"
+              label={t('common.done')}
               onPress={() => setIsPickerOpen(false)}
               variant="secondary"
               icon="checkmark"
@@ -134,7 +138,7 @@ export function DateField({
 
       {selected ? (
         <Button
-          label="Clear date"
+          label={t('ui.clearDate')}
           onPress={() => {
             onChange('');
             setIsPickerOpen(false);
@@ -154,7 +158,7 @@ export function DateField({
             style={{ marginTop: 2 }}
           />
           <AppText variant="caption" color="dangerText" style={{ flex: 1 }}>
-            {error}
+            {localizeMessage(error ?? '')}
           </AppText>
         </View>
       ) : helper ? (

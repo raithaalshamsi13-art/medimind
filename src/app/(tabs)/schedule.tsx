@@ -20,7 +20,8 @@ import { MemberContextBanner } from '@/components/family/MemberContextBanner';
 import { MemberSwitcher } from '@/components/family/MemberSwitcher';
 import { DoseRow } from '@/components/schedule/DoseRow';
 import { AppText, Button, Card, InlineMessage, Screen } from '@/components/ui';
-import { possessive } from '@/domain/familyMember';
+import { useT } from '@/i18n';
+import { doseStatusLabel, formatTime12, possessiveT, tCount } from '@/i18n/labels';
 import { localDateKey, type Dose, type DoseStatus } from '@/domain/reminder';
 import { formatIsoDate } from '@/lib/datetime';
 import { getNotificationService, type NotificationPermission } from '@/services/notifications';
@@ -38,6 +39,7 @@ import { useTheme } from '@/theme/ThemeContext';
 
 export default function ScheduleScreen() {
   const theme = useTheme();
+  const { t } = useT();
   const router = useRouter();
   const user = useAuthStore(selectUser);
 
@@ -79,7 +81,7 @@ export default function ScheduleScreen() {
   );
 
   const nameOf = (medicationId: string) =>
-    medications.find((m) => m.id === medicationId)?.name ?? 'Medicine';
+    medications.find((m) => m.id === medicationId)?.name ?? t('common.medicine');
   const labelOf = (reminderId: string) => reminders.find((r) => r.id === reminderId)?.doseLabel ?? null;
 
   const handleMark = async (dose: Dose, status: DoseStatus) => {
@@ -102,11 +104,15 @@ export default function ScheduleScreen() {
     <Screen scroll>
       <View style={{ gap: theme.spacing.xl }}>
         <View style={{ gap: theme.spacing.xs }}>
-          <AppText variant="title">{member ? possessive(member, 'schedule') : 'Schedule'}</AppText>
+          <AppText variant="title">{member ? possessiveT(t, member, 'schedule') : t('tabs.schedule')}</AppText>
           <AppText variant="body" color="textSecondary">
             {today.length === 0
-              ? 'No doses scheduled today'
-              : `${takenToday} of ${today.length} ${today.length === 1 ? 'dose' : 'doses'} taken today`}
+              ? t('schedule.noDosesToday')
+              : t('schedule.takenOfToday', {
+                  taken: takenToday,
+                  total: today.length,
+                  doses: tCount(t, 'common.dosesCount', today.length).replace(/^\d+\s*/, ''),
+                })}
           </AppText>
         </View>
 
@@ -118,7 +124,7 @@ export default function ScheduleScreen() {
           />
         ) : null}
         {member && !member.isSelf ? (
-          <MemberContextBanner member={member} prefix="Showing the schedule for" />
+          <MemberContextBanner member={member} prefix={t('schedule.showingFor')} />
         ) : null}
 
         {error ? <InlineMessage tone="danger" message={error.message} /> : null}
@@ -127,7 +133,7 @@ export default function ScheduleScreen() {
         {!notifications.isAvailable ? (
           <InlineMessage
             tone="info"
-            message="Notifications are not available in the browser. The schedule still works here; open MediMind on your phone to be reminded."
+            message={t('schedule.webNotice')}
           />
         ) : permission === 'undetermined' ? (
           <Card>
@@ -135,43 +141,40 @@ export default function ScheduleScreen() {
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
                 <Ionicons name="notifications-outline" size={24} color={theme.colors.primary} />
                 <AppText variant="subheading" style={{ flex: 1 }}>
-                  Get reminded on time
+                  {t('schedule.getReminded')}
                 </AppText>
               </View>
               <AppText variant="body" color="textSecondary">
-                MediMind can send a notification at each reminder time, with Taken and Skip buttons.
-                Your phone will ask for permission once.
+                {t('schedule.getRemindedBody')}
               </AppText>
-              <Button label="Turn on notifications" icon="notifications" onPress={() => void enableNotifications()} />
+              <Button label={t('schedule.turnOn')} icon="notifications" onPress={() => void enableNotifications()} />
             </View>
           </Card>
         ) : permission === 'denied' ? (
           <InlineMessage
             tone="warning"
-            title="Notifications are off"
-            message="Reminders will not ring until you allow notifications for MediMind in your phone's Settings. The schedule below still works."
+            title={t('schedule.offTitle')}
+            message={t('schedule.offBody')}
           />
         ) : null}
 
         {/* ---------- Today ---------- */}
         <View style={{ gap: theme.spacing.md }}>
-          <AppText variant="heading">Today · {formatIsoDate(todayKey)}</AppText>
+          <AppText variant="heading">{t('schedule.today', { date: formatIsoDate(todayKey) })}</AppText>
 
           {today.length === 0 ? (
             <Card>
               <View style={{ alignItems: 'center', gap: theme.spacing.md, paddingVertical: theme.spacing.md }}>
                 <Ionicons name="calendar-clear-outline" size={40} color={theme.colors.textMuted} />
                 <AppText variant="subheading" align="center">
-                  {memberReminders.length === 0 ? 'No reminders yet' : 'Nothing due today'}
+                  {memberReminders.length === 0 ? t('schedule.noRemindersYet') : t('schedule.nothingDue')}
                 </AppText>
                 <AppText variant="body" color="textSecondary" align="center">
-                  {memberReminders.length === 0
-                    ? 'Open a medicine and choose "Set a reminder". MediMind suggests the times from its label.'
-                    : 'This person’s reminders do not fall on today.'}
+                  {memberReminders.length === 0 ? t('schedule.noRemindersBody') : t('schedule.notOnToday')}
                 </AppText>
                 {memberReminders.length === 0 ? (
                   <Button
-                    label="Go to medicines"
+                    label={t('schedule.goToMedicines')}
                     icon="medkit-outline"
                     variant="secondary"
                     onPress={() => router.push('/medications')}
@@ -195,19 +198,18 @@ export default function ScheduleScreen() {
 
           {today.length > 0 ? (
             <AppText variant="caption" color="textMuted">
-              Mark each dose when you take it. If you miss one, follow the label or leaflet — never
-              take a double dose to catch up.
+              {t('schedule.markNote')}
             </AppText>
           ) : null}
         </View>
 
         {/* ---------- History ---------- */}
         <View style={{ gap: theme.spacing.md }}>
-          <AppText variant="heading">History</AppText>
+          <AppText variant="heading">{t('schedule.history')}</AppText>
           {history.length === 0 ? (
             <Card>
               <AppText variant="body" color="textSecondary" align="center">
-                Past days will appear here once reminders have been running.
+                {t('schedule.historyEmpty')}
               </AppText>
             </Card>
           ) : (
@@ -229,6 +231,7 @@ function HistoryDay({
   nameOf: (medicationId: string) => string;
 }) {
   const theme = useTheme();
+  const { t } = useT();
   const taken = doses.filter((d) => d.status === 'TAKEN').length;
   const missed = doses.filter((d) => d.status === 'MISSED').length;
 
@@ -238,7 +241,7 @@ function HistoryDay({
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
           <AppText variant="subheading">{formatIsoDate(day)}</AppText>
           <AppText variant="caption" color={missed > 0 ? 'warningText' : 'textSecondary'}>
-            {taken} of {doses.length} taken{missed > 0 ? ` · ${missed} missed` : ''}
+            {t('schedule.takenOf', { taken, total: doses.length })}{missed > 0 ? t('schedule.missedN', { n: missed }) : ''}
           </AppText>
         </View>
         <View style={{ gap: theme.spacing.sm }}>
@@ -253,6 +256,7 @@ function HistoryDay({
 
 function HistoryLine({ dose, name }: { dose: Dose; name: string }) {
   const theme = useTheme();
+  const { t } = useT();
   const icon: Record<DoseStatus, keyof typeof Ionicons.glyphMap> = {
     UPCOMING: 'time-outline',
     TAKEN: 'checkmark-circle',
@@ -265,9 +269,7 @@ function HistoryLine({ dose, name }: { dose: Dose; name: string }) {
     MISSED: theme.colors.warning,
     SKIPPED: theme.colors.textMuted,
   };
-  const time = dose.scheduledAt.slice(11, 16);
-  const [h, m] = time.split(':').map(Number);
-  const pretty = `${((h ?? 0) + 11) % 12 + 1}:${String(m ?? 0).padStart(2, '0')} ${(h ?? 0) < 12 ? 'AM' : 'PM'}`;
+  const pretty = formatTime12(t, dose.scheduledAt.slice(11, 16));
 
   return (
     <View
@@ -282,7 +284,7 @@ function HistoryLine({ dose, name }: { dose: Dose; name: string }) {
         {name}
       </AppText>
       <AppText variant="caption" color="textSecondary">
-        {dose.status === 'UPCOMING' ? 'Not marked' : dose.status.charAt(0) + dose.status.slice(1).toLowerCase()}
+        {dose.status === 'UPCOMING' ? t('schedule.notMarked') : doseStatusLabel(t, dose.status)}
       </AppText>
     </View>
   );

@@ -11,6 +11,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useState, type ReactNode } from 'react';
 import { Pressable, View, type ViewStyle } from 'react-native';
 
+import { useT } from '@/i18n';
 import { useTheme } from '@/theme/ThemeContext';
 
 import { AppText } from './AppText';
@@ -35,6 +36,7 @@ export function Collapsible({
   style,
 }: CollapsibleProps) {
   const theme = useTheme();
+  const { t } = useT();
   const [isOpen, setIsOpen] = useState(defaultOpen);
 
   return (
@@ -54,7 +56,7 @@ export function Collapsible({
         accessibilityRole="button"
         accessibilityState={{ expanded: isOpen }}
         accessibilityLabel={title}
-        accessibilityHint={isOpen ? 'Hides this section' : 'Shows this section'}
+        accessibilityHint={isOpen ? t('ui.hidesSection') : t('ui.showsSection')}
         style={({ pressed }) => ({
           flexDirection: 'row',
           alignItems: 'center',
@@ -74,7 +76,7 @@ export function Collapsible({
           ) : null}
         </View>
         <AppText variant="label" color="primary">
-          {isOpen ? 'Hide' : summary ? 'Edit' : 'Add'}
+          {isOpen ? t('common.hide') : summary ? t('common.edit') : t('common.add')}
         </AppText>
         <Ionicons
           name={isOpen ? 'chevron-up' : 'chevron-down'}

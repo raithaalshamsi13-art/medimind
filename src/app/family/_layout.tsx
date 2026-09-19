@@ -5,16 +5,18 @@
 
 import { Stack } from 'expo-router';
 
+import { useT } from '@/i18n';
 import { useTheme } from '@/theme/ThemeContext';
 
 export default function FamilyLayout() {
   const theme = useTheme();
+  const { t } = useT();
 
   return (
     <Stack
       screenOptions={{
         headerShown: true,
-        headerBackTitle: 'Back',
+        headerBackTitle: t('common.goBack'),
         contentStyle: { backgroundColor: theme.colors.background },
         headerStyle: { backgroundColor: theme.colors.surface },
         headerTintColor: theme.colors.primary,
@@ -24,9 +26,9 @@ export default function FamilyLayout() {
           fontSize: theme.type.subheading.fontSize,
         },
       }}>
-      <Stack.Screen name="add" options={{ title: 'Add family member' }} />
-      <Stack.Screen name="[id]" options={{ title: 'Family member' }} />
-      <Stack.Screen name="edit/[id]" options={{ title: 'Edit profile' }} />
+      <Stack.Screen name="add" options={{ title: t('header.addFamilyMember') }} />
+      <Stack.Screen name="[id]" options={{ title: t('header.familyMember') }} />
+      <Stack.Screen name="edit/[id]" options={{ title: t('header.editProfile') }} />
     </Stack>
   );
 }

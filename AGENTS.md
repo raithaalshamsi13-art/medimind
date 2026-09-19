@@ -70,6 +70,15 @@ It reads a medicine label, verifies it, and only then schedules reminders.
   business logic, no SQL, no direct AI calls in a screen.
 - All text goes through `<AppText>`; all colours and sizes come from
   `useTheme()`. Never hardcode a hex colour or a font size in a component.
+- **Every user-facing string comes from `src/i18n/en.ts` via `useT()` /
+  `t('key')`** (or `tNow()` outside React). Add the key to `en.ts` AND `ar.ts`
+  — TypeScript refuses a missing Arabic string. Enum labels go through
+  `src/i18n/labels.ts` (`kindLabel`, `relationshipLabelT`, …). Messages that
+  the domain layer produces in English (Zod, `appError`, repositories) are
+  translated at display time by `localizeMessage()`, so their exact English
+  wording must also appear in `en.ts` under `validation.*` / `error.*` /
+  `repo.*`. Stored medicine text (dosage, frequency, instructions) stays
+  English — chips translate their labels but compose to the same words.
 - Buttons and tappable rows respect `theme.touch` (48 minimum, 56 default,
   64 for primary actions).
 - Colour never carries meaning on its own — always pair it with a text label

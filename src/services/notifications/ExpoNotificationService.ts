@@ -17,6 +17,7 @@ import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 
 import type { Reminder } from '@/domain/reminder';
+import { tNow } from '@/i18n';
 
 import type {
   NotificationPermission,
@@ -51,13 +52,13 @@ async function configureOnce(): Promise<void> {
   });
 
   await Notifications.setNotificationCategoryAsync(DOSE_CATEGORY, [
-    { identifier: ACTION_TAKEN, buttonTitle: 'Taken', options: { opensAppToForeground: false } },
-    { identifier: ACTION_SKIPPED, buttonTitle: 'Skip', options: { opensAppToForeground: false } },
+    { identifier: ACTION_TAKEN, buttonTitle: tNow('notif.taken'), options: { opensAppToForeground: false } },
+    { identifier: ACTION_SKIPPED, buttonTitle: tNow('notif.skip'), options: { opensAppToForeground: false } },
   ]);
 
   if (Platform.OS === 'android') {
     await Notifications.setNotificationChannelAsync('reminders', {
-      name: 'Medicine reminders',
+      name: tNow('notif.channel'),
       importance: Notifications.AndroidImportance.HIGH,
       sound: 'default',
     });
@@ -89,12 +90,12 @@ export class ExpoNotificationService implements NotificationService {
     if ((await this.getPermission()) !== 'granted') return [];
 
     const ids: string[] = [];
-    const body = reminder.doseLabel ? `${medicationName}, ${reminder.doseLabel}` : medicationName;
+    const body = reminder.doseLabel ? tNow('notif.body', { name: medicationName, dose: reminder.doseLabel }) : medicationName;
 
     for (const time of reminder.times) {
       const [hour, minute] = time.split(':').map(Number);
       const content: Notifications.NotificationContentInput = {
-        title: 'Time for your medicine',
+        title: tNow('notif.title'),
         body,
         categoryIdentifier: DOSE_CATEGORY,
         sound: 'default',
@@ -140,10 +141,8 @@ export class ExpoNotificationService implements NotificationService {
 
     return Notifications.scheduleNotificationAsync({
       content: {
-        title: 'You may have missed a dose',
-        body:
-          `${medicationName} was due earlier and has not been marked as taken. ` +
-          'Follow the instructions on the label, and ask a pharmacist if you are unsure. Do not take a double dose.',
+        title: tNow('notif.missedTitle'),
+        body: tNow('notif.missedBody', { name: medicationName }),
         sound: 'default',
         data: { kind: 'follow-up', doseId } satisfies DoseNotificationData,
       },

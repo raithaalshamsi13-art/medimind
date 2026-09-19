@@ -24,40 +24,41 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { Logo } from '@/components/brand/Logo';
 import { AppText, Button, InlineMessage } from '@/components/ui';
-import { MEDICAL_DISCLAIMER_SHORT } from '@/config/constants';
 import { useSettingsStore } from '@/stores/useSettingsStore';
+import { useT, type TranslationKey } from '@/i18n';
 import { useTheme } from '@/theme/ThemeContext';
 
 type Slide = {
   key: string;
   icon: keyof typeof Ionicons.glyphMap;
-  title: string;
-  body: string;
+  title: TranslationKey;
+  body: TranslationKey;
 };
 
 const SLIDES: Slide[] = [
   {
     key: 'scan',
     icon: 'camera-outline',
-    title: 'Scan your medicine',
-    body: 'Point your camera at the label. MediMind reads the medicine name, the dose, the expiry date and the instructions for you.',
+    title: 'onboarding.slide1Title',
+    body: 'onboarding.slide1Body',
   },
   {
     key: 'check',
     icon: 'shield-checkmark-outline',
-    title: 'Check its safety',
-    body: 'Before anything is saved, MediMind checks the expiry date and tells you clearly when something could not be read — so you are never guessing.',
+    title: 'onboarding.slide2Title',
+    body: 'onboarding.slide2Body',
   },
   {
     key: 'remind',
     icon: 'alarm-outline',
-    title: 'Never forget your reminders',
-    body: 'You confirm the schedule, then MediMind reminds you at the right time — with a voice alert if you prefer to listen rather than read.',
+    title: 'onboarding.slide3Title',
+    body: 'onboarding.slide3Body',
   },
 ];
 
 export default function OnboardingScreen() {
   const theme = useTheme();
+  const { t } = useT();
   const { width } = useWindowDimensions();
   const setSetting = useSettingsStore((state) => state.set);
 
@@ -101,11 +102,11 @@ export default function OnboardingScreen() {
         <Pressable
           onPress={finish}
           accessibilityRole="button"
-          accessibilityLabel="Skip introduction"
+          accessibilityLabel={t('onboarding.skipHint')}
           hitSlop={12}
           style={{ minHeight: 44, justifyContent: 'center', paddingHorizontal: theme.spacing.sm }}>
           <AppText variant="label" color="textSecondary">
-            Skip
+            {t('onboarding.skip')}
           </AppText>
         </Pressable>
       </View>
@@ -141,17 +142,17 @@ export default function OnboardingScreen() {
               </View>
 
               <AppText variant="title" align="center">
-                {slide.title}
+                {t(slide.title)}
               </AppText>
 
               <AppText variant="bodyLarge" color="textSecondary" align="center">
-                {slide.body}
+                {t(slide.body)}
               </AppText>
             </View>
 
             {/* The disclaimer belongs on the last slide, before sign-up. */}
             {slideIndex === SLIDES.length - 1 ? (
-              <InlineMessage tone="info" message={MEDICAL_DISCLAIMER_SHORT} />
+              <InlineMessage tone="info" message={t('disclaimer.short')} />
             ) : null}
           </View>
         ))}
@@ -166,7 +167,7 @@ export default function OnboardingScreen() {
         }}>
         <View
           accessible
-          accessibilityLabel={`Step ${index + 1} of ${SLIDES.length}`}
+          accessibilityLabel={`${index + 1} / ${SLIDES.length}`}
           style={{
             flexDirection: 'row',
             justifyContent: 'center',
@@ -187,7 +188,7 @@ export default function OnboardingScreen() {
         </View>
 
         <Button
-          label={isLastSlide ? 'Get started' : 'Next'}
+          label={isLastSlide ? t('onboarding.getStarted') : t('onboarding.next')}
           onPress={goNext}
           size="large"
           icon={isLastSlide ? 'arrow-forward' : undefined}

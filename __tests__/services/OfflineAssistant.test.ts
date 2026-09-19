@@ -51,12 +51,12 @@ const EXPIRED = ctx({ name: 'Old ibuprofen', dosage: '200 mg', expirationDate: '
 const PRN = ctx({ name: 'Antihistamine', dosage: '10 mg', frequency: 'as needed' });
 
 function answer(question: string, medications: MedicationContext[] = [PARACETAMOL]) {
-  return assistant.answer({ question, history: [], medications, person: null });
+  return assistant.answer({ question, history: [], medications, person: null, language: 'en' });
 }
 
 describe('OfflineAssistant', () => {
   it('reports its kind as offline', async () => {
-    const result = await assistant.ask({ question: 'help', history: [], medications: [], person: null });
+    const result = await assistant.ask({ question: 'help', history: [], medications: [], person: null, language: 'en' });
     expect(result.ok).toBe(true);
     if (!result.ok) return;
     expect(result.value.source).toBe('offline');
@@ -216,6 +216,7 @@ describe('health profile (read back only)', () => {
       history: [],
       medications: [PARACETAMOL],
       person,
+      language: 'en',
     });
     expect(reply).toContain('Fatima');
     expect(reply).toContain('weight 68.5 kg');
@@ -232,6 +233,7 @@ describe('health profile (read back only)', () => {
       history: [],
       medications: [],
       person: null,
+      language: 'en',
     });
     expect(reply).toContain('do not have a health profile');
   });
@@ -242,6 +244,7 @@ describe('health profile (read back only)', () => {
       history: [],
       medications: [],
       person: { ...person, isSelf: true, label: 'you', name: 'you', ageYears: null, gender: null, heightCm: null, weightKg: null, bloodType: null, conditions: [] },
+      language: 'en',
     });
     expect(reply).toContain('Nothing is recorded yet');
   });

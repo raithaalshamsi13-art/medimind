@@ -12,6 +12,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { useState } from 'react';
 import { Pressable, TextInput, View, type TextInputProps, type ViewStyle } from 'react-native';
 
+import { useT } from '@/i18n';
+import { localizeMessage } from '@/i18n/labels';
 import { useTheme } from '@/theme/ThemeContext';
 
 import { AppText } from './AppText';
@@ -57,9 +59,11 @@ export function TextField({
   style,
 }: TextFieldProps) {
   const theme = useTheme();
+  const { t } = useT();
   const [isRevealed, setIsRevealed] = useState(false);
 
   const hasError = Boolean(error);
+  const errorText = error ? localizeMessage(error) : error;
   // `borderStrong`, not `border`: an input's boundary is a meaningful UI
   // element and WCAG 1.4.11 asks for 3:1 against its surroundings. The softer
   // `border` token is for decorative edges like card outlines and dividers.
@@ -102,7 +106,7 @@ export function TextField({
           onSubmitEditing={onSubmitEditing}
           autoCorrect={false}
           accessibilityLabel={label}
-          accessibilityHint={error ?? helper}
+          accessibilityHint={errorText ?? helper}
           allowFontScaling
           style={{
             flex: 1,
@@ -118,7 +122,7 @@ export function TextField({
           <Pressable
             onPress={() => setIsRevealed((current) => !current)}
             accessibilityRole="button"
-            accessibilityLabel={isRevealed ? 'Hide password' : 'Show password'}
+            accessibilityLabel={isRevealed ? t('ui.hidePassword') : t('ui.showPassword')}
             hitSlop={12}
             style={{
               minWidth: 44,
@@ -144,7 +148,7 @@ export function TextField({
             style={{ marginTop: 2 }}
           />
           <AppText variant="caption" color="dangerText" style={{ flex: 1 }}>
-            {error}
+            {errorText}
           </AppText>
         </View>
       ) : helper ? (

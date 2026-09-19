@@ -15,7 +15,8 @@ import { View } from 'react-native';
 
 import { LogoMark } from '@/components/brand/Logo';
 import { AppText } from '@/components/ui';
-import { ASSISTANT_REPLY_FOOTER, type AssistantMessage } from '@/domain/assistant';
+import type { AssistantMessage } from '@/domain/assistant';
+import { useT } from '@/i18n';
 import { formatClockTime } from '@/lib/datetime';
 import { useTheme } from '@/theme/ThemeContext';
 
@@ -26,6 +27,7 @@ function timeOf(iso: string): string {
 
 export function ChatBubble({ message }: { message: AssistantMessage }) {
   const theme = useTheme();
+  const { t } = useT();
   const isUser = message.role === 'user';
   const time = timeOf(message.createdAt);
 
@@ -46,7 +48,7 @@ export function ChatBubble({ message }: { message: AssistantMessage }) {
       <View
         accessible
         accessibilityRole="text"
-        accessibilityLabel={`${isUser ? 'You' : 'Assistant'}${time ? `, ${time}` : ''}: ${message.text}`}
+        accessibilityLabel={`${isUser ? t('common.me') : t('assistant.name')}${time ? `, ${time}` : ''}: ${message.text}`}
         style={{ maxWidth: '82%', gap: theme.spacing.xs }}>
         <View
           style={{
@@ -79,7 +81,7 @@ export function ChatBubble({ message }: { message: AssistantMessage }) {
           ) : null}
           {isUser ? null : (
             <AppText variant="caption" color="textMuted">
-              · {message.source === 'ai' ? 'AI' : 'Offline'}
+              · {message.source === 'ai' ? t('assistant.tagAi') : t('assistant.tagOffline')}
             </AppText>
           )}
         </View>
@@ -97,7 +99,7 @@ export function ChatBubble({ message }: { message: AssistantMessage }) {
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.xs }}>
               <Ionicons name="alert-circle-outline" size={14} color={theme.colors.warningText} />
               <AppText variant="caption" color="textMuted" style={{ flex: 1 }}>
-                {ASSISTANT_REPLY_FOOTER}
+                {t('assistant.footer')}
               </AppText>
             </View>
           </View>

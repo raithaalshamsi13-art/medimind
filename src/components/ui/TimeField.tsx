@@ -11,6 +11,8 @@ import { useState } from 'react';
 import { Platform, Pressable, View, type ViewStyle } from 'react-native';
 
 import { formatClockTime } from '@/lib/datetime';
+import { useT } from '@/i18n';
+import { localizeMessage } from '@/i18n/labels';
 import { useTheme } from '@/theme/ThemeContext';
 
 import { AppText } from './AppText';
@@ -40,6 +42,7 @@ function toValue(date: Date): string {
 
 export function TimeField({ label, value, onChange, onRemove, error, style }: TimeFieldProps) {
   const theme = useTheme();
+  const { t } = useT();
   const [isOpen, setIsOpen] = useState(false);
   const hasError = Boolean(error);
 
@@ -59,7 +62,7 @@ export function TimeField({ label, value, onChange, onRemove, error, style }: Ti
           onPress={() => setIsOpen((open) => !open)}
           accessibilityRole="button"
           accessibilityLabel={`${label}: ${formatClockTime(value)}`}
-          accessibilityHint="Opens a clock to choose the time"
+          accessibilityHint={t('reminder.timeHint')}
           accessibilityState={{ expanded: isOpen }}
           style={({ pressed }) => ({
             flex: 1,
@@ -88,7 +91,7 @@ export function TimeField({ label, value, onChange, onRemove, error, style }: Ti
           <Pressable
             onPress={onRemove}
             accessibilityRole="button"
-            accessibilityLabel={`Remove ${formatClockTime(value)}`}
+            accessibilityLabel={t('reminder.removeTime', { time: formatClockTime(value) })}
             style={({ pressed }) => ({
               width: theme.touch.comfortable,
               height: theme.touch.comfortable,
@@ -114,14 +117,14 @@ export function TimeField({ label, value, onChange, onRemove, error, style }: Ti
             themeVariant={theme.scheme}
           />
           {Platform.OS === 'ios' ? (
-            <Button label="Done" onPress={() => setIsOpen(false)} variant="secondary" icon="checkmark" />
+            <Button label={t('common.done')} onPress={() => setIsOpen(false)} variant="secondary" icon="checkmark" />
           ) : null}
         </View>
       ) : null}
 
       {hasError ? (
         <AppText variant="caption" color="dangerText">
-          {error}
+          {localizeMessage(error ?? '')}
         </AppText>
       ) : null}
     </View>

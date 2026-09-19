@@ -341,7 +341,7 @@ in dark mode.
 | **M3** | SQLite schema + migrations, repositories, medication CRUD, structured manual entry (chips, date picker), health conditions, family profiles (one account, many people) | ✅ Complete |
 | **M4** | Camera, scanner abstraction + mock, scan confirmation, safety engine, demo mode | ⬜ Deferred (after M5) |
 | **M5** | Suggested reminders, local notifications, dose tracking, missed doses | ✅ Complete |
-| **M6** | Voice alerts, offline sync, settings, accessibility, error handling, tests | ⬜ |
+| **M6** | Voice alerts, offline sync, settings, accessibility, error handling, tests | ◐ Language (English / Arabic, RTL) done |
 
 ### Ask MediMind (the assistant)
 

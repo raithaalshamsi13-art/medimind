@@ -9,6 +9,7 @@ import { Pressable, ScrollView, View } from 'react-native';
 
 import { AppText } from '@/components/ui';
 import type { FamilyMember } from '@/domain/familyMember';
+import { useT } from '@/i18n';
 import { useTheme } from '@/theme/ThemeContext';
 
 import { MemberAvatar } from './MemberAvatar';
@@ -21,6 +22,7 @@ export type MemberSwitcherProps = {
 
 export function MemberSwitcher({ members, activeMemberId, onSelect }: MemberSwitcherProps) {
   const theme = useTheme();
+  const { t } = useT();
 
   // One member (just "Me") needs no switcher.
   if (members.length < 2) return null;
@@ -30,7 +32,7 @@ export function MemberSwitcher({ members, activeMemberId, onSelect }: MemberSwit
       horizontal
       showsHorizontalScrollIndicator={false}
       accessibilityRole="radiogroup"
-      accessibilityLabel="Family member"
+      accessibilityLabel={t('header.familyMember')}
       contentContainerStyle={{ gap: theme.spacing.sm, paddingVertical: theme.spacing.xxs }}>
       {members.map((member) => {
         const selected = member.id === activeMemberId;
@@ -64,7 +66,7 @@ export function MemberSwitcher({ members, activeMemberId, onSelect }: MemberSwit
                 variant="label"
                 color={selected ? 'primary' : 'text'}
                 weight={selected ? '700' : '600'}>
-                {member.isSelf ? 'Me' : member.name}
+                {member.isSelf ? t('common.me') : member.name}
               </AppText>
             </View>
           </Pressable>

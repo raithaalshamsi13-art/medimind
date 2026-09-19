@@ -14,6 +14,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+import { applyDirection } from '@/i18n';
 import { getNotificationService } from '@/services/notifications';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { useDoseStore } from '@/stores/useDoseStore';
@@ -82,6 +83,13 @@ function RootNavigator() {
       SplashScreen.hideAsync().catch(() => {});
     }
   }, [isReady]);
+
+  // Point the layout in the saved language's direction as soon as settings
+  // are known (immediate on web; persisted by React Native on the phone).
+  const language = useSettingsStore((state) => state.language);
+  useEffect(() => {
+    if (isSettingsHydrated) applyDirection(language);
+  }, [isSettingsHydrated, language]);
 
   // Load this user's medicines once they are signed in, and drop them from
   // memory on sign-out so the next account never sees the previous one's data.

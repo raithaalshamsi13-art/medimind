@@ -9,10 +9,13 @@ import { Animated, Easing, View } from 'react-native';
 
 import { LogoMark } from '@/components/brand/Logo';
 import { AppText } from '@/components/ui';
+import { useT } from '@/i18n';
 import { useTheme } from '@/theme/ThemeContext';
 
-export function TypingIndicator({ label = 'MediMind is typing…' }: { label?: string }) {
+export function TypingIndicator({ label: labelProp }: { label?: string }) {
   const theme = useTheme();
+  const { t } = useT();
+  const label = labelProp ?? t('assistant.typing');
   const dots = useRef([new Animated.Value(0.3), new Animated.Value(0.3), new Animated.Value(0.3)]).current;
 
   useEffect(() => {

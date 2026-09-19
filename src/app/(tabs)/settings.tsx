@@ -1,15 +1,16 @@
 /**
  * Settings.
  *
- * Milestone 2 ships the parts that actually work today: the profile card, the
- * two accessibility switches (which are wired all the way through the theme),
- * and logout. Everything still to come is listed but visibly inactive, rather
- * than being a switch that silently does nothing.
+ * Everything here works today: profile, language, appearance, accessibility
+ * switches (wired through the theme), reminder notifications, health and
+ * family shortcuts, about, log out. Features still to come are listed but
+ * visibly inactive, rather than being a switch that silently does nothing.
  */
 
 import { Ionicons } from '@expo/vector-icons';
 import Constants from 'expo-constants';
 import { useRouter } from 'expo-router';
+import { useState } from 'react';
 import { Switch, View } from 'react-native';
 
 import { isAssistantConfigured, isSupabaseConfigured } from '@/config/env';
@@ -19,13 +20,16 @@ import {
   Badge,
   Button,
   Card,
+  ChoiceChips,
   InlineMessage,
   OptionGroup,
   Screen,
+  type ChipOption,
   type Option,
 } from '@/components/ui';
-import { APP_NAME, APP_TAGLINE, MEDICAL_DISCLAIMER } from '@/config/constants';
+import { APP_NAME, APP_TAGLINE } from '@/config/constants';
 import { firstNameOf } from '@/domain/user';
+import { applyDirection, LANGUAGES, reloadApp, useT, type Language } from '@/i18n';
 import { confirmAction } from '@/lib/confirm';
 import { isStoragePersistent } from '@/lib/storage';
 import { getNotificationService } from '@/services/notifications';
@@ -37,17 +41,6 @@ import { useSettingsStore, type AppearancePreference } from '@/stores/useSetting
 import { useTheme } from '@/theme/ThemeContext';
 import { PALETTE_LIST, type PaletteId } from '@/theme/palettes';
 
-const APPEARANCE_OPTIONS: readonly Option<AppearancePreference>[] = [
-  {
-    value: 'system',
-    label: 'Match my phone',
-    description: 'Follow the device light or dark setting.',
-    icon: 'phone-portrait-outline',
-  },
-  { value: 'light', label: 'Light', description: 'Always use the light theme.', icon: 'sunny-outline' },
-  { value: 'dark', label: 'Dark', description: 'Always use the dark theme.', icon: 'moon-outline' },
-];
-
 /** Built from the palette registry, so adding a palette needs no change here. */
 const PALETTE_OPTIONS: readonly Option<PaletteId>[] = PALETTE_LIST.map((palette) => ({
   value: palette.id,
@@ -56,14 +49,19 @@ const PALETTE_OPTIONS: readonly Option<PaletteId>[] = PALETTE_LIST.map((palette)
   swatch: palette.swatch,
 }));
 
+const LANGUAGE_OPTIONS: readonly ChipOption<Language>[] = LANGUAGES.map((language) => ({
+  value: language.code,
+  label: language.nativeLabel,
+}));
+
 const UPCOMING_SETTINGS = [
-  { icon: 'volume-high-outline', label: 'Voice alerts', milestone: 'Milestone 6' },
-  { icon: 'person-outline', label: 'Edit profile', milestone: 'Milestone 6' },
-  { icon: 'lock-closed-outline', label: 'Privacy', milestone: 'Milestone 6' },
+  { icon: 'volume-high-outline', key: 'settings.upcoming.voice', milestone: 6 },
+  { icon: 'lock-closed-outline', key: 'settings.upcoming.privacy', milestone: 6 },
 ] as const;
 
 export default function SettingsScreen() {
   const theme = useTheme();
+  const { t, language } = useT();
   const router = useRouter();
 
   const user = useAuthStore(selectUser);
@@ -72,9 +70,46 @@ export default function SettingsScreen() {
   const signOut = useAuthStore((state) => state.signOut);
 
   const notificationsEnabled = useSettingsStore((state) => state.notificationsEnabled);
+  const largeText = useSettingsStore((state) => state.largeText);
+  const highContrast = useSettingsStore((state) => state.highContrast);
+  const appearance = useSettingsStore((state) => state.appearance);
+  const paletteId = useSettingsStore((state) => state.paletteId);
+  const setSetting = useSettingsStore((state) => state.set);
+
   const rescheduleAll = useReminderStore((state) => state.rescheduleAll);
   const medications = useMedicationStore(selectMedications);
   const notificationsAvailable = getNotificationService().isAvailable;
+
+  const [needsReload, setNeedsReload] = useState(false);
+
+  const appearanceOptions: readonly Option<AppearancePreference>[] = [
+    {
+      value: 'system',
+      label: t('settings.appearance.system'),
+      description: t('settings.appearance.systemDesc'),
+      icon: 'phone-portrait-outline',
+    },
+    {
+      value: 'light',
+      label: t('settings.appearance.light'),
+      description: t('settings.appearance.lightDesc'),
+      icon: 'sunny-outline',
+    },
+    {
+      value: 'dark',
+      label: t('settings.appearance.dark'),
+      description: t('settings.appearance.darkDesc'),
+      icon: 'moon-outline',
+    },
+  ];
+
+  const changeLanguage = (next: Language | null) => {
+    if (!next || next === language) return;
+    setSetting('language', next);
+    // Text changes at once; on the phone the layout direction needs a reload.
+    const { needsReload: reload } = applyDirection(next);
+    setNeedsReload(reload);
+  };
 
   const toggleNotifications = async (next: boolean) => {
     setSetting('notificationsEnabled', next);
@@ -89,19 +124,13 @@ export default function SettingsScreen() {
     }
   };
 
-  const largeText = useSettingsStore((state) => state.largeText);
-  const highContrast = useSettingsStore((state) => state.highContrast);
-  const appearance = useSettingsStore((state) => state.appearance);
-  const paletteId = useSettingsStore((state) => state.paletteId);
-  const setSetting = useSettingsStore((state) => state.set);
-
   const confirmSignOut = async () => {
     // confirmAction, not Alert.alert: the native alert is a silent no-op in
     // the browser, which made "Log out" do nothing on the web build.
     const confirmed = await confirmAction({
-      title: 'Log out of MediMind?',
-      message: 'Your saved medicines and reminders stay on this device.',
-      confirmLabel: 'Log out',
+      title: t('settings.logOutTitle'),
+      message: t('settings.logOutBody'),
+      confirmLabel: t('settings.logOut'),
       destructive: true,
     });
     if (confirmed) await signOut();
@@ -110,18 +139,13 @@ export default function SettingsScreen() {
   return (
     <Screen scroll>
       <View style={{ gap: theme.spacing.xl }}>
-        <AppText variant="title">Settings</AppText>
+        <AppText variant="title">{t('settings.title')}</AppText>
 
-        {/*
-          Honest warning when the device gave us no durable storage — usually
-          because the app is running in a web browser, where the native secure
-          store does not exist. The app still works; the data just won't last.
-        */}
         {isStoragePersistent() ? null : (
           <InlineMessage
             tone="warning"
-            title="Data will not be saved"
-            message="MediMind could not open secure storage here, so your account and settings will be lost when the app closes. This normally means the app is running in a web browser — open it with Expo Go on a phone for full functionality."
+            title={t('settings.dataNotSavedTitle')}
+            message={t('settings.dataNotSavedBody')}
           />
         )}
 
@@ -143,12 +167,12 @@ export default function SettingsScreen() {
             </View>
 
             <View style={{ flex: 1, gap: theme.spacing.xs }}>
-              <AppText variant="subheading">{user?.displayName ?? 'MediMind user'}</AppText>
+              <AppText variant="subheading">{user?.displayName ?? t('settings.userFallback')}</AppText>
               <AppText variant="caption" color="textSecondary">
-                {user?.email ?? 'Not signed in'}
+                {user?.email ?? t('settings.notSignedIn')}
               </AppText>
               <Badge
-                label={isLocalOnly ? 'Saved on this device' : 'Cloud account'}
+                label={isLocalOnly ? t('settings.savedOnDevice') : t('settings.cloudAccount')}
                 tone={isLocalOnly ? 'neutral' : 'success'}
                 icon={isLocalOnly ? 'phone-portrait-outline' : 'cloud-done-outline'}
               />
@@ -156,27 +180,66 @@ export default function SettingsScreen() {
           </View>
           {self ? (
             <Button
-              label="My profile"
+              label={t('settings.myProfile')}
               icon="person-circle-outline"
               variant="secondary"
               onPress={() => router.push({ pathname: '/family/[id]', params: { id: self.id } })}
-              accessibilityHint="Opens your profile: date of birth, gender, height, weight, blood type"
+              accessibilityHint={t('settings.myProfileHint')}
               style={{ marginTop: theme.spacing.md }}
             />
           ) : null}
         </Card>
 
+        {/* ---------- Language ---------- */}
+        <View style={{ gap: theme.spacing.md }}>
+          <AppText variant="heading">{t('settings.language')}</AppText>
+          <Card>
+            <View style={{ gap: theme.spacing.md }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
+                <Ionicons name="language-outline" size={24} color={theme.colors.primary} />
+                <AppText variant="body" color="textSecondary" style={{ flex: 1 }}>
+                  {t('settings.languageBody')}
+                </AppText>
+              </View>
+              <ChoiceChips
+                options={LANGUAGE_OPTIONS}
+                value={language}
+                onChange={changeLanguage}
+                accessibilityLabel={t('settings.languageLabel')}
+                allowClear={false}
+              />
+              {needsReload ? (
+                <View style={{ gap: theme.spacing.md }}>
+                  <InlineMessage
+                    tone="info"
+                    title={t('settings.reloadTitle')}
+                    message={t('settings.reloadBody')}
+                  />
+                  <Button
+                    label={t('settings.reloadNow')}
+                    icon="refresh"
+                    variant="secondary"
+                    onPress={() => {
+                      if (!reloadApp()) setNeedsReload(true);
+                    }}
+                  />
+                </View>
+              ) : null}
+            </View>
+          </Card>
+        </View>
+
         {/* ---------- Appearance ---------- */}
         <View style={{ gap: theme.spacing.md }}>
-          <AppText variant="heading">Appearance</AppText>
+          <AppText variant="heading">{t('settings.appearance')}</AppText>
 
           <View style={{ gap: theme.spacing.sm }}>
             <AppText variant="label" color="textMuted">
-              LIGHT OR DARK
+              {t('settings.lightOrDark')}
             </AppText>
             <OptionGroup
-              accessibilityLabel="Light or dark appearance"
-              options={APPEARANCE_OPTIONS}
+              accessibilityLabel={t('settings.lightOrDarkLabel')}
+              options={appearanceOptions}
               value={appearance}
               onChange={(next) => setSetting('appearance', next)}
             />
@@ -184,10 +247,10 @@ export default function SettingsScreen() {
 
           <View style={{ gap: theme.spacing.sm }}>
             <AppText variant="label" color="textMuted">
-              COLOUR THEME
+              {t('settings.colourTheme')}
             </AppText>
             <OptionGroup
-              accessibilityLabel="Colour theme"
+              accessibilityLabel={t('settings.colourThemeLabel')}
               options={PALETTE_OPTIONS}
               value={paletteId}
               onChange={(next) => setSetting('paletteId', next)}
@@ -195,21 +258,20 @@ export default function SettingsScreen() {
           </View>
 
           <AppText variant="caption" color="textMuted">
-            Every colour theme is checked to meet the WCAG AA contrast standard, so text stays
-            readable whichever you pick.
+            {t('settings.themeNote')}
           </AppText>
         </View>
 
-        {/* ---------- Accessibility (live) ---------- */}
+        {/* ---------- Accessibility ---------- */}
         <View style={{ gap: theme.spacing.md }}>
-          <AppText variant="heading">Accessibility</AppText>
+          <AppText variant="heading">{t('settings.accessibility')}</AppText>
 
           <Card>
             <View style={{ gap: theme.spacing.base }}>
               <ToggleRow
                 icon="text-outline"
-                title="Large text"
-                description="Increase the size of all text in the app."
+                title={t('settings.largeText')}
+                description={t('settings.largeTextDesc')}
                 value={largeText}
                 onValueChange={(next) => setSetting('largeText', next)}
               />
@@ -218,8 +280,8 @@ export default function SettingsScreen() {
 
               <ToggleRow
                 icon="contrast-outline"
-                title="High contrast"
-                description="Stronger text and border colours for easier reading."
+                title={t('settings.highContrast')}
+                description={t('settings.highContrastDesc')}
                 value={highContrast}
                 onValueChange={(next) => setSetting('highContrast', next)}
               />
@@ -227,57 +289,50 @@ export default function SettingsScreen() {
           </Card>
 
           <AppText variant="caption" color="textMuted">
-            These take effect immediately and are remembered next time you open MediMind. High
-            contrast replaces the colour theme with maximum-contrast black and white.
+            {t('settings.accessibilityNote')}
           </AppText>
         </View>
 
         {/* ---------- Reminders ---------- */}
         <View style={{ gap: theme.spacing.md }}>
-          <AppText variant="heading">Reminders</AppText>
+          <AppText variant="heading">{t('settings.reminders')}</AppText>
           <Card>
             <View style={{ gap: theme.spacing.base }}>
               <ToggleRow
                 icon="notifications-outline"
-                title="Medicine reminder notifications"
-                description={
-                  notificationsAvailable
-                    ? 'A notification at each reminder time, with Taken and Skip buttons.'
-                    : 'Not available in the browser. Open MediMind on your phone to be notified.'
-                }
+                title={t('settings.notifTitle')}
+                description={notificationsAvailable ? t('settings.notifDesc') : t('settings.notifDescWeb')}
                 value={notificationsEnabled}
                 onValueChange={(next) => void toggleNotifications(next)}
               />
             </View>
           </Card>
           <AppText variant="caption" color="textMuted">
-            Switching this off cancels every scheduled notification; the schedule in the app keeps
-            working. Reminders are never set for an expired medicine.
+            {t('settings.remindersNote')}
           </AppText>
         </View>
 
         {/* ---------- My health ---------- */}
         <View style={{ gap: theme.spacing.md }}>
-          <AppText variant="heading">My health</AppText>
+          <AppText variant="heading">{t('settings.myHealth')}</AppText>
           <Card>
             <View style={{ gap: theme.spacing.md }}>
               <AppText variant="body" color="textSecondary">
-                Long-term conditions and readings you want to keep a note of, for you or any
-                family member. Stored as you type them, never interpreted.
+                {t('settings.myHealthBody')}
               </AppText>
               <Button
-                label="Health conditions"
+                label={t('settings.healthConditions')}
                 icon="heart-outline"
                 variant="secondary"
                 onPress={() => router.push('/health/conditions')}
-                accessibilityHint="Opens the health conditions of the family member you are managing"
+                accessibilityHint={t('settings.healthConditionsHint')}
               />
               <Button
-                label="Family members"
+                label={t('settings.familyMembers')}
                 icon="people-outline"
                 variant="secondary"
                 onPress={() => router.push('/family')}
-                accessibilityHint="Opens the Family tab"
+                accessibilityHint={t('settings.familyMembersHint')}
               />
             </View>
           </Card>
@@ -285,13 +340,13 @@ export default function SettingsScreen() {
 
         {/* ---------- Not built yet ---------- */}
         <View style={{ gap: theme.spacing.md }}>
-          <AppText variant="heading">More settings</AppText>
+          <AppText variant="heading">{t('settings.moreSettings')}</AppText>
 
           <Card>
             <View style={{ gap: theme.spacing.base }}>
               {UPCOMING_SETTINGS.map((item) => (
                 <View
-                  key={item.label}
+                  key={item.key}
                   style={{
                     flexDirection: 'row',
                     alignItems: 'center',
@@ -300,9 +355,9 @@ export default function SettingsScreen() {
                   }}>
                   <Ionicons name={item.icon} size={22} color={theme.colors.textMuted} />
                   <AppText variant="body" color="textSecondary" style={{ flex: 1 }}>
-                    {item.label}
+                    {t(item.key)}
                   </AppText>
-                  <Badge label={item.milestone} tone="neutral" />
+                  <Badge label={t('common.milestone', { n: item.milestone })} tone="neutral" />
                 </View>
               ))}
             </View>
@@ -311,7 +366,7 @@ export default function SettingsScreen() {
 
         {/* ---------- About ---------- */}
         <View style={{ gap: theme.spacing.md }}>
-          <AppText variant="heading">About {APP_NAME}</AppText>
+          <AppText variant="heading">{t('settings.about', { app: APP_NAME })}</AppText>
 
           <Card>
             <View style={{ gap: theme.spacing.md }}>
@@ -321,19 +376,21 @@ export default function SettingsScreen() {
               </AppText>
               <View style={{ height: 1, backgroundColor: theme.colors.border }} />
               <AppText variant="caption" color="textSecondary">
-                {MEDICAL_DISCLAIMER}
+                {t('disclaimer.full')}
               </AppText>
               <View style={{ height: 1, backgroundColor: theme.colors.border }} />
-              {/* Deployment readout - lets anyone confirm which backends this
-                  build was configured with, without reading the bundle. */}
               <AppText variant="caption" color="textSecondary">
-                Cloud database: {isSupabaseConfigured ? 'configured' : 'not configured (accounts stay on this device)'}
+                {t('settings.cloudDatabase', {
+                  state: isSupabaseConfigured ? t('settings.configured') : t('settings.notConfiguredAccounts'),
+                })}
               </AppText>
               <AppText variant="caption" color="textSecondary">
-                Assistant server: {isAssistantConfigured ? 'configured' : 'not configured (offline assistant only)'}
+                {t('settings.assistantServer', {
+                  state: isAssistantConfigured ? t('settings.configured') : t('settings.notConfiguredOffline'),
+                })}
               </AppText>
               <AppText variant="caption" color="textMuted">
-                Version {Constants.expoConfig?.version ?? '1.0.0'}
+                {t('settings.version', { version: Constants.expoConfig?.version ?? '1.0.0' })}
               </AppText>
             </View>
           </Card>
@@ -341,11 +398,11 @@ export default function SettingsScreen() {
 
         {/* ---------- Logout ---------- */}
         <Button
-          label="Log out"
+          label={t('settings.logOut')}
           icon="log-out-outline"
           variant="danger"
           onPress={() => void confirmSignOut()}
-          accessibilityHint="Signs you out and returns to the login screen"
+          accessibilityHint={t('settings.logOutHint')}
         />
       </View>
     </Screen>

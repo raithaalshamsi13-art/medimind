@@ -10,11 +10,13 @@ import { FamilyMemberForm } from '@/components/family/FamilyMemberForm';
 import { Button, InlineMessage, Screen } from '@/components/ui';
 import { toFamilyMemberFormValues, type FamilyMemberInput } from '@/domain/familyMember';
 import { selectUser, useAuthStore } from '@/stores/useAuthStore';
+import { useT } from '@/i18n';
 import { memberById, selectMembers, useFamilyStore } from '@/stores/useFamilyStore';
 import { useTheme } from '@/theme/ThemeContext';
 
 export default function EditFamilyMemberScreen() {
   const theme = useTheme();
+  const { t } = useT();
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
   const user = useAuthStore(selectUser);
@@ -37,10 +39,10 @@ export default function EditFamilyMemberScreen() {
         <View style={{ gap: theme.spacing.lg }}>
           <InlineMessage
             tone="warning"
-            title="Family member not found"
-            message="This profile may have been removed."
+            title={t('family.notFoundTitle')}
+            message={t('family.notFoundBody')}
           />
-          <Button label="Go back" onPress={() => router.back()} />
+          <Button label={t('common.goBack')} onPress={() => router.back()} />
         </View>
       </Screen>
     );
@@ -52,7 +54,7 @@ export default function EditFamilyMemberScreen() {
         <FamilyMemberForm
           initialValues={toFamilyMemberFormValues(member)}
           isSelf={member.isSelf}
-          submitLabel="Save changes"
+          submitLabel={t('common.saveChanges')}
           isSubmitting={isSaving}
           onSubmit={handleSubmit}
           onCancel={() => router.back()}

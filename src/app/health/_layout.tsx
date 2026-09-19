@@ -6,16 +6,18 @@
 
 import { Stack } from 'expo-router';
 
+import { useT } from '@/i18n';
 import { useTheme } from '@/theme/ThemeContext';
 
 export default function HealthLayout() {
   const theme = useTheme();
+  const { t } = useT();
 
   return (
     <Stack
       screenOptions={{
         headerShown: true,
-        headerBackTitle: 'Back',
+        headerBackTitle: t('common.goBack'),
         contentStyle: { backgroundColor: theme.colors.background },
         headerStyle: { backgroundColor: theme.colors.surface },
         headerTintColor: theme.colors.primary,
@@ -25,7 +27,7 @@ export default function HealthLayout() {
           fontSize: theme.type.subheading.fontSize,
         },
       }}>
-      <Stack.Screen name="conditions" options={{ title: 'Health conditions' }} />
+      <Stack.Screen name="conditions" options={{ title: t('header.healthConditions') }} />
     </Stack>
   );
 }

@@ -21,6 +21,7 @@ import {
   toHealthProfileFormValues,
   type HealthProfileFormValues,
 } from '@/domain/familyMember';
+import { useT } from '@/i18n';
 import { fieldErrorsOf } from '@/lib/validation';
 import { selectUser, useAuthStore } from '@/stores/useAuthStore';
 import { selectSelf, useFamilyStore } from '@/stores/useFamilyStore';
@@ -30,6 +31,7 @@ type Field = keyof HealthProfileFormValues;
 
 export default function ProfileSetupScreen() {
   const theme = useTheme();
+  const { t } = useT();
   const router = useRouter();
   const user = useAuthStore(selectUser);
   const self = useFamilyStore(selectSelf);
@@ -85,14 +87,13 @@ export default function ProfileSetupScreen() {
             <Ionicons name="person-circle-outline" size={40} color={theme.colors.primary} />
           </View>
           <AppText variant="caption" color="textMuted">
-            STEP 2 OF 2
+            {t('profileSetup.step')}
           </AppText>
           <AppText variant="title" align="center">
-            Tell us a little about yourself
+            {t('profileSetup.title')}
           </AppText>
           <AppText variant="body" color="textSecondary" align="center">
-            This helps MediMind and its assistant keep your medicines in context. Everything here
-            is optional and you can change it later.
+            {t('profileSetup.subtitle')}
           </AppText>
         </View>
 
@@ -112,19 +113,19 @@ export default function ProfileSetupScreen() {
 
         <View style={{ gap: theme.spacing.md }}>
           <Button
-            label="Save and continue"
+            label={t('profileSetup.save')}
             icon="checkmark"
             size="large"
             onPress={() => void finish(true)}
             loading={isSaving}
-            accessibilityHint="Saves your profile and opens your dashboard"
+            accessibilityHint={t('profileSetup.saveHint')}
           />
           <Button
-            label="Skip for now"
+            label={t('common.skipForNow')}
             variant="secondary"
             onPress={() => void finish(false)}
             disabled={isSaving}
-            accessibilityHint="Opens your dashboard without saving these details"
+            accessibilityHint={t('profileSetup.skipHint')}
           />
         </View>
       </View>

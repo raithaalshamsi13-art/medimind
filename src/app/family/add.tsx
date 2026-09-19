@@ -14,10 +14,12 @@ import {
   type FamilyMemberInput,
 } from '@/domain/familyMember';
 import { selectUser, useAuthStore } from '@/stores/useAuthStore';
+import { useT } from '@/i18n';
 import { selectMembers, useFamilyStore } from '@/stores/useFamilyStore';
 
 export default function AddFamilyMemberScreen() {
   const router = useRouter();
+  const { t } = useT();
   const user = useAuthStore(selectUser);
 
   const members = useFamilyStore(selectMembers);
@@ -36,7 +38,7 @@ export default function AddFamilyMemberScreen() {
   if (!user) {
     return (
       <Screen scroll>
-        <InlineMessage tone="warning" message="You need to be signed in to add a family member." />
+        <InlineMessage tone="warning" message={t('family.signInToAdd')} />
       </Screen>
     );
   }
@@ -47,7 +49,7 @@ export default function AddFamilyMemberScreen() {
         <FamilyMemberForm
           initialValues={emptyFamilyMemberForm(nextAvatarColor(members))}
           isSelf={false}
-          submitLabel="Add family member"
+          submitLabel={t('family.add')}
           isSubmitting={isSaving}
           onSubmit={handleSubmit}
           onCancel={() => router.back()}

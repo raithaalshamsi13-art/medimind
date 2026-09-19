@@ -28,15 +28,8 @@ import { LogoMark } from '@/components/brand/Logo';
 import { MemberContextBanner } from '@/components/family/MemberContextBanner';
 import { AppText, Button, Card, InlineMessage, Screen } from '@/components/ui';
 import { isAssistantConfigured } from '@/config/env';
-import {
-  ASSISTANT_ACKNOWLEDGEMENT,
-  ASSISTANT_SAFETY_NOTE,
-  MAX_QUESTION_LENGTH,
-  SUGGESTED_QUESTIONS,
-  suggestedQuestionsFor,
-  toPersonContext,
-  type AssistantMessage,
-} from '@/domain/assistant';
+import { MAX_QUESTION_LENGTH, toPersonContext, type AssistantMessage } from '@/domain/assistant';
+import { useT } from '@/i18n';
 import { useAssistantStore } from '@/stores/useAssistantStore';
 import {
   forMember,
@@ -52,6 +45,7 @@ import { useTheme } from '@/theme/ThemeContext';
 
 export default function AssistantScreen() {
   const theme = useTheme();
+  const { t, language } = useT();
   const router = useRouter();
   const { medicationId } = useLocalSearchParams<{ medicationId?: string }>();
 
@@ -96,12 +90,18 @@ export default function AssistantScreen() {
   const preferAi = isAssistantConfigured;
 
   const suggestions = useMemo(() => {
-    if (focus) return suggestedQuestionsFor(focus.name);
+    if (focus) {
+      return [
+        t('assistant.q.nextDoseOf', { name: focus.name }),
+        t('assistant.q.howMuch', { name: focus.name }),
+        t('assistant.q.usedFor', { name: focus.name }),
+        t('assistant.q.sideEffects', { name: focus.name }),
+      ];
+    }
+    const general = [t('assistant.q.nextDose'), t('assistant.q.expiresFirst'), t('assistant.q.missed')];
     const first = medications[0];
-    return first
-      ? [...SUGGESTED_QUESTIONS.slice(0, 3), `What is ${first.name} usually used for?`]
-      : SUGGESTED_QUESTIONS;
-  }, [focus, medications]);
+    return first ? [...general, t('assistant.q.usedFor', { name: first.name })] : [...general, t('assistant.q.help')];
+  }, [focus, medications, t]);
   const hasConversation = messages.length > 1;
 
   useEffect(() => {
@@ -112,7 +112,7 @@ export default function AssistantScreen() {
     const question = text.trim();
     if (question.length === 0 || isThinking) return;
     setDraft('');
-    await ask(question, medications, person, preferAi);
+    await ask(question, medications, person, preferAi, language);
   };
 
   // ---------------------------------------------------------------------------
@@ -139,29 +139,29 @@ export default function AssistantScreen() {
               />
             </View>
             <AppText variant="title" align="center">
-              Before you start
+              {t('assistant.beforeYouStart')}
             </AppText>
           </View>
 
           <Card>
-            <AppText variant="bodyLarge">{ASSISTANT_ACKNOWLEDGEMENT}</AppText>
+            <AppText variant="bodyLarge">{t('assistant.acknowledgement')}</AppText>
           </Card>
 
           <InlineMessage
             tone="warning"
-            title="Not medical advice"
-            message="If you ever feel unwell or unsure about a medicine, contact your doctor or pharmacist — not this app."
+            title={t('assistant.notAdviceTitle')}
+            message={t('assistant.notAdviceBody')}
           />
 
           <View style={{ gap: theme.spacing.md }}>
             <Button
-              label="I understand"
+              label={t('assistant.iUnderstand')}
               icon="checkmark"
               size="large"
               onPress={() => setSetting('assistantDisclaimerAcknowledged', true)}
-              accessibilityHint="Accepts the notice and opens the assistant"
+              accessibilityHint={t('assistant.iUnderstandHint')}
             />
-            <Button label="Not now" variant="secondary" onPress={() => router.replace('/')} />
+            <Button label={t('common.notNow')} variant="secondary" onPress={() => router.replace('/')} />
           </View>
         </View>
       </Screen>
@@ -189,7 +189,7 @@ export default function AssistantScreen() {
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
           <LogoMark size={44} />
           <View style={{ flex: 1, gap: theme.spacing.xxs }}>
-            <AppText variant="subheading">MediMind Assistant</AppText>
+            <AppText variant="subheading">{t('assistant.name')}</AppText>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.xs }}>
               <View
                 style={{
@@ -200,7 +200,7 @@ export default function AssistantScreen() {
                 }}
               />
               <AppText variant="caption" color="textSecondary">
-                {preferAi ? 'AI chat · falls back to offline answers' : 'Offline · reads your records back'}
+                {preferAi ? t('assistant.statusAi') : t('assistant.statusOffline')}
               </AppText>
             </View>
           </View>
@@ -208,7 +208,7 @@ export default function AssistantScreen() {
             <Pressable
               onPress={reset}
               accessibilityRole="button"
-              accessibilityLabel="Start a new conversation"
+              accessibilityLabel={t('assistant.newConversation')}
               hitSlop={8}
               style={({ pressed }) => ({
                 width: theme.touch.minTarget,
@@ -226,7 +226,7 @@ export default function AssistantScreen() {
         {member && !member.isSelf ? (
           <MemberContextBanner
             member={member}
-            prefix="Chatting about medicines for"
+            prefix={t('assistant.chattingFor')}
             onChange={() => router.push('/family')}
           />
         ) : null}
@@ -234,7 +234,7 @@ export default function AssistantScreen() {
         <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: theme.spacing.xs }}>
           <Ionicons name="alert-circle-outline" size={16} color={theme.colors.warningText} style={{ marginTop: 2 }} />
           <AppText variant="caption" color="textSecondary" style={{ flex: 1 }}>
-            {ASSISTANT_SAFETY_NOTE}
+            {t('assistant.safetyNote')}
           </AppText>
         </View>
       </View>
@@ -292,7 +292,7 @@ export default function AssistantScreen() {
                 key={question}
                 onPress={() => void send(question)}
                 accessibilityRole="button"
-                accessibilityLabel={`Ask: ${question}`}
+                accessibilityLabel={t('assistant.askPrefix', { question })}
                 style={({ pressed }) => ({
                   minHeight: theme.touch.minTarget,
                   justifyContent: 'center',
@@ -333,15 +333,15 @@ export default function AssistantScreen() {
             <TextInput
               value={draft}
               onChangeText={setDraft}
-              placeholder="Message MediMind…"
+              placeholder={t('assistant.messagePlaceholder')}
               placeholderTextColor={theme.colors.textMuted}
               multiline
               maxLength={MAX_QUESTION_LENGTH}
               autoCapitalize="sentences"
               autoCorrect
               editable={!isThinking}
-              accessibilityLabel="Message"
-              accessibilityHint="Type a question about your saved medicines"
+              accessibilityLabel={t('assistant.messageLabel')}
+              accessibilityHint={t('assistant.messageHint')}
               allowFontScaling
               style={{
                 color: theme.colors.text,
@@ -356,7 +356,7 @@ export default function AssistantScreen() {
             onPress={() => void send(draft)}
             disabled={!canSend}
             accessibilityRole="button"
-            accessibilityLabel="Send"
+            accessibilityLabel={t('assistant.send')}
             accessibilityState={{ disabled: !canSend }}
             style={({ pressed }) => ({
               width: theme.touch.comfortable,

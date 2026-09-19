@@ -36,7 +36,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { ProviderError, selectProvider, type Turn } from './providers.js';
 
 /** Bumped on every change so /health shows which code is live. */
-const VERSION = '1.4.1';
+const VERSION = '1.5.0';
 
 const MAX_QUESTION_LENGTH = 500;
 const MAX_HISTORY_TURNS = 10;
@@ -102,7 +102,16 @@ type PersonContext = {
   bloodType: string | null;
   conditions: { name: string; reading: string | null }[];
 };
-type Body = { question?: unknown; history?: unknown; medications?: unknown; person?: unknown };
+type Body = {
+  question?: unknown;
+  history?: unknown;
+  medications?: unknown;
+  person?: unknown;
+  /** 'en' | 'ar' — the app's UI language; the reply is written in it. */
+  language?: unknown;
+};
+
+const LANGUAGE_NAMES: Record<string, string> = { en: 'English', ar: 'Arabic' };
 
 const MAX_CONDITIONS = 30;
 
@@ -301,10 +310,16 @@ async function handleAssistant(req: IncomingMessage, res: ServerResponse): Promi
     : [];
   // A malformed profile is dropped, not rejected: the medicines still answer.
   const person = isPerson(body.person) ? body.person : null;
+  const language =
+    typeof body.language === 'string' && body.language in LANGUAGE_NAMES ? body.language : 'en';
+  const languageRule =
+    language === 'en'
+      ? ''
+      : `\n\nLANGUAGE: The app is set to ${LANGUAGE_NAMES[language]}. Write your whole reply in ${LANGUAGE_NAMES[language]}, including the closing sentence (translate it faithfully). Keep medicine names as recorded.`;
 
   try {
     const result = await provider.complete({
-      system: SYSTEM_PROMPT,
+      system: SYSTEM_PROMPT + languageRule,
       medicationsText: `${describePerson(person)}\n\n${describeMedications(medications)}`,
       history,
       question,

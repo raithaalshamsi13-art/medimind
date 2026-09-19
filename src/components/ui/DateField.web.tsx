@@ -15,6 +15,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { format, parseISO } from 'date-fns';
 import { View, type ViewStyle } from 'react-native';
 
+import { useT } from '@/i18n';
+import { localizeMessage } from '@/i18n/labels';
 import { useTheme } from '@/theme/ThemeContext';
 
 import { AppText } from './AppText';
@@ -42,6 +44,7 @@ export function DateField({
   style,
 }: DateFieldProps) {
   const theme = useTheme();
+  const { t } = useT();
   const hasError = Boolean(error);
   const isSet = /^\d{4}-\d{2}-\d{2}$/.test(value) && !Number.isNaN(parseISO(value).getTime());
 
@@ -89,7 +92,7 @@ export function DateField({
 
       {isSet ? (
         <Button
-          label="Clear date"
+          label={t('ui.clearDate')}
           onPress={() => onChange('')}
           variant="ghost"
           icon="close-circle-outline"
@@ -106,7 +109,7 @@ export function DateField({
             style={{ marginTop: 2 }}
           />
           <AppText variant="caption" color="dangerText" style={{ flex: 1 }}>
-            {error}
+            {localizeMessage(error ?? '')}
           </AppText>
         </View>
       ) : helper ? (

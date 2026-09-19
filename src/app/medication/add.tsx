@@ -29,10 +29,12 @@ import {
 } from '@/stores/useFamilyStore';
 import { selectConditions, useHealthConditionStore } from '@/stores/useHealthConditionStore';
 import { useMedicationStore } from '@/stores/useMedicationStore';
+import { useT } from '@/i18n';
 import { useTheme } from '@/theme/ThemeContext';
 
 export default function AddMedicationScreen() {
   const theme = useTheme();
+  const { t } = useT();
   const router = useRouter();
   const { memberId } = useLocalSearchParams<{ memberId?: string }>();
   const user = useAuthStore(selectUser);
@@ -85,7 +87,7 @@ export default function AddMedicationScreen() {
       <Screen scroll>
         <InlineMessage
           tone="warning"
-          message="You need to be signed in to add a medicine."
+          message={t('form.signInToAdd')}
         />
       </Screen>
     );
@@ -97,10 +99,10 @@ export default function AddMedicationScreen() {
         <View style={{ gap: theme.spacing.lg }}>
           <InlineMessage
             tone="warning"
-            title="Who is this medicine for?"
-            message="Choose a family member first, so the medicine is saved under the right person."
+            title={t('form.whoForTitle')}
+            message={t('form.whoForBody')}
           />
-          <Button label="Go to Family" icon="people-outline" onPress={() => router.push('/family')} />
+          <Button label={t('form.goToFamily')} icon="people-outline" onPress={() => router.push('/family')} />
         </View>
       </Screen>
     );
@@ -111,12 +113,12 @@ export default function AddMedicationScreen() {
       <View style={{ gap: theme.spacing.lg }}>
         <MemberContextBanner
           member={member}
-          prefix="Adding medicine for"
+          prefix={t('form.addingFor')}
           onChange={() => router.push('/family')}
         />
         <MedicationForm
           initialValues={EMPTY_MEDICATION_FORM}
-          submitLabel={`Save medicine for ${member.isSelf ? 'me' : member.name}`}
+          submitLabel={member.isSelf ? t('form.saveMedicineForMe') : t('form.saveMedicineFor', { name: member.name })}
           isSubmitting={isSaving}
           onSubmit={handleSubmit}
           onCancel={() => router.back()}

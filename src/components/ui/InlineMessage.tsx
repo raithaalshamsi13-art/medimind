@@ -9,6 +9,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { View, type ViewStyle } from 'react-native';
 
+import { localizeMessage } from '@/i18n/labels';
 import { useTheme } from '@/theme/ThemeContext';
 
 import { AppText } from './AppText';
@@ -30,8 +31,11 @@ const DEFAULT_ICONS: Record<InlineMessageTone, keyof typeof Ionicons.glyphMap> =
   danger: 'alert-circle',
 };
 
-export function InlineMessage({ message, tone = 'info', title, style }: InlineMessageProps) {
+export function InlineMessage({ message: rawMessage, tone = 'info', title: rawTitle, style }: InlineMessageProps) {
   const theme = useTheme();
+  // Messages from the domain / error layers arrive in English; translate by lookup.
+  const message = localizeMessage(rawMessage);
+  const title = rawTitle ? localizeMessage(rawTitle) : rawTitle;
 
   const palette: Record<InlineMessageTone, { bg: string; fg: string; border: string }> = {
     info: { bg: theme.colors.infoSoft, fg: theme.colors.infoText, border: theme.colors.info },

@@ -16,12 +16,13 @@ import { MemberContextBanner } from '@/components/family/MemberContextBanner';
 import { HealthConditionEditor } from '@/components/health/HealthConditionEditor';
 import { AppText, Button, Card, InlineMessage, Screen } from '@/components/ui';
 import {
-  conditionDisplayName,
   EMPTY_CONDITION_FORM,
   toConditionFormValues,
   type HealthCondition,
   type HealthConditionInput,
 } from '@/domain/healthCondition';
+import { useT } from '@/i18n';
+import { conditionNameT } from '@/i18n/labels';
 import { confirmAction } from '@/lib/confirm';
 import { selectUser, useAuthStore } from '@/stores/useAuthStore';
 import {
@@ -39,6 +40,7 @@ type Mode = { kind: 'list' } | { kind: 'add' } | { kind: 'edit'; condition: Heal
 
 export default function HealthConditionsScreen() {
   const theme = useTheme();
+  const { t } = useT();
   const router = useRouter();
   const { memberId } = useLocalSearchParams<{ memberId?: string }>();
   const user = useAuthStore(selectUser);
@@ -67,7 +69,7 @@ export default function HealthConditionsScreen() {
   if (!user) {
     return (
       <Screen scroll>
-        <InlineMessage tone="warning" message="You need to be signed in to see health conditions." />
+        <InlineMessage tone="warning" message={t('conditions.signIn')} />
       </Screen>
     );
   }
@@ -78,10 +80,10 @@ export default function HealthConditionsScreen() {
         <View style={{ gap: theme.spacing.lg }}>
           <InlineMessage
             tone="warning"
-            title="Whose conditions?"
-            message="Choose a family member first, so the conditions are saved under the right person."
+            title={t('conditions.whoseTitle')}
+            message={t('conditions.whoseBody')}
           />
-          <Button label="Go to Family" icon="people-outline" onPress={() => router.push('/family')} />
+          <Button label={t('form.goToFamily')} icon="people-outline" onPress={() => router.push('/family')} />
         </View>
       </Screen>
     );
@@ -99,10 +101,9 @@ export default function HealthConditionsScreen() {
 
   const handleRemove = async (condition: HealthCondition) => {
     const confirmed = await confirmAction({
-      title: `Remove ${conditionDisplayName(condition)}?`,
-      message:
-        'It will be unlinked from any medicines. The medicines themselves are not deleted.',
-      confirmLabel: 'Remove',
+      title: t('conditions.removeTitle', { name: conditionNameT(t, condition) }),
+      message: t('conditions.removeBody'),
+      confirmLabel: t('common.remove'),
       destructive: true,
     });
     if (!confirmed) return;
@@ -114,20 +115,19 @@ export default function HealthConditionsScreen() {
   return (
     <Screen scroll keyboardAvoiding>
       <View style={{ gap: theme.spacing.xl }}>
-        <MemberContextBanner member={member} prefix="Health conditions for" />
+        <MemberContextBanner member={member} prefix={t('conditions.for')} />
 
         <AppText variant="body" color="textSecondary">
-          Keep a note of long-term conditions and the latest readings you want to remember.
-          MediMind stores them as you type them and does not interpret them.
+          {t('conditions.intro')}
         </AppText>
 
         {mode.kind === 'add' ? (
           <Card>
             <View style={{ gap: theme.spacing.md }}>
-              <AppText variant="heading">New condition</AppText>
+              <AppText variant="heading">{t('conditions.new')}</AppText>
               <HealthConditionEditor
                 initialValues={EMPTY_CONDITION_FORM}
-                submitLabel="Save condition"
+                submitLabel={t('conditions.save')}
                 isSubmitting={isSaving}
                 onSubmit={(input) => void handleCreate(input)}
                 onCancel={() => setMode({ kind: 'list' })}
@@ -137,7 +137,7 @@ export default function HealthConditionsScreen() {
           </Card>
         ) : (
           <Button
-            label="Add a condition"
+            label={t('conditions.add')}
             icon="add-circle-outline"
             onPress={() => setMode({ kind: 'add' })}
             disabled={mode.kind === 'edit'}
@@ -149,8 +149,10 @@ export default function HealthConditionsScreen() {
             <View style={{ alignItems: 'center', gap: theme.spacing.md }}>
               <Ionicons name="heart-outline" size={40} color={theme.colors.textMuted} />
               <AppText variant="body" color="textSecondary" align="center">
-                No conditions recorded for {member.isSelf ? 'you' : member.name} yet. Add one to
-                link it to {member.isSelf ? 'your' : 'their'} medicines.
+                {t('conditions.noneFor', {
+                  name: member.isSelf ? t('conditions.you') : member.name,
+                  their: member.isSelf ? t('conditions.your') : t('conditions.their'),
+                })}
               </AppText>
             </View>
           </Card>
@@ -160,10 +162,10 @@ export default function HealthConditionsScreen() {
           mode.kind === 'edit' && mode.condition.id === condition.id ? (
             <Card key={condition.id}>
               <View style={{ gap: theme.spacing.md }}>
-                <AppText variant="heading">Edit condition</AppText>
+                <AppText variant="heading">{t('conditions.editTitle')}</AppText>
                 <HealthConditionEditor
                   initialValues={toConditionFormValues(condition)}
-                  submitLabel="Save changes"
+                  submitLabel={t('common.saveChanges')}
                   isSubmitting={isSaving}
                   onSubmit={(input) => void handleUpdate(condition.id, input)}
                   onCancel={() => setMode({ kind: 'list' })}
@@ -198,6 +200,7 @@ function ConditionCard({
   onRemove: () => void;
 }) {
   const theme = useTheme();
+  const { t } = useT();
 
   return (
     <Card>
@@ -205,23 +208,23 @@ function ConditionCard({
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
           <Ionicons name="heart-outline" size={24} color={theme.colors.primary} />
           <AppText variant="subheading" style={{ flex: 1 }}>
-            {conditionDisplayName(condition)}
+            {conditionNameT(t, condition)}
           </AppText>
         </View>
 
         <View style={{ gap: theme.spacing.xs }}>
           <AppText variant="label" color="textMuted">
-            LATEST READING
+            {t('conditions.latestReading')}
           </AppText>
           <AppText variant="body" color={condition.reading ? 'text' : 'textMuted'}>
-            {condition.reading ?? 'Not recorded'}
+            {condition.reading ?? t('common.notRecorded')}
           </AppText>
         </View>
 
         {condition.notes ? (
           <View style={{ gap: theme.spacing.xs }}>
             <AppText variant="label" color="textMuted">
-              NOTES
+              {t('conditions.notes')}
             </AppText>
             <AppText variant="body">{condition.notes}</AppText>
           </View>
@@ -229,7 +232,7 @@ function ConditionCard({
 
         <View style={{ flexDirection: 'row', gap: theme.spacing.md }}>
           <Button
-            label="Edit"
+            label={t('common.edit')}
             icon="create-outline"
             variant="secondary"
             onPress={onEdit}
@@ -237,7 +240,7 @@ function ConditionCard({
             style={{ flex: 1 }}
           />
           <Button
-            label="Remove"
+            label={t('common.remove')}
             icon="trash-outline"
             variant="danger"
             onPress={onRemove}

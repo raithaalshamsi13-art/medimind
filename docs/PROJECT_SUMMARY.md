@@ -6,7 +6,7 @@ A complete record of what has been built so far, why it was built that way, and
 what remains. Written to be lifted straight into a graduation report or used as
 speaker notes for the demonstration.
 
-_Last updated 13 September 2026. Every number below was read from the
+_Last updated 19 September 2026. Every number below was read from the
 repository, not estimated. This file is kept current with every commit: each
 step adds an entry to §18 (change log) and updates the sections it touches._
 
@@ -19,9 +19,9 @@ step adds an entry to §18 (change log) and updates the sections it touches._
 | Concept | **SCAN → CHECK → CONFIRM → REMIND → TRACK** — verify the medicine before scheduling anything |
 | Platform | iPhone via Expo Go (primary); web browser (UI work only) |
 | Stack | Expo SDK 57 · React Native 0.86 · React 19.2 · TypeScript 6 · Expo Router · SQLite · Zustand · Zod |
-| Source | 191 tracked files · ~19,500 lines across `src/`, tests, the API server, scripts and SQL |
-| Tests | **315 passing** in 18 suites — including real-SQLite tests and a WCAG contrast checker |
-| Commits | 42, all verified (typecheck + tests + iOS and web bundles) before committing |
+| Source | 196 tracked files · ~21,500 lines across `src/`, tests, the API server, scripts and SQL |
+| Tests | **325 passing** in 19 suites — including real-SQLite tests and a WCAG contrast checker |
+| Commits | 44, all verified (typecheck + tests + iOS and web bundles) before committing |
 | Milestones | M1 Foundation ✅ · M2 UI & Auth ✅ · M3 Database & CRUD ✅ · Assistant ✅ · Deployment ✅ · Structured entry + health conditions ✅ · Family profiles ✅ · Personal health profile ✅ · M5 Reminders ✅ · M4 Scanner ⬜ (deferred) · M6 Polish ⬜ |
 | Live | Web: https://medimind-medimind3.vercel.app · API: Railway (`/health` shows version + model) · Accounts/DB: Supabase |
 | Native build needed | **None.** Everything runs in Expo Go — no Xcode, no Mac, no Android Studio, no Apple developer account |
@@ -300,6 +300,41 @@ REMIND and TRACK. Built on the dose parser from the assistant work.
 - **Per family member**: every reminder and dose carries `member_id`; the
   Schedule tab has the same switcher and banner as the rest of the app.
 
+### 4.4e Arabic — a second language for the whole app
+
+- **Setting**: Settings → **Language** — English / العربية chips. Text
+  changes at once; Arabic also switches the layout to right-to-left
+  (immediately on the web, after one reload on the phone — the screen says so
+  and offers **Reload now**). The choice is remembered.
+- **How it is built** (`src/i18n/`): a typed dictionary. `en.ts` defines the
+  key list (≈450 strings); `ar.ts` is `Record<keyof typeof en, string>`, so a
+  missing Arabic string is a compile error. `useT()` gives `t(key, params)`
+  and re-renders on change; `tNow()` serves stores and services. No extra
+  library.
+- **Everything is covered**: every screen and component, tab and header
+  titles, enum labels (medicine type / form / units / frequency chips /
+  instruction chips / conditions and their reading hints / relationships /
+  genders / blood types / dose statuses / weekdays / avatar colours), dates
+  (date-fns `ar` locale), times ("8:00 م"), plurals (`_one` / `_other`),
+  notification wording, the assistant's intro, acknowledgement, quick
+  replies and fixed safety replies, and validation / error messages.
+- **Messages from the domain layer** (Zod schemas, the error catalogue,
+  repository refusals) are still produced in English so the tests keep their
+  meaning; `localizeMessage()` translates them at display time by exact
+  lookup in `InlineMessage`, `TextField`, `DateField`, `TimeField` and the
+  chip error captions. Anything the user typed passes through untouched.
+- **Stored text stays English on purpose**: chips show Arabic labels but
+  compose to the same `"Twice daily"` / `"With food"` the dose parser and the
+  assistant understand; recognised stored values are shown translated
+  (`frequencyDisplayT`), unrecognised ones as recorded.
+- **The AI answers in Arabic** when the app is in Arabic: the request carries
+  `language`, and server **v1.5.0** adds a rule to write the whole reply,
+  closing sentence included, in that language. The offline rule-based
+  assistant still answers in English and says so on the bubble.
+- Tests: `i18n/translate` — every key present in both languages with the
+  same placeholders, interpolation, `localizeMessage` lookup, counts, times,
+  expiry labels, frequency display, possessives.
+
 ### 4.5 Ask MediMind — the assistant (a chat)
 
 Reached from the **Ask** tab or a medicine's **Ask about this medicine** button.
@@ -519,10 +554,11 @@ demo cannot be broken by a missing key or a dead network.
 
 ## 9. Testing and verification
 
-**315 tests in 18 suites**, all passing:
+**325 tests in 19 suites**, all passing:
 
 | Suite | Covers |
 |---|---|
+| `i18n/translate` | every English key has an Arabic string with matching placeholders, interpolation, `localizeMessage` lookup, counts, 12-hour times per language, expiry wording, frequency display, possessives |
 | `db/ReminderRepository` | reminder CRUD, one per medicine, notification ids, per-user isolation; doses created once per occurrence, status kept on re-seed, missed sweep only touches UPCOMING before the cutoff, follow-up id; cascades from medicine and family member — **both** backends |
 | `domain/reminder` | suggestion from the label (blocked when expired, none when not understood, as-needed), input schema (sorted unique times, days rules, date order), occurrences per day, grace window, wording helpers |
 | `db/migrations` | schema version, idempotence, indexes, every CHECK constraint; v2 columns, condition-type CHECK, link cascade; v3 one-"Me" index, relationship/colour CHECKs, member_id FK + cascade; v4 profile columns default null, value lists and ranges enforced; v5 one reminder per medicine, one dose per occurrence, enums, cascades |
@@ -645,7 +681,7 @@ This is where each one stands.
 | 12 Missed dose (gentle reminder, never "double up") | ✅ Done | Swept to MISSED after 120 min; one gentle follow-up notification per dose, cancelled when marked; never "take it now" |
 | 13 Voice alerts (TTS, toggle in Settings) | ⬜ Not started | `voiceAlertsEnabled` setting exists; `expo-speech` not yet wired |
 | 14 Offline support | ✅ Done by design | Local-first SQLite, on-device auth, offline assistant; AI features say so when they need internet |
-| 15 Settings (profile, notifications, voice, accessibility, privacy, about, logout) | ◐ Partial | Profile, appearance, accessibility, about, logout done; notifications / voice / privacy screens pending |
+| 15 Settings (profile, notifications, voice, accessibility, privacy, about, logout) | ◐ Mostly done | Profile, language (English / Arabic, RTL), appearance, accessibility, reminder notifications, health shortcuts, about, logout done; voice / privacy pending |
 | 16 Accessibility | ◐ Strong foundation | Large text, high contrast, WCAG-checked palettes, 48 pt targets, labels never colour-only; a final screen-reader pass remains |
 | 17 Error handling (friendly messages everywhere) | ◐ Partial | `Result<T>` + error catalogue used throughout; camera / notification / OCR cases arrive with their features |
 | 18 Security | ◐ Partial | No secrets in the bundle, per-user scoping, minimal data, no admin login; Supabase RLS pending |
@@ -935,6 +971,7 @@ will work with no internet and no API key — exactly as the brief requires.
 | Tab bar (icon-only portrait / labels landscape) | `src/app/(tabs)/_layout.tsx` |
 | Cloud schema + RLS (Supabase) | `supabase/schema.sql` |
 | Deployment guide | `docs/DEPLOYMENT.md` |
+| Translations (English / Arabic), RTL, label helpers | `src/i18n/` (`en.ts`, `ar.ts`, `labels.ts`, `index.ts`) |
 | Contrast checker | `scripts/check-contrast.js` |
 | Icon generation | `scripts/generate-icons.ps1` |
 | Real-SQLite test adapter | `__tests__/helpers/testDatabase.ts` |
@@ -946,6 +983,26 @@ will work with no internet and no API key — exactly as the brief requires.
 Newest first. Every commit that changes the app adds an entry here **in the
 same commit**, and updates the sections above that it touches (rule in
 `AGENTS.md`, "Verify before claiming done").
+
+### 2026-09-19 — Arabic language switch, right-to-left, AI replies in Arabic
+- **Settings → Language** (English / العربية). Typed dictionaries in
+  `src/i18n/` (`en.ts` is the key list, `ar.ts` must match — compile-time
+  check); `useT()` / `tNow()`; `labels.ts` for enum labels, counts, times,
+  expiry wording and `localizeMessage()` (translates English messages from
+  Zod / errors / repositories at display time by exact lookup).
+- Every screen, component, header, tab, chip label, badge, notification and
+  assistant fixed text converted; dates and clock times localised
+  (date-fns `ar`, "8:00 م"); `AppText` sets `writingDirection`;
+  `applyDirection()` flips the layout (web immediately via `dir="rtl"`,
+  phone after a reload the screen offers).
+- Server **v1.5.0**: the request carries `language`; the prompt instructs
+  the model to reply entirely in Arabic when set. Offline assistant remains
+  English, noted on the bubble.
+- Stored dosage / frequency / instructions stay English (chips translate
+  labels only) so the dose parser and assistant keep working; recognised
+  values display translated.
+- Tests: new `i18n/translate` suite (+9). Rule added to `AGENTS.md`: every
+  user-facing string via the dictionary.
 
 ### 2026-09-13 — Milestone 5, steps 4–5: notifications and missed doses
 - **Notifications** (`ExpoNotificationService`): a repeating local

@@ -12,16 +12,17 @@ import { View } from 'react-native';
 
 import { AuthHeader } from '@/components/auth/AuthHeader';
 import { AppText, Button, InlineMessage, Screen, TextField, TextLink } from '@/components/ui';
-import { MEDICAL_DISCLAIMER_SHORT } from '@/config/constants';
 import { signUpSchema } from '@/domain/user';
 import { fieldErrorsOf } from '@/lib/validation';
 import { useAuthStore } from '@/stores/useAuthStore';
+import { useT } from '@/i18n';
 import { useTheme } from '@/theme/ThemeContext';
 
 type SignUpField = 'displayName' | 'email' | 'password';
 
 export default function SignUpScreen() {
   const theme = useTheme();
+  const { t } = useT();
   const router = useRouter();
 
   const signUp = useAuthStore((state) => state.signUp);
@@ -56,27 +57,27 @@ export default function SignUpScreen() {
     <Screen scroll keyboardAvoiding>
       <View style={{ gap: theme.spacing.xl, paddingTop: theme.spacing.xl }}>
         <AuthHeader
-          title="Create your account"
-          subtitle="You only need three details to get started."
+          title={t('auth.signup.title')}
+          subtitle={t('auth.signup.subtitle')}
         />
 
         {error ? <InlineMessage tone="danger" message={error.message} /> : null}
 
         <View style={{ gap: theme.spacing.base }}>
           <TextField
-            label="Your name"
+            label={t('auth.signup.yourName')}
             value={displayName}
             onChangeText={setDisplayName}
-            placeholder="Omar"
+            placeholder={t('auth.signup.namePlaceholder')}
             error={fieldErrors.displayName}
             autoCapitalize="words"
             autoComplete="name"
             textContentType="name"
-            helper="Used to greet you on the home screen."
+            helper={t('auth.signup.nameHelper')}
           />
 
           <TextField
-            label="Email"
+            label={t('auth.email')}
             value={email}
             onChangeText={setEmail}
             placeholder="name@example.com"
@@ -87,37 +88,37 @@ export default function SignUpScreen() {
           />
 
           <TextField
-            label="Password"
+            label={t('auth.password')}
             value={password}
             onChangeText={setPassword}
-            placeholder="At least 8 characters"
+            placeholder={t('auth.signup.passwordPlaceholder')}
             error={fieldErrors.password}
             secure
             autoComplete="new-password"
             textContentType="newPassword"
-            helper="At least 8 characters."
+            helper={t('auth.signup.passwordHelper')}
             returnKeyType="go"
             onSubmitEditing={onSubmit}
           />
         </View>
 
         <Button
-          label="Create account"
+          label={t('auth.signup.button')}
           onPress={onSubmit}
           loading={isSubmitting}
           size="large"
-          accessibilityHint="Creates your account and opens your dashboard"
+          accessibilityHint={t('auth.signup.buttonHint')}
         />
 
         <View style={{ alignItems: 'center', gap: theme.spacing.xs }}>
           <AppText variant="body" color="textSecondary">
-            Already have an account?
+            {t('auth.signup.haveAccount')}
           </AppText>
-          <TextLink label="Log in instead" onPress={() => router.back()} />
+          <TextLink label={t('auth.signup.logInInstead')} onPress={() => router.back()} />
         </View>
 
         <AppText variant="caption" color="textMuted" align="center">
-          {MEDICAL_DISCLAIMER_SHORT}
+          {t('disclaimer.short')}
         </AppText>
       </View>
     </Screen>

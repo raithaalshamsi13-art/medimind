@@ -35,16 +35,16 @@ import {
 } from '@/components/ui';
 import { formatIsoDate } from '@/lib/datetime';
 import {
-  describeTimes,
   reminderInputSchema,
   suggestReminder,
-  WEEKDAY_LABELS,
   WEEKDAYS,
   type Reminder,
   type ReminderFrequency,
   type ReminderInput,
   type Weekday,
 } from '@/domain/reminder';
+import { useT } from '@/i18n';
+import { describeTimesT, frequencyDisplayT, localizeMessage, weekdayLabel } from '@/i18n/labels';
 import { confirmAction } from '@/lib/confirm';
 import { fieldErrorsOf } from '@/lib/validation';
 import { selectUser, useAuthStore } from '@/stores/useAuthStore';
@@ -65,15 +65,6 @@ type Draft = {
   enabled: boolean;
 };
 
-const FREQUENCY_OPTIONS: readonly ChipOption<ReminderFrequency>[] = [
-  { value: 'DAILY', label: 'Every day', icon: 'repeat-outline' },
-  { value: 'SPECIFIC_DAYS', label: 'Certain days', icon: 'calendar-outline' },
-];
-
-const DAY_OPTIONS: readonly ChipOption<`${Weekday}`>[] = WEEKDAYS.map((day) => ({
-  value: `${day}`,
-  label: WEEKDAY_LABELS[day],
-}));
 
 function draftFrom(existing: Reminder | null, suggestedTimes: string[], doseLabel: string | null): Draft {
   if (existing) {
@@ -100,6 +91,15 @@ function draftFrom(existing: Reminder | null, suggestedTimes: string[], doseLabe
 
 export default function ReminderScreen() {
   const theme = useTheme();
+  const { t } = useT();
+  const frequencyOptions: readonly ChipOption<ReminderFrequency>[] = [
+    { value: 'DAILY', label: t('reminder.everyDay'), icon: 'repeat-outline' },
+    { value: 'SPECIFIC_DAYS', label: t('reminder.certainDays'), icon: 'calendar-outline' },
+  ];
+  const dayOptions: readonly ChipOption<`${Weekday}`>[] = WEEKDAYS.map((day) => ({
+    value: `${day}`,
+    label: weekdayLabel(t, day),
+  }));
   const router = useRouter();
   const { medicationId, new: isNew } = useLocalSearchParams<{ medicationId: string; new?: string }>();
   const user = useAuthStore(selectUser);
@@ -151,10 +151,10 @@ export default function ReminderScreen() {
         <View style={{ gap: theme.spacing.lg }}>
           <InlineMessage
             tone="warning"
-            title="Medicine not found"
-            message="This medicine may have been deleted."
+            title={t('detail.notFoundTitle')}
+            message={t('family.notFoundBody')}
           />
-          <Button label="Go back" onPress={() => router.back()} />
+          <Button label={t('common.goBack')} onPress={() => router.back()} />
         </View>
       </Screen>
     );
@@ -170,21 +170,21 @@ export default function ReminderScreen() {
     return (
       <Screen scroll>
         <View style={{ gap: theme.spacing.xl }}>
-          <MemberContextBanner member={member} prefix="Reminder for" />
+          <MemberContextBanner member={member} prefix={t('reminder.for')} />
           <AppText variant="title">{medication.name}</AppText>
-          <InlineMessage tone="danger" title="No reminder for an expired medicine" message={suggestion.reason} />
+          <InlineMessage tone="danger" title={t('reminder.expiredTitle')} message={t('reminder.expiredReason')} />
           <AppText variant="body" color="textSecondary">
-            Recorded expiry date: {medication.expirationDate ? formatIsoDate(medication.expirationDate) : 'unknown'}.
+            {t('reminder.recordedExpiry', { date: medication.expirationDate ? formatIsoDate(medication.expirationDate) : t('reminder.unknown') })}
           </AppText>
           <View style={{ gap: theme.spacing.md }}>
             <Button
-              label="Edit the medicine"
+              label={t('reminder.editMedicine')}
               icon="create-outline"
               onPress={() =>
                 router.replace({ pathname: '/medication/edit/[id]', params: { id: medication.id } })
               }
             />
-            <Button label="Back to the medicine" variant="secondary" onPress={goToMedicine} />
+            <Button label={t('reminder.backToMedicine')} variant="secondary" onPress={goToMedicine} />
           </View>
         </View>
       </Screen>
@@ -219,9 +219,9 @@ export default function ReminderScreen() {
   const handleRemove = async () => {
     if (!existing) return;
     const confirmed = await confirmAction({
-      title: 'Remove this reminder?',
-      message: `${medication.name} will no longer appear in the schedule or send notifications. The medicine itself stays.`,
-      confirmLabel: 'Remove reminder',
+      title: t('reminder.removeTitle'),
+      message: t('reminder.removeBody', { name: medication.name }),
+      confirmLabel: t('reminder.remove'),
       destructive: true,
     });
     if (!confirmed) return;
@@ -250,12 +250,12 @@ export default function ReminderScreen() {
   return (
     <Screen scroll keyboardAvoiding>
       <View style={{ gap: theme.spacing.xl }}>
-        <MemberContextBanner member={member} prefix={existing ? 'Editing reminder for' : 'Setting a reminder for'} />
+        <MemberContextBanner member={member} prefix={existing ? t('reminder.editingFor') : t('reminder.settingFor')} />
 
         <View style={{ gap: theme.spacing.xs }}>
           <AppText variant="title">{medication.name}</AppText>
           <AppText variant="body" color="textSecondary">
-            {[medication.dosage, medication.frequency].filter(Boolean).join(' · ') || 'No dose or frequency recorded'}
+            {[medication.dosage, frequencyDisplayT(t, medication.frequency)].filter(Boolean).join(' · ') || t('reminder.noDoseOrFrequency')}
           </AppText>
         </View>
 
@@ -264,34 +264,34 @@ export default function ReminderScreen() {
         {!existing && suggestion?.kind === 'suggested' ? (
           <InlineMessage
             tone="info"
-            title="Suggested from the label"
-            message={`Your label says "${medication.frequency}", so MediMind suggests ${describeTimes(suggestion.times)}. Change the times if you take it differently.`}
+            title={t('reminder.suggestedTitle')}
+            message={t('reminder.suggestedBody', { frequency: medication.frequency ?? '', times: describeTimesT(t, suggestion.times) })}
           />
         ) : null}
         {!existing && suggestion?.kind === 'as-needed' ? (
           <InlineMessage
             tone="info"
-            title="Taken as needed"
-            message="Your label says to take this only when needed, so there is no fixed time to suggest. You can still set reminder times below if that helps you."
+            title={t('reminder.asNeededTitle')}
+            message={t('reminder.asNeededBody')}
           />
         ) : null}
         {!existing && suggestion?.kind === 'none' ? (
           <InlineMessage
             tone="warning"
-            title="No suggestion"
-            message="MediMind could not work out times from what was recorded, so it will not guess. Add the times from your label or leaflet."
+            title={t('reminder.noSuggestionTitle')}
+            message={t('reminder.noSuggestionBody')}
           />
         ) : null}
 
         {/* ---------- Times ---------- */}
         <FormSection
           step={1}
-          title="Reminder times"
-          description="One reminder for each time you take it.">
+          title={t('reminder.timesTitle')}
+          description={t('reminder.timesDesc')}>
           {draft.times.map((time, index) => (
             <TimeField
               key={`${index}-${time}`}
-              label={`Time ${index + 1}`}
+              label={t('reminder.timeN', { n: index + 1 })}
               value={time}
               onChange={(value) => setTime(index, value)}
               onRemove={draft.times.length > 1 ? () => removeTime(index) : undefined}
@@ -299,76 +299,76 @@ export default function ReminderScreen() {
           ))}
           {fieldErrors.times ? (
             <AppText variant="caption" color="dangerText">
-              {fieldErrors.times}
+              {localizeMessage(fieldErrors.times)}
             </AppText>
           ) : null}
           {draft.times.length < 12 ? (
-            <Button label="Add another time" icon="add" variant="secondary" onPress={addTime} />
+            <Button label={t('reminder.addTime')} icon="add" variant="secondary" onPress={addTime} />
           ) : null}
         </FormSection>
 
         {/* ---------- Dose wording ---------- */}
         <FormSection
           step={2}
-          title="What the reminder says"
-          description="Copied from the recorded dosage. Shown in the notification.">
+          title={t('reminder.saysTitle')}
+          description={t('reminder.saysDesc')}>
           <TextField
-            label="Dose"
+            label={t('reminder.dose')}
             value={draft.doseLabel}
             onChangeText={(doseLabel) => patch({ doseLabel }, ['doseLabel'])}
-            placeholder="e.g. 500 mg or 1 tablet"
+            placeholder={t('reminder.dosePlaceholder')}
             error={fieldErrors.doseLabel}
-            helper={medication.dosage ? undefined : 'No dosage was recorded — leave blank rather than guess.'}
+            helper={medication.dosage ? undefined : t('reminder.doseHelperNone')}
           />
         </FormSection>
 
         {/* ---------- Days ---------- */}
-        <FormSection step={3} title="Which days" description="Every day, or only some days of the week.">
+        <FormSection step={3} title={t('reminder.daysTitle')} description={t('reminder.daysDesc')}>
           <ChoiceChips
-            options={FREQUENCY_OPTIONS}
+            options={frequencyOptions}
             value={draft.frequency}
             onChange={(frequency) => patch({ frequency: frequency ?? 'DAILY' }, ['days'])}
-            accessibilityLabel="How often"
+            accessibilityLabel={t('reminder.daysTitle')}
             allowClear={false}
           />
           {draft.frequency === 'SPECIFIC_DAYS' ? (
             <View style={{ gap: theme.spacing.sm }}>
               <MultiChoiceChips
-                options={DAY_OPTIONS}
+                options={dayOptions}
                 values={draft.days.map((day) => `${day}` as `${Weekday}`)}
                 onChange={(values) => patch({ days: values.map((v) => Number(v) as Weekday) }, ['days'])}
-                accessibilityLabel="Days of the week"
+                accessibilityLabel={t('reminder.certainDays')}
               />
               {fieldErrors.days ? (
                 <AppText variant="caption" color="dangerText">
-                  {fieldErrors.days}
+                  {localizeMessage(fieldErrors.days)}
                 </AppText>
               ) : null}
             </View>
           ) : null}
 
           <Collapsible
-            title="Start and end dates"
+            title={t('reminder.startEnd')}
             icon="calendar-clear-outline"
             summary={
               draft.startDate || draft.endDate
-                ? `${draft.startDate ? `From ${formatIsoDate(draft.startDate)}` : 'From today'}${draft.endDate ? ` until ${formatIsoDate(draft.endDate)}` : ''}`
+                ? `${draft.startDate ? t('reminder.from', { date: formatIsoDate(draft.startDate) }) : t('reminder.fromToday')}${draft.endDate ? t('reminder.until', { date: formatIsoDate(draft.endDate) }) : ''}`
                 : undefined
             }
             defaultOpen={Boolean(draft.startDate || draft.endDate)}>
             <DateField
-              label="Start date (optional)"
+              label={t('reminder.startDate')}
               value={draft.startDate}
               onChange={(startDate) => patch({ startDate }, ['startDate'])}
               error={fieldErrors.startDate}
-              helper="Leave blank to start today."
+              helper={t('reminder.startHelper')}
             />
             <DateField
-              label="End date (optional)"
+              label={t('reminder.endDate')}
               value={draft.endDate}
               onChange={(endDate) => patch({ endDate }, ['endDate'])}
               error={fieldErrors.endDate}
-              helper="For a short course, e.g. a week of antibiotics."
+              helper={t('reminder.endHelper')}
             />
           </Collapsible>
         </FormSection>
@@ -378,15 +378,15 @@ export default function ReminderScreen() {
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
               <Ionicons name="notifications-outline" size={24} color={theme.colors.primary} />
               <View style={{ flex: 1, gap: theme.spacing.xxs }}>
-                <AppText variant="subheading">Reminder on</AppText>
+                <AppText variant="subheading">{t('reminder.on')}</AppText>
                 <AppText variant="caption" color="textSecondary">
-                  Switch off to pause without deleting.
+                  {t('reminder.pauseNote')}
                 </AppText>
               </View>
               <Switch
                 value={draft.enabled}
                 onValueChange={(enabled) => patch({ enabled })}
-                accessibilityLabel="Reminder on"
+                accessibilityLabel={t('reminder.on')}
                 trackColor={{ true: theme.colors.primary, false: theme.colors.borderStrong }}
               />
             </View>
@@ -394,26 +394,25 @@ export default function ReminderScreen() {
         ) : null}
 
         <AppText variant="caption" color="textMuted">
-          A reminder only repeats what you recorded. It never changes the amount or tells you to
-          take a dose late — follow the label and ask a pharmacist if unsure.
+          {t('reminder.note')}
         </AppText>
 
         <View style={{ gap: theme.spacing.md }}>
           <Button
-            label={existing ? 'Save reminder' : 'Confirm reminder'}
+            label={existing ? t('reminder.save') : t('reminder.confirm')}
             icon="checkmark"
             size="large"
             onPress={() => void handleSubmit()}
             loading={isSaving}
           />
           {isNew ? (
-            <Button label="Not now" variant="secondary" onPress={goToMedicine} disabled={isSaving} />
+            <Button label={t('common.notNow')} variant="secondary" onPress={goToMedicine} disabled={isSaving} />
           ) : (
-            <Button label="Cancel" variant="secondary" onPress={() => router.back()} disabled={isSaving} />
+            <Button label={t('common.cancel')} variant="secondary" onPress={() => router.back()} disabled={isSaving} />
           )}
           {existing ? (
             <Button
-              label="Remove reminder"
+              label={t('reminder.remove')}
               icon="trash-outline"
               variant="danger"
               onPress={() => void handleRemove()}

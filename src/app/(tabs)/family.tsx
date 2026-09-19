@@ -12,7 +12,9 @@ import { View } from 'react-native';
 
 import { MemberAvatar } from '@/components/family/MemberAvatar';
 import { AppText, Badge, Button, Card, InlineMessage, Screen } from '@/components/ui';
-import { ageOf, GENDER_LABELS, relationshipLabel, type FamilyMember } from '@/domain/familyMember';
+import { ageOf, type FamilyMember } from '@/domain/familyMember';
+import { useT } from '@/i18n';
+import { genderLabel, relationshipLabelT, tCount } from '@/i18n/labels';
 import {
   selectActiveMemberId,
   selectMembers,
@@ -24,6 +26,7 @@ import { useTheme } from '@/theme/ThemeContext';
 
 export default function FamilyScreen() {
   const theme = useTheme();
+  const { t } = useT();
   const router = useRouter();
 
   const members = useFamilyStore(selectMembers);
@@ -53,10 +56,9 @@ export default function FamilyScreen() {
     <Screen scroll>
       <View style={{ gap: theme.spacing.xl }}>
         <View style={{ gap: theme.spacing.xs }}>
-          <AppText variant="title">Family</AppText>
+          <AppText variant="title">{t('family.title')}</AppText>
           <AppText variant="body" color="textSecondary">
-            Manage everyone’s medicines and health information from one account. No separate
-            logins needed.
+            {t('family.intro')}
           </AppText>
         </View>
 
@@ -80,27 +82,25 @@ export default function FamilyScreen() {
             <View style={{ alignItems: 'center', gap: theme.spacing.md, paddingVertical: theme.spacing.md }}>
               <Ionicons name="people-outline" size={44} color={theme.colors.primary} />
               <AppText variant="heading" align="center">
-                Manage your family
+                {t('family.manageTitle')}
               </AppText>
               <AppText variant="body" color="textSecondary" align="center">
-                Add family members to keep everyone’s medicines and health information organised
-                in one place — a parent, a child, a grandparent.
+                {t('family.manageBody')}
               </AppText>
             </View>
           </Card>
         ) : null}
 
         <Button
-          label="Add family member"
+          label={t('family.add')}
           icon="person-add-outline"
           size="large"
           onPress={() => router.push('/family/add')}
-          accessibilityHint="Opens a short form to add a person"
+          accessibilityHint={t('family.addHint')}
         />
 
         <AppText variant="caption" color="textMuted" align="center">
-          Each person’s medicines and conditions are kept completely separate. Every screen shows
-          whose information you are looking at.
+          {t('family.separationNote')}
         </AppText>
       </View>
     </Screen>
@@ -121,26 +121,27 @@ function MemberCard({
   onPress: () => void;
 }) {
   const theme = useTheme();
+  const { t } = useT();
   const age = ageOf(member);
 
   const detail = [
-    member.isSelf ? 'Me' : relationshipLabel(member),
-    age !== null ? `${age} years` : null,
-    member.gender && member.gender !== 'UNSPECIFIED' ? GENDER_LABELS[member.gender] : null,
+    member.isSelf ? t('common.me') : relationshipLabelT(t, member),
+    age !== null ? t('common.years', { age }) : null,
+    member.gender && member.gender !== 'UNSPECIFIED' ? genderLabel(t, member.gender) : null,
   ]
     .filter(Boolean)
     .join(' · ');
 
   const summary = [
-    `${medicineCount} ${medicineCount === 1 ? 'medicine' : 'medicines'}`,
-    `${conditionCount} ${conditionCount === 1 ? 'condition' : 'conditions'}`,
+    tCount(t, 'common.medicinesCount', medicineCount),
+    tCount(t, 'common.conditionsCount', conditionCount),
   ].join(' · ');
 
   return (
     <Card
       onPress={onPress}
       accessibilityLabel={`${member.name}, ${detail}. ${summary}`}
-      accessibilityHint="Opens their profile">
+      accessibilityHint={t('family.opensProfile')}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
         <MemberAvatar member={member} size={56} />
         <View style={{ flex: 1, gap: theme.spacing.xs }}>
@@ -153,7 +154,7 @@ function MemberCard({
           <AppText variant="caption" color="textMuted">
             {summary}
           </AppText>
-          {isActive ? <Badge label="Managing now" tone="info" icon="checkmark-circle" /> : null}
+          {isActive ? <Badge label={t('family.managingNow')} tone="info" icon="checkmark-circle" /> : null}
         </View>
         <Ionicons name="chevron-forward" size={22} color={theme.colors.textMuted} />
       </View>

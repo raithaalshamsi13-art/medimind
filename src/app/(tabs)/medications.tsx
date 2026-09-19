@@ -19,7 +19,8 @@ import { MemberContextBanner } from '@/components/family/MemberContextBanner';
 import { MemberSwitcher } from '@/components/family/MemberSwitcher';
 import { MedicationCard } from '@/components/medication/MedicationCard';
 import { AppText, Button, Card, InlineMessage, Screen, TextField } from '@/components/ui';
-import { possessive } from '@/domain/familyMember';
+import { useT } from '@/i18n';
+import { possessiveT, tCount } from '@/i18n/labels';
 import { selectUser, useAuthStore } from '@/stores/useAuthStore';
 import {
   forMember,
@@ -38,6 +39,7 @@ import { useTheme } from '@/theme/ThemeContext';
 
 export default function MedicationsScreen() {
   const theme = useTheme();
+  const { t } = useT();
   const router = useRouter();
   const user = useAuthStore(selectUser);
 
@@ -73,11 +75,9 @@ export default function MedicationsScreen() {
           gap: theme.spacing.base,
         }}>
         <View style={{ gap: theme.spacing.xs }}>
-          <AppText variant="title">{member ? possessive(member, 'medicines') : 'Medicines'}</AppText>
+          <AppText variant="title">{member ? possessiveT(t, member, 'medicines') : t('medicines.title')}</AppText>
           <AppText variant="body" color="textSecondary">
-            {totalCount === 0
-              ? 'Nothing saved yet'
-              : `${totalCount} ${totalCount === 1 ? 'medicine' : 'medicines'} saved`}
+            {totalCount === 0 ? t('medicines.nothingSaved') : tCount(t, 'medicines.saved', totalCount)}
           </AppText>
         </View>
 
@@ -90,14 +90,14 @@ export default function MedicationsScreen() {
         ) : null}
 
         {member && !member.isSelf ? (
-          <MemberContextBanner member={member} prefix="Showing medicines for" />
+          <MemberContextBanner member={member} prefix={t('medicines.showingFor')} />
         ) : null}
 
         {!isPersistent ? (
           <InlineMessage
             tone="warning"
-            title="Not being saved"
-            message="Medicines added here will be lost when you close the app, because this device gave MediMind no permanent storage. Open MediMind on your phone to save them."
+            title={t('medicines.notSavedTitle')}
+            message={t('medicines.notSavedBody')}
           />
         ) : null}
 
@@ -105,10 +105,10 @@ export default function MedicationsScreen() {
 
         {totalCount > 0 ? (
           <TextField
-            label="Search"
+            label={t('medicines.search')}
             value={searchQuery}
             onChangeText={setSearchQuery}
-            placeholder="Search by name, dose or instructions"
+            placeholder={t('medicines.searchPlaceholder')}
             autoCapitalize="none"
           />
         ) : null}
@@ -135,17 +135,17 @@ export default function MedicationsScreen() {
           isLoading ? null : isSearching ? (
             <EmptyState
               icon="search-outline"
-              title="No matches"
-              body={`Nothing matches “${searchQuery.trim()}”. Try a shorter search, or check the spelling.`}
+              title={t('medicines.noMatchesTitle')}
+              body={t('medicines.noMatchesBody', { query: searchQuery.trim() })}
             />
           ) : (
             <EmptyState
               icon="medkit-outline"
-              title="No medicines yet"
+              title={t('medicines.noneTitle')}
               body={
                 member && !member.isSelf
-                  ? `Add ${member.name}’s first medicine by hand, or scan its label once scanning is available.`
-                  : 'Add your first medicine by hand, or scan its label once scanning is available.'
+                  ? t('medicines.noneBodyFor', { name: member.name })
+                  : t('medicines.noneBody')
               }
             />
           )
@@ -164,7 +164,7 @@ export default function MedicationsScreen() {
           backgroundColor: theme.colors.background,
         }}>
         <Button
-          label={member && !member.isSelf ? `Add medicine for ${member.name}` : 'Add medicine'}
+          label={member && !member.isSelf ? t('medicines.addFor', { name: member.name }) : t('medicines.add')}
           icon="add"
           size="large"
           onPress={() =>

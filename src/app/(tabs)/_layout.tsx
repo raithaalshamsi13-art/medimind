@@ -25,6 +25,7 @@ import { Tabs } from 'expo-router';
 import { useWindowDimensions, type ColorValue } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+import { useT } from '@/i18n';
 import { useTheme } from '@/theme/ThemeContext';
 
 type IconName = keyof typeof Ionicons.glyphMap;
@@ -45,6 +46,7 @@ function tabIcon(filled: IconName, outline: IconName) {
 
 export default function TabsLayout() {
   const theme = useTheme();
+  const { t } = useT();
   const insets = useSafeAreaInsets();
   const { width, height } = useWindowDimensions();
 
@@ -81,34 +83,34 @@ export default function TabsLayout() {
       }}>
       <Tabs.Screen
         name="index"
-        options={{ title: 'Home', tabBarIcon: tabIcon('home', 'home-outline') }}
+        options={{ title: t('tabs.home'), tabBarIcon: tabIcon('home', 'home-outline') }}
       />
       <Tabs.Screen
         name="medications"
-        options={{ title: 'Medicines', tabBarIcon: tabIcon('medkit', 'medkit-outline') }}
+        options={{ title: t('tabs.medicines'), tabBarIcon: tabIcon('medkit', 'medkit-outline') }}
       />
       <Tabs.Screen
         name="assistant"
         options={{
-          title: 'Ask',
-          tabBarAccessibilityLabel: 'Ask MediMind',
+          title: t('tabs.ask'),
+          tabBarAccessibilityLabel: t('tabs.askFull'),
           tabBarIcon: tabIcon('chatbubble-ellipses', 'chatbubble-ellipses-outline'),
         }}
       />
       <Tabs.Screen
         name="schedule"
-        options={{ title: 'Schedule', tabBarIcon: tabIcon('calendar', 'calendar-outline') }}
+        options={{ title: t('tabs.schedule'), tabBarIcon: tabIcon('calendar', 'calendar-outline') }}
       />
       <Tabs.Screen
         name="family"
-        options={{ title: 'Family', tabBarIcon: tabIcon('people', 'people-outline') }}
+        options={{ title: t('tabs.family'), tabBarIcon: tabIcon('people', 'people-outline') }}
       />
       {/* Dose history (Milestone 5) will live inside the Schedule tab; the
           route file stays so nothing links to a missing screen. */}
       <Tabs.Screen name="history" options={{ href: null }} />
       <Tabs.Screen
         name="settings"
-        options={{ title: 'Settings', tabBarIcon: tabIcon('settings', 'settings-outline') }}
+        options={{ title: t('tabs.settings'), tabBarIcon: tabIcon('settings', 'settings-outline') }}
       />
     </Tabs>
   );

@@ -5,16 +5,18 @@
 
 import { Stack } from 'expo-router';
 
+import { useT } from '@/i18n';
 import { useTheme } from '@/theme/ThemeContext';
 
 export default function ReminderLayout() {
   const theme = useTheme();
+  const { t } = useT();
 
   return (
     <Stack
       screenOptions={{
         headerShown: true,
-        headerBackTitle: 'Back',
+        headerBackTitle: t('common.goBack'),
         contentStyle: { backgroundColor: theme.colors.background },
         headerStyle: { backgroundColor: theme.colors.surface },
         headerTintColor: theme.colors.primary,
@@ -24,7 +26,7 @@ export default function ReminderLayout() {
           fontSize: theme.type.subheading.fontSize,
         },
       }}>
-      <Stack.Screen name="[medicationId]" options={{ title: 'Reminder' }} />
+      <Stack.Screen name="[medicationId]" options={{ title: t('header.reminder') }} />
     </Stack>
   );
 }

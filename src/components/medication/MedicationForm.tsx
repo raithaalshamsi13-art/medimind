@@ -41,13 +41,12 @@ import {
 } from '@/components/ui';
 import { expiryStatus, type ExpiryState } from '@/domain/expiry';
 import {
-  conditionDisplayName,
   EMPTY_CONDITION_FORM,
   type HealthCondition,
   type HealthConditionInput,
 } from '@/domain/healthCondition';
 import {
-  MEDICATION_KIND_LABELS,
+  MEDICATION_FORMS,
   MEDICATION_KINDS,
   medicationInputSchema,
   type MedicationForm as MedicationFormKind,
@@ -60,8 +59,6 @@ import {
   composeFrequency,
   composeInstructions,
   DOSAGE_UNITS,
-  dosageUnitLabel,
-  FREQUENCY_PRESET_LABELS,
   FREQUENCY_PRESETS,
   INSTRUCTION_OPTIONS,
   isValidDoseAmount,
@@ -74,11 +71,22 @@ import {
   type FrequencyPreset,
   type InstructionOption,
 } from '@/domain/medicationOptions';
+import { useT } from '@/i18n';
+import {
+  conditionNameT,
+  expiryLabelT,
+  frequencyPresetLabel,
+  instructionLabel,
+  kindLabel,
+  localizeMessage,
+  medicationFormLabel,
+  unitLabel,
+} from '@/i18n/labels';
 import type { AppError } from '@/lib/errors';
 import { fieldErrorsOf } from '@/lib/validation';
 import { useTheme } from '@/theme/ThemeContext';
 
-import { MEDICATION_FORM_OPTIONS } from './formIcons';
+import { MEDICATION_FORM_ICONS } from './formIcons';
 
 type FormField = keyof MedicationFormValues;
 
@@ -86,23 +94,6 @@ type FormField = keyof MedicationFormValues;
 // Static option lists
 // ---------------------------------------------------------------------------
 
-const KIND_OPTIONS: readonly ChipOption<MedicationKind>[] = MEDICATION_KINDS.map((kind) => ({
-  value: kind,
-  label: MEDICATION_KIND_LABELS[kind],
-}));
-
-const UNIT_OPTIONS: readonly ChipOption<DosageUnit>[] = DOSAGE_UNITS.map((unit) => ({
-  value: unit,
-  label: dosageUnitLabel(unit),
-}));
-
-const FREQUENCY_OPTIONS: readonly ChipOption<FrequencyPreset>[] = FREQUENCY_PRESETS.map(
-  (preset) => ({ value: preset, label: FREQUENCY_PRESET_LABELS[preset] }),
-);
-
-const INSTRUCTION_CHIPS: readonly ChipOption<InstructionOption>[] = INSTRUCTION_OPTIONS.map(
-  (option) => ({ value: option, label: option }),
-);
 
 const EXPIRY_TONES: Record<ExpiryState, BadgeTone> = {
   EXPIRED: 'danger',
@@ -153,9 +144,10 @@ function toDraft(values: MedicationFormValues): Draft {
 }
 
 type Composed = { values: MedicationFormValues; errors: Partial<Record<FormField, string>> };
+type Translate = ReturnType<typeof useT>['t'];
 
 /** Draft → the plain values the schema validates, plus errors only the draft can detect. */
-function compose(draft: Draft): Composed {
+function compose(draft: Draft, t: Translate): Composed {
   const errors: Partial<Record<FormField, string>> = {};
 
   let dosage = '';
@@ -163,9 +155,9 @@ function compose(draft: Draft): Composed {
     dosage = draft.doseCustom;
   } else if (draft.doseAmount.trim().length > 0) {
     if (!isValidDoseAmount(draft.doseAmount)) {
-      errors.dosage = 'Please enter the amount as a number, for example 500 or 2.5.';
+      errors.dosage = t('form.errAmountNumber');
     } else if (!draft.doseUnit) {
-      errors.dosage = 'Please choose a unit for the amount, for example mg or tablet(s).';
+      errors.dosage = t('form.errUnit');
     } else {
       dosage = composeDosage(draft.doseAmount, draft.doseUnit) ?? '';
     }
@@ -173,10 +165,10 @@ function compose(draft: Draft): Composed {
 
   let frequency = composeFrequency(draft.frequency) ?? '';
   if (draft.frequency.preset === 'EVERY_HOURS' && !isValidEveryHours(draft.frequency.hours)) {
-    errors.frequency = 'Please enter how many hours, from 1 to 24.';
+    errors.frequency = t('form.errHours');
     frequency = '';
   } else if (draft.frequency.preset === 'OTHER' && frequency.length === 0) {
-    errors.frequency = 'Please type how often, or choose one of the options above.';
+    errors.frequency = t('form.errDescribe');
   }
 
   return {
@@ -230,6 +222,29 @@ export function MedicationForm({
   onManageConditions,
 }: MedicationFormProps) {
   const theme = useTheme();
+  const { t } = useT();
+
+  const kindOptions: readonly ChipOption<MedicationKind>[] = MEDICATION_KINDS.map((kind) => ({
+    value: kind,
+    label: kindLabel(t, kind),
+  }));
+  const formOptions: readonly ChipOption<MedicationFormKind>[] = MEDICATION_FORMS.map((form) => ({
+    value: form,
+    label: medicationFormLabel(t, form),
+    icon: MEDICATION_FORM_ICONS[form],
+  }));
+  const unitOptions: readonly ChipOption<DosageUnit>[] = DOSAGE_UNITS.map((unit) => ({
+    value: unit,
+    label: unitLabel(t, unit),
+  }));
+  const frequencyOptions: readonly ChipOption<FrequencyPreset>[] = FREQUENCY_PRESETS.map((preset) => ({
+    value: preset,
+    label: frequencyPresetLabel(t, preset),
+  }));
+  const instructionChips: readonly ChipOption<InstructionOption>[] = INSTRUCTION_OPTIONS.map((option) => ({
+    value: option,
+    label: instructionLabel(t, option),
+  }));
 
   const [draft, setDraft] = useState<Draft>(() => toDraft(initialValues));
   const [fieldErrors, setFieldErrors] = useState<Partial<Record<FormField, string>>>({});
@@ -248,7 +263,7 @@ export function MedicationForm({
   };
 
   const handleSubmit = () => {
-    const composed = compose(draft);
+    const composed = compose(draft, t);
     const parsed = medicationInputSchema.safeParse(composed.values);
 
     const errors: Partial<Record<FormField, string>> = {
@@ -279,8 +294,8 @@ export function MedicationForm({
   const conditionOptions: ChipOption<string>[] = conditions.map((condition) => ({
     value: condition.id,
     label: condition.reading
-      ? `${conditionDisplayName(condition)} · ${condition.reading}`
-      : conditionDisplayName(condition),
+      ? `${conditionNameT(t, condition)} · ${condition.reading}`
+      : conditionNameT(t, condition),
   }));
 
   return (
@@ -290,40 +305,40 @@ export function MedicationForm({
       {hasErrors ? (
         <InlineMessage
           tone="warning"
-          message="Please check the highlighted fields below and try again."
+          message={t('common.checkFields')}
         />
       ) : null}
 
       {/* ---------- 1. About the medicine ---------- */}
       <FormSection
         step={1}
-        title="About the medicine"
-        description="Only the name is required. Choose the rest if you know it.">
+        title={t('form.section1Title')}
+        description={t('form.section1Desc')}>
         <TextField
-          label="Medicine name"
+          label={t('form.name')}
           value={draft.name}
           onChangeText={(name) => patch({ name }, ['name'])}
-          placeholder="e.g. Paracetamol"
+          placeholder={t('form.namePlaceholder')}
           error={fieldErrors.name}
           autoCapitalize="sentences"
-          helper="Required. Copy it exactly as printed on the box."
+          helper={t('form.nameHelper')}
         />
 
-        <FieldGroup label="Type" error={fieldErrors.kind}>
+        <FieldGroup label={t('form.type')} error={fieldErrors.kind}>
           <ChoiceChips
-            options={KIND_OPTIONS}
+            options={kindOptions}
             value={draft.kind}
             onChange={(kind) => patch({ kind }, ['kind'])}
-            accessibilityLabel="Medicine type"
+            accessibilityLabel={t('form.type')}
           />
         </FieldGroup>
 
-        <FieldGroup label="Form" error={fieldErrors.form}>
+        <FieldGroup label={t('form.form')} error={fieldErrors.form}>
           <ChoiceChips
-            options={MEDICATION_FORM_OPTIONS}
+            options={formOptions}
             value={draft.form}
             onChange={(form) => patch({ form }, ['form'])}
-            accessibilityLabel="Medicine form"
+            accessibilityLabel={t('form.form')}
           />
         </FieldGroup>
       </FormSection>
@@ -331,28 +346,28 @@ export function MedicationForm({
       {/* ---------- 2. Dose and how often ---------- */}
       <FormSection
         step={2}
-        title="Dose and how often"
-        description="Copy these from the label. Leave blank if you cannot read them — MediMind will not guess.">
+        title={t('form.section2Title')}
+        description={t('form.section2Desc')}>
         {draft.doseMode === 'structured' ? (
           <View style={{ gap: theme.spacing.md }}>
             <TextField
-              label="Amount"
+              label={t('form.amount')}
               value={draft.doseAmount}
               onChangeText={(doseAmount) => patch({ doseAmount }, ['dosage'])}
-              placeholder="e.g. 500"
+              placeholder={t('form.amountPlaceholder')}
               keyboardType="decimal-pad"
               error={fieldErrors.dosage}
             />
-            <FieldGroup label="Unit">
+            <FieldGroup label={t('form.unit')}>
               <ChoiceChips
-                options={UNIT_OPTIONS}
+                options={unitOptions}
                 value={draft.doseUnit}
                 onChange={(doseUnit) => patch({ doseUnit }, ['dosage'])}
-                accessibilityLabel="Dose unit"
+                accessibilityLabel={t('form.unit')}
               />
             </FieldGroup>
             <TextLink
-              label="Type the dose as text instead"
+              label={t('form.typeDoseAsText')}
               onPress={() =>
                 patch(
                   {
@@ -370,44 +385,44 @@ export function MedicationForm({
         ) : (
           <View style={{ gap: theme.spacing.md }}>
             <TextField
-              label="Dosage"
+              label={t('form.dosage')}
               value={draft.doseCustom}
               onChangeText={(doseCustom) => patch({ doseCustom }, ['dosage'])}
-              placeholder="e.g. 1 sachet in water"
+              placeholder={t('form.dosagePlaceholder')}
               error={fieldErrors.dosage}
               autoCapitalize="none"
             />
             <TextLink
-              label="Choose an amount and unit instead"
+              label={t('form.chooseAmountUnit')}
               onPress={() => patch({ doseMode: 'structured' }, ['dosage'])}
             />
           </View>
         )}
 
-        <FieldGroup label="How often" error={fieldErrors.frequency}>
+        <FieldGroup label={t('form.howOften')} error={fieldErrors.frequency}>
           <ChoiceChips
-            options={FREQUENCY_OPTIONS}
+            options={frequencyOptions}
             value={draft.frequency.preset}
             onChange={(preset) => patch({ frequency: { ...draft.frequency, preset } }, ['frequency'])}
-            accessibilityLabel="How often"
+            accessibilityLabel={t('form.howOften')}
           />
           {draft.frequency.preset === 'EVERY_HOURS' ? (
             <TextField
-              label="Every how many hours?"
+              label={t('form.everyHowManyHours')}
               value={draft.frequency.hours}
               onChangeText={(hours) => patch({ frequency: { ...draft.frequency, hours } }, ['frequency'])}
-              placeholder="e.g. 8"
+              placeholder={t('form.hoursPlaceholder')}
               keyboardType="number-pad"
             />
           ) : null}
           {draft.frequency.preset === 'OTHER' ? (
             <TextField
-              label="Describe how often"
+              label={t('form.describeHowOften')}
               value={draft.frequency.custom}
               onChangeText={(custom) =>
                 patch({ frequency: { ...draft.frequency, custom } }, ['frequency'])
               }
-              placeholder="e.g. Every Monday morning"
+              placeholder={t('form.howOftenPlaceholder')}
               autoCapitalize="sentences"
             />
           ) : null}
@@ -415,20 +430,20 @@ export function MedicationForm({
       </FormSection>
 
       {/* ---------- 3. Expiry date ---------- */}
-      <FormSection step={3} title="Expiry date" description="Printed on the box, usually as EXP.">
+      <FormSection step={3} title={t('form.section3Title')} description={t('form.section3Desc')}>
         <DateField
-          label="Expiry date"
+          label={t('form.expiryDate')}
           value={draft.expirationDate}
           onChange={(expirationDate) => patch({ expirationDate }, ['expirationDate'])}
           error={fieldErrors.expirationDate}
-          helper="Leave blank if the label has no readable date."
+          helper={t('form.expiryHelper')}
           maximumDate={new Date(2100, 11, 31)}
         />
 
         {expiry ? (
           <View style={{ gap: theme.spacing.sm }}>
             <Badge
-              label={expiry.label}
+              label={expiryLabelT(t, expiry)}
               tone={EXPIRY_TONES[expiry.state]}
               icon={
                 expiry.state === 'EXPIRED'
@@ -441,13 +456,13 @@ export function MedicationForm({
             {expiry.state === 'EXPIRED' ? (
               <InlineMessage
                 tone="danger"
-                title="This medicine has expired"
-                message="You can still save it for your records, but MediMind will mark it as expired and will not create a normal reminder for it. Ask a pharmacist how to dispose of it."
+                title={t('form.expiredTitle')}
+                message={t('form.expiredBody')}
               />
             ) : expiry.state === 'EXPIRING_SOON' ? (
               <InlineMessage
                 tone="warning"
-                message="This medicine expires within 30 days. Check with your pharmacist about a replacement."
+                message={t('form.expiringSoonBody')}
               />
             ) : null}
           </View>
@@ -457,25 +472,25 @@ export function MedicationForm({
       {/* ---------- 4. Instructions ---------- */}
       <FormSection
         step={4}
-        title="Instructions"
-        description="Tick anything the label says. Add your own wording for anything else.">
+        title={t('form.section4Title')}
+        description={t('form.section4Desc')}>
         <MultiChoiceChips
-          options={INSTRUCTION_CHIPS}
+          options={instructionChips}
           values={draft.instructionOptions}
           onChange={(instructionOptions) => patch({ instructionOptions }, ['instructions'])}
-          accessibilityLabel="Common instructions"
+          accessibilityLabel={t('form.section4Title')}
         />
 
         <Collapsible
-          title="Other instructions"
+          title={t('form.otherInstructions')}
           icon="document-text-outline"
           summary={draft.instructionExtra || undefined}
           defaultOpen={draft.instructionExtra.length > 0}>
           <TextField
-            label="Other instructions"
+            label={t('form.otherInstructions')}
             value={draft.instructionExtra}
             onChangeText={(instructionExtra) => patch({ instructionExtra }, ['instructions'])}
-            placeholder="e.g. Avoid grapefruit juice"
+            placeholder={t('form.otherInstructionsPlaceholder')}
             error={fieldErrors.instructions}
             autoCapitalize="sentences"
             multiline
@@ -483,7 +498,7 @@ export function MedicationForm({
         </Collapsible>
         {fieldErrors.instructions && draft.instructionExtra.length === 0 ? (
           <AppText variant="caption" color="dangerText">
-            {fieldErrors.instructions}
+            {localizeMessage(fieldErrors.instructions)}
           </AppText>
         ) : null}
       </FormSection>
@@ -491,23 +506,23 @@ export function MedicationForm({
       {/* ---------- 5. Health conditions ---------- */}
       <FormSection
         step={5}
-        title="Health conditions"
-        description="Optional. Tick the conditions this medicine relates to, for your own organisation.">
+        title={t('form.section5Title')}
+        description={t('form.section5Desc')}>
         {conditions.length > 0 ? (
           <MultiChoiceChips
             options={conditionOptions}
             values={draft.conditionIds}
             onChange={(conditionIds) => patch({ conditionIds }, ['conditionIds'])}
-            accessibilityLabel="Related health conditions"
+            accessibilityLabel={t('form.section5Title')}
           />
         ) : (
           <AppText variant="body" color="textSecondary">
-            You have not added any health conditions yet.
+            {t('form.noConditionsYet')}
           </AppText>
         )}
         {fieldErrors.conditionIds ? (
           <AppText variant="caption" color="dangerText">
-            {fieldErrors.conditionIds}
+            {localizeMessage(fieldErrors.conditionIds)}
           </AppText>
         ) : null}
 
@@ -519,10 +534,10 @@ export function MedicationForm({
               borderRadius: theme.radius.md,
               backgroundColor: theme.colors.surfaceAlt,
             }}>
-            <AppText variant="subheading">New condition</AppText>
+            <AppText variant="subheading">{t('form.newCondition')}</AppText>
             <HealthConditionEditor
               initialValues={EMPTY_CONDITION_FORM}
-              submitLabel="Save condition"
+              submitLabel={t('form.saveCondition')}
               isSubmitting={isSavingCondition}
               onSubmit={(input) => void handleCreateCondition(input)}
               onCancel={() => setIsAddingCondition(false)}
@@ -532,16 +547,16 @@ export function MedicationForm({
         ) : (
           <View style={{ gap: theme.spacing.md }}>
             <Button
-              label="Add a condition"
+              label={t('form.addCondition')}
               icon="add-circle-outline"
               variant="secondary"
               onPress={() => setIsAddingCondition(true)}
             />
             {conditions.length > 0 ? (
               <TextLink
-                label="Edit or remove my conditions"
+                label={t('form.editRemoveConditions')}
                 onPress={onManageConditions}
-                accessibilityHint="Opens the My Health Conditions screen"
+                accessibilityHint={t('form.editRemoveConditionsHint')}
               />
             ) : null}
           </View>
@@ -555,23 +570,22 @@ export function MedicationForm({
             style={{ marginTop: 2 }}
           />
           <AppText variant="caption" color="textMuted" style={{ flex: 1 }}>
-            Conditions are notes for you. MediMind never uses them to judge or suggest a medicine,
-            and they are not shared with the assistant.
+            {t('form.conditionsNote')}
           </AppText>
         </View>
       </FormSection>
 
       {/* ---------- Notes ---------- */}
       <Collapsible
-        title="Notes"
+        title={t('form.notes')}
         icon="create-outline"
         summary={draft.notes || undefined}
         defaultOpen={draft.notes.length > 0}>
         <TextField
-          label="Notes"
+          label={t('form.notes')}
           value={draft.notes}
           onChangeText={(notes) => patch({ notes }, ['notes'])}
-          placeholder="Anything you want to remember"
+          placeholder={t('form.notesPlaceholder')}
           error={fieldErrors.notes}
           autoCapitalize="sentences"
           multiline
@@ -579,8 +593,7 @@ export function MedicationForm({
       </Collapsible>
 
       <AppText variant="caption" color="textMuted">
-        MediMind stores exactly what you enter here. It does not check whether a medicine is
-        suitable for you — always follow the label and ask a pharmacist if you are unsure.
+        {t('form.disclaimer')}
       </AppText>
 
       <View style={{ gap: theme.spacing.md }}>
@@ -591,7 +604,7 @@ export function MedicationForm({
           size="large"
           icon="checkmark"
         />
-        <Button label="Cancel" onPress={onCancel} variant="secondary" disabled={isSubmitting} />
+        <Button label={t('common.cancel')} onPress={onCancel} variant="secondary" disabled={isSubmitting} />
       </View>
     </View>
   );
@@ -623,7 +636,7 @@ function FieldGroup({
             style={{ marginTop: 2 }}
           />
           <AppText variant="caption" color="dangerText" style={{ flex: 1 }}>
-            {error}
+            {localizeMessage(error)}
           </AppText>
         </View>
       ) : null}

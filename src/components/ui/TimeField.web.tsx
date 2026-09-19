@@ -7,6 +7,8 @@ import { Ionicons } from '@expo/vector-icons';
 import { Pressable, View, type ViewStyle } from 'react-native';
 
 import { formatClockTime } from '@/lib/datetime';
+import { useT } from '@/i18n';
+import { localizeMessage } from '@/i18n/labels';
 import { useTheme } from '@/theme/ThemeContext';
 
 import { AppText } from './AppText';
@@ -22,6 +24,7 @@ export type TimeFieldProps = {
 
 export function TimeField({ label, value, onChange, onRemove, error, style }: TimeFieldProps) {
   const theme = useTheme();
+  const { t } = useT();
   const hasError = Boolean(error);
 
   return (
@@ -71,7 +74,7 @@ export function TimeField({ label, value, onChange, onRemove, error, style }: Ti
           <Pressable
             onPress={onRemove}
             accessibilityRole="button"
-            accessibilityLabel={`Remove ${formatClockTime(value)}`}
+            accessibilityLabel={t('reminder.removeTime', { time: formatClockTime(value) })}
             style={({ pressed }) => ({
               width: theme.touch.comfortable,
               height: theme.touch.comfortable,
@@ -86,7 +89,7 @@ export function TimeField({ label, value, onChange, onRemove, error, style }: Ti
       </View>
       {hasError ? (
         <AppText variant="caption" color="dangerText">
-          {error}
+          {localizeMessage(error ?? '')}
         </AppText>
       ) : null}
     </View>
