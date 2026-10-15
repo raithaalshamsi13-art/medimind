@@ -1184,9 +1184,13 @@ same commit**, and updates the sections above that it touches (rule in
   rewrite and allows 60 s. The Anthropic SDK was replaced by plain `fetch`,
   so the server has **no runtime dependencies**. Server **1.8.0**. Verified
   locally by running the built handler and hitting `/api/health`, `/health`
-  and `/api/scan` (correct 500 `NO_PROVIDER` without a key). The live
-  function is verified after the push and the Vercel variables are set —
-  see `docs/DEPLOYMENT.md` §2a.
+  and `/api/scan` (correct 500 `NO_PROVIDER` without a key). **Live and
+  verified**: after the push, `https://medimind-medimind3.vercel.app/api/health`
+  answers `version 1.8.0` (the first attempt failed with
+  FUNCTION_INVOCATION_FAILED because the server used NodeNext `.js`
+  import specifiers Vercel could not trace — the server is CommonJS now).
+  `assistant:false` until `GEMINI_API_KEY` is added to Vercel — see
+  `docs/DEPLOYMENT.md` §2a.
 - **Voice**: `speakable()` runs before every utterance — units become words
   in English and Arabic ("500 mg" → "500 milligrams", "10 mg/5 ml" → "10
   milligrams per 5 millilitres", "IU" → "international units") and
