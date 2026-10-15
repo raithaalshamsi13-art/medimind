@@ -34,10 +34,10 @@
 
 import type { IncomingMessage, ServerResponse } from 'node:http';
 
-import { ProviderError, selectProvider, type Turn } from './providers';
+import { ProviderError, readEnv, selectProvider, type Turn } from './providers';
 
 /** Bumped on every change so /health shows which code is live. */
-const VERSION = '1.8.1';
+const VERSION = '1.8.2';
 
 const MAX_QUESTION_LENGTH = 500;
 const MAX_HISTORY_TURNS = 10;
@@ -47,8 +47,8 @@ const MAX_BODY_BYTES = 64 * 1024;
 /** Per-IP: this many requests per window. Enough for a person, not a script. */
 const RATE_LIMIT = { windowMs: 10 * 60 * 1000, max: 40 };
 
-const APP_ACCESS_KEY = process.env.APP_ACCESS_KEY ?? '';
-const ALLOWED_ORIGIN = process.env.ALLOWED_ORIGIN ?? '*';
+const APP_ACCESS_KEY = readEnv(process.env, 'APP_ACCESS_KEY') ?? '';
+const ALLOWED_ORIGIN = readEnv(process.env, 'ALLOWED_ORIGIN') ?? '*';
 
 const provider = selectProvider(process.env);
 
@@ -584,11 +584,11 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse): 
       // never a value), so a missing key or a stale deploy is visible from
       // the health page instead of guessed at.
       config: {
-        GEMINI_API_KEY: Boolean(process.env.GEMINI_API_KEY?.trim()),
-        GROQ_API_KEY: Boolean(process.env.GROQ_API_KEY?.trim()),
-        ANTHROPIC_API_KEY: Boolean(process.env.ANTHROPIC_API_KEY?.trim()),
+        GEMINI_API_KEY: Boolean(readEnv(process.env, 'GEMINI_API_KEY')),
+        GROQ_API_KEY: Boolean(readEnv(process.env, 'GROQ_API_KEY')),
+        ANTHROPIC_API_KEY: Boolean(readEnv(process.env, 'ANTHROPIC_API_KEY')),
         APP_ACCESS_KEY: Boolean(APP_ACCESS_KEY),
-        AI_PROVIDER: process.env.AI_PROVIDER?.trim() || null,
+        AI_PROVIDER: readEnv(process.env, 'AI_PROVIDER') ?? null,
         /** Names (never values) of any variable that looks like an AI key — catches a misspelt name. */
         similarNames: Object.keys(process.env).filter((name) => /GEMINI|GROQ|ANTHROPIC|GOOGLE/i.test(name)),
       },

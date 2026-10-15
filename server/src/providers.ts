@@ -309,22 +309,37 @@ export const DEFAULT_MODELS = {
  * Pick a provider from the environment. Returns null when no key is set at
  * all, in which case the app keeps using its offline assistant.
  */
+/**
+ * Read a variable by name, accepting any letter case ("gemini_api_key" is
+ * a real mistake people make in hosting dashboards, and Linux treats it as
+ * a different variable). The exact name wins when both exist.
+ */
+export function readEnv(env: NodeJS.ProcessEnv, name: string): string | undefined {
+  const exact = env[name];
+  if (exact !== undefined && exact.trim().length > 0) return exact.trim();
+  const wanted = name.toLowerCase();
+  for (const key of Object.keys(env)) {
+    if (key.toLowerCase() === wanted && env[key] && env[key]!.trim().length > 0) return env[key]!.trim();
+  }
+  return undefined;
+}
+
 export function selectProvider(env: NodeJS.ProcessEnv): LlmProvider | null {
-  const gemini = env.GEMINI_API_KEY?.trim();
-  const groq = env.GROQ_API_KEY?.trim();
-  const anthropic = env.ANTHROPIC_API_KEY?.trim();
-  const forced = env.AI_PROVIDER?.trim().toLowerCase();
+  const gemini = readEnv(env, 'GEMINI_API_KEY');
+  const groq = readEnv(env, 'GROQ_API_KEY');
+  const anthropic = readEnv(env, 'ANTHROPIC_API_KEY');
+  const forced = readEnv(env, 'AI_PROVIDER')?.toLowerCase();
 
   const wants = (name: string) => !forced || forced === name;
 
   if (gemini && wants('gemini')) {
-    return createGeminiProvider(gemini, env.GEMINI_MODEL?.trim() || DEFAULT_MODELS.gemini);
+    return createGeminiProvider(gemini, readEnv(env, 'GEMINI_MODEL') || DEFAULT_MODELS.gemini);
   }
   if (groq && wants('groq')) {
-    return createGroqProvider(groq, env.GROQ_MODEL?.trim() || DEFAULT_MODELS.groq);
+    return createGroqProvider(groq, readEnv(env, 'GROQ_MODEL') || DEFAULT_MODELS.groq);
   }
   if (anthropic && wants('anthropic')) {
-    return createAnthropicProvider(anthropic, env.ANTHROPIC_MODEL?.trim() || DEFAULT_MODELS.anthropic);
+    return createAnthropicProvider(anthropic, readEnv(env, 'ANTHROPIC_MODEL') || DEFAULT_MODELS.anthropic);
   }
   return null;
 }

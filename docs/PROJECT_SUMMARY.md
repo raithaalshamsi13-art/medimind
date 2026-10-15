@@ -1169,6 +1169,13 @@ Newest first. Every commit that changes the app adds an entry here **in the
 same commit**, and updates the sections above that it touches (rule in
 `AGENTS.md`, "Verify before claiming done").
 
+### 2026-10-15 — Variable names are case-insensitive (server 1.8.2)
+- Found via the new health diagnostics: the Vercel project had the key saved
+  as `gemini_api_key` (lowercase), which Linux treats as a different
+  variable from `GEMINI_API_KEY`. `readEnv()` now accepts any letter case
+  for every variable the server reads (exact name wins), so the deployment
+  works as saved; the docs still say to use the uppercase names.
+
 ### 2026-10-15 — Health diagnostics (server 1.8.1)
 - `/health` now reports a `config` block (which AI-key / app-key variables
   this deployment can see — presence only), a `deployment` block (host,
