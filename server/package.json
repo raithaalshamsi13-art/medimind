@@ -3,7 +3,6 @@
   "version": "1.0.0",
   "private": true,
   "description": "MediMind API - holds the AI key server-side, answers assistant questions and reads labels. Runs on Railway (index.ts) or as a Vercel function (api/[...path].ts).",
-  "type": "module",
   "engines": {
     "node": ">=20"
   },

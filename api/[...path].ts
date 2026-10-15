@@ -16,7 +16,7 @@
 
 import type { IncomingMessage, ServerResponse } from 'node:http';
 
-import { handleRequest } from '../server/src/app.js';
+import { handleRequest } from '../server/src/app';
 
 export const config = {
   api: { bodyParser: false },

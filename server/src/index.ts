@@ -7,7 +7,7 @@
 
 import { createServer } from 'node:http';
 
-import { describeProvider, handleRequest, VERSION } from './app.js';
+import { describeProvider, handleRequest, VERSION } from './app';
 
 const PORT = Number(process.env.PORT ?? 8787);
 

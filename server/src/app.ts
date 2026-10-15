@@ -34,7 +34,7 @@
 
 import type { IncomingMessage, ServerResponse } from 'node:http';
 
-import { ProviderError, selectProvider, type Turn } from './providers.js';
+import { ProviderError, selectProvider, type Turn } from './providers';
 
 /** Bumped on every change so /health shows which code is live. */
 const VERSION = '1.8.0';
