@@ -25,7 +25,14 @@
 
 import { z } from 'zod';
 
-import { expirationDateSchema, medicationNameSchema, type Medication, type MedicationCreateInput } from './medication';
+import {
+  expirationDateSchema,
+  medicationNameSchema,
+  type Medication,
+  type MedicationCreateInput,
+  type MedicationForm,
+  type MedicationKind,
+} from './medication';
 
 // ---------------------------------------------------------------------------
 // Result contract (validated at the boundary — the reader is untrusted input)
@@ -54,6 +61,8 @@ export const scanResultSchema = z.object({
     }, z.string().nullable()),
     manufacturer: nullableText(100),
     activeIngredients: nullableText(200),
+    /** The dosage form as printed ("film-coated tablets"); mapped to `form` when recognised. */
+    form: nullableText(40),
   }),
   confidence: z.object({
     name: confidence.default(0),
@@ -89,8 +98,102 @@ export type ScanTranslation = NonNullable<ScanResult['translation']>;
 export function displayField(result: ScanResult, field: ScanField, language: 'en' | 'ar'): string | null {
   const printed = result.fields[field];
   if (language === 'en' || !result.translation || printed === null) return printed;
-  if (field === 'expirationDate' || field === 'manufacturer') return printed;
+  if (field === 'expirationDate' || field === 'manufacturer' || field === 'form') return printed;
   return result.translation[field] ?? printed;
+}
+
+// ---------------------------------------------------------------------------
+// Grounding — a value the reader did not actually read is not trusted
+// ---------------------------------------------------------------------------
+
+/** Lower-case, strip punctuation, collapse spaces: for "does this text contain that". */
+function normaliseText(text: string): string {
+  return text
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/** Confidence given to a field whose words are not in the transcription. */
+export const UNGROUNDED_CONFIDENCE = 0.5;
+
+export type GroundingMessages = {
+  nameNotOnLabel: string;
+  dosageNotOnLabel: string;
+  expiryNotOnLabel: string;
+};
+
+/**
+ * Cross-check the picked-out fields against the transcription. The reader is
+ * told to copy, never to recognise — but a model can still "complete" a
+ * half-read name into a common medicine. If the name (or the numbers of the
+ * dosage, or the year of the expiry date) cannot be found in `rawText`, the
+ * field's confidence is capped below the threshold, so the user is asked to
+ * confirm the name and the field is badged "Check this". Nothing is removed:
+ * what was read stays visible for the user to judge.
+ */
+export function groundResult(result: ScanResult, messages: GroundingMessages): ScanResult {
+  const text = normaliseText(result.rawText);
+  if (text.length === 0) return result;
+
+  const confidence = { ...result.confidence };
+  const warnings = [...result.warnings];
+  const cap = (field: 'name' | 'dosage' | 'expirationDate', message: string) => {
+    if (confidence[field] > UNGROUNDED_CONFIDENCE) confidence[field] = UNGROUNDED_CONFIDENCE;
+    if (!warnings.includes(message)) warnings.push(message);
+  };
+
+  const name = result.fields.name ? normaliseText(result.fields.name) : '';
+  if (name.length > 0) {
+    // Every word of the name must be printed; a single word is allowed to
+    // match as a prefix ("Panadol" vs "PanadolExtra" run together).
+    const words = name.split(' ');
+    const allPresent = words.every((word) => text.includes(word));
+    if (!allPresent) cap('name', messages.nameNotOnLabel);
+  }
+
+  const dosage = result.fields.dosage ?? '';
+  const numbers = dosage.match(/\d+(?:[.,]\d+)?/g) ?? [];
+  if (numbers.length > 0 && !numbers.every((n) => text.includes(n.replace(',', '.')) || text.includes(n))) {
+    cap('dosage', messages.dosageNotOnLabel);
+  }
+
+  const expiry = result.fields.expirationDate;
+  if (expiry) {
+    const year = expiry.slice(0, 4);
+    if (!text.includes(year) && !text.includes(year.slice(2))) cap('expirationDate', messages.expiryNotOnLabel);
+  }
+
+  return { ...result, confidence, warnings: warnings.slice(0, 10) };
+}
+
+// ---------------------------------------------------------------------------
+// Form and kind from the printed words
+// ---------------------------------------------------------------------------
+
+const FORM_KEYWORDS: readonly [RegExp, MedicationForm][] = [
+  [/\b(tablet|tablets|tab|tabs|caplet|caplets)\b|أقراص|قرص/i, 'TABLET'],
+  [/\b(capsule|capsules|caps|softgel|softgels)\b|كبسول/i, 'CAPSULE'],
+  [/\b(inhaler|inhalation|puffs?)\b|بخاخ استنشاق|استنشاق/i, 'INHALER'],
+  [/\b(injection|injectable|vial|ampoule|prefilled)\b|حقن/i, 'INJECTION'],
+  [/\b(drops?)\b|قطرة|نقط/i, 'DROPS'],
+  [/\b(spray|nasal)\b|بخاخ/i, 'SPRAY'],
+  [/\b(patch|patches|transdermal)\b|لصقة|لاصقة/i, 'PATCH'],
+  [/\b(cream|ointment|gel|lotion|topical)\b|كريم|مرهم|جل/i, 'CREAM'],
+  [/\b(syrup|suspension|solution|elixir|liquid|oral solution|sachet|sachets|powder)\b|شراب|معلق|محلول|سائل/i, 'LIQUID'],
+];
+
+/** Map the printed dosage form to the app's list; null when it is not recognised. */
+export function formFromLabel(text: string | null): MedicationForm | null {
+  if (!text) return null;
+  for (const [pattern, form] of FORM_KEYWORDS) if (pattern.test(text)) return form;
+  return null;
+}
+
+/** "Food supplement", "vitamin", "iron" → SUPPLEMENT; otherwise unknown (null). */
+export function kindFromLabel(text: string): MedicationKind | null {
+  return /\b(supplement|supplements|dietary|multivitamin|vitamins?)\b|مكمل غذائي|فيتامين/i.test(text) ? 'SUPPLEMENT' : null;
 }
 
 /** Fields the app saves onto a medicine, with their confidence. */
@@ -138,6 +241,8 @@ export function scanToMedicationInput(
 
   return {
     name: name.data,
+    kind: kindFromLabel(`${result.fields.name ?? ''} ${result.rawText}`),
+    form: formFromLabel(result.fields.form) ?? formFromLabel(result.fields.name) ?? formFromLabel(result.rawText),
     dosage: result.fields.dosage,
     frequency: result.fields.frequency,
     instructions: result.fields.instructions,
@@ -211,6 +316,7 @@ function demoReading(scenario: DemoScenario, year: number): Omit<ScanResult, 'tr
           expirationDate: `${year + 2}-04-30`,
           manufacturer: 'Demo Pharma Ltd',
           activeIngredients: 'Paracetamol',
+          form: 'film-coated tablets',
         },
         confidence: { name: 0.96, dosage: 0.94, frequency: 0.85, instructions: 0.9, expirationDate: 0.93 },
         warnings: [],
@@ -228,6 +334,7 @@ function demoReading(scenario: DemoScenario, year: number): Omit<ScanResult, 'tr
           expirationDate: `${year - 1}-01-31`,
           manufacturer: 'Demo Pharma Ltd',
           activeIngredients: 'Cetirizine dihydrochloride',
+          form: 'tablets',
         },
         confidence: { name: 0.95, dosage: 0.92, frequency: 0.9, instructions: 0, expirationDate: 0.97 },
         warnings: [],
@@ -243,6 +350,7 @@ function demoReading(scenario: DemoScenario, year: number): Omit<ScanResult, 'tr
           expirationDate: null,
           manufacturer: null,
           activeIngredients: null,
+          form: null,
         },
         confidence: { name: 0.2, dosage: 0.1, frequency: 0, instructions: 0, expirationDate: 0.1 },
         warnings: ['Most of the label is scratched or blurred. Nothing could be read with confidence.'],

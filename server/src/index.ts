@@ -37,7 +37,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { ProviderError, selectProvider, type Turn } from './providers.js';
 
 /** Bumped on every change so /health shows which code is live. */
-const VERSION = '1.6.1';
+const VERSION = '1.7.0';
 
 const MAX_QUESTION_LENGTH = 500;
 const MAX_HISTORY_TURNS = 10;
@@ -86,7 +86,7 @@ About the person (when a profile is supplied below):
  * the fields the app stores. The rules mirror the app's: nothing is guessed,
  * an unreadable field is null with a low confidence, and the wording is kept.
  */
-const SCAN_PROMPT = `You are reading a photo of a medicine package, bottle or blister pack for a medication-reminder app. Return ONLY a JSON object, no prose, with exactly this shape:
+const SCAN_PROMPT = `You are an OCR reader for a medication-reminder app. You are given ONE photo of a medicine package, bottle, blister pack or supplement container. Work in two steps: FIRST transcribe every piece of legible printed text exactly as printed; THEN fill the fields ONLY by copying words from that transcription. Return ONLY a JSON object, no prose, with exactly this shape:
 
 {
   "rawText": "every piece of legible printed text on the packaging, in reading order, one line per printed line, wording and numbers preserved exactly (do not translate, do not summarise; keep units, lot numbers and warnings)",
@@ -97,7 +97,8 @@ const SCAN_PROMPT = `You are reading a photo of a medicine package, bottle or bl
     "instructions": "printed directions such as \\"Take with food\\" or a maximum per day, or null",
     "expirationDate": "the expiry date as YYYY-MM-DD; if only month and year are printed use the last day of that month; or null",
     "manufacturer": "the manufacturer or marketing company as printed, or null",
-    "activeIngredients": "the active ingredient(s) as printed, or null"
+    "activeIngredients": "the active ingredient(s) as printed, or null",
+    "form": "the dosage form as printed, e.g. \"film-coated tablets\", \"capsules\", \"syrup\", \"oral drops\", \"cream\", or null"
   },
   "confidence": { "name": 0-1, "dosage": 0-1, "frequency": 0-1, "instructions": 0-1, "expirationDate": 0-1 },
   "warnings": ["short plain-language notes about anything unclear, cut off, blurred or hidden, in {language}"],
@@ -105,6 +106,8 @@ const SCAN_PROMPT = `You are reading a photo of a medicine package, bottle or bl
 }
 
 Rules:
+- Every value in "fields" must appear, word for word, somewhere in "rawText". If you cannot point to the printed words, the value is null. Never complete, correct or normalise a name: "Ferrous Sulphate 200 mg" stays exactly that.
+- This is OCR, not recognition: identify the product ONLY from the printed text. Never infer the medicine from the colour, shape, logo or style of the packaging, and never substitute a common medicine (such as paracetamol) for what is printed. An iron supplement, a vitamin, an antibiotic and a painkiller are all simply whatever their label says.
 - Never invent a value. If something is not printed, or you cannot read it clearly, set the field to null and its confidence low. A confidence of 0.9 or more means you can read it clearly; below 0.7 means the user must check it.
 - "dosage" is the strength printed on the pack, never how much to take. "frequency" is only what the label itself says about timing.
 - Do not add medical advice, uses or side effects — only what is printed.
@@ -405,7 +408,7 @@ function extractJson(text: string): unknown {
   return JSON.parse(trimmed.slice(start, end + 1));
 }
 
-const SCAN_FIELDS = ['name', 'dosage', 'frequency', 'instructions', 'expirationDate', 'manufacturer', 'activeIngredients'] as const;
+const SCAN_FIELDS = ['name', 'dosage', 'frequency', 'instructions', 'expirationDate', 'manufacturer', 'activeIngredients', 'form'] as const;
 const CONFIDENCE_FIELDS = ['name', 'dosage', 'frequency', 'instructions', 'expirationDate'] as const;
 
 /** Coerce whatever the model returned into the exact shape the app validates. */
@@ -420,7 +423,7 @@ function normaliseScan(raw: unknown) {
     typeof v === 'number' && Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 0;
 
   const fields: Record<string, string | null> = {};
-  for (const key of SCAN_FIELDS) fields[key] = text(fieldsIn[key], key === 'instructions' ? 300 : key === 'activeIngredients' ? 200 : 100);
+  for (const key of SCAN_FIELDS) fields[key] = text(fieldsIn[key], key === 'instructions' ? 300 : key === 'activeIngredients' ? 200 : key === 'form' ? 40 : 100);
   const confidence: Record<string, number> = {};
   for (const key of CONFIDENCE_FIELDS) confidence[key] = fields[key] === null ? 0 : number01(confIn[key]);
 

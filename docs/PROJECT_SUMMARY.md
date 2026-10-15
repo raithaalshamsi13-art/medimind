@@ -20,8 +20,8 @@ step adds an entry to §18 (change log) and updates the sections it touches._
 | Platform | iPhone via Expo Go (primary); web browser (UI work only) |
 | Stack | Expo SDK 57 · React Native 0.86 · React 19.2 · TypeScript 6 · Expo Router · SQLite · Zustand · Zod |
 | Source | 217 tracked files · ~29,000 lines across `src/`, tests, the API server, scripts and SQL |
-| Tests | **360 passing** in 22 suites — including real-SQLite tests and a WCAG contrast checker |
-| Commits | 47, all verified (typecheck + tests + iOS and web bundles) before committing |
+| Tests | **371 passing** in 23 suites — including real-SQLite tests and a WCAG contrast checker |
+| Commits | 48, all verified (typecheck + tests + iOS and web bundles) before committing |
 | Milestones | M1 Foundation ✅ · M2 UI & Auth ✅ · M3 Database & CRUD ✅ · Assistant ✅ · Deployment ✅ · Structured entry + health conditions ✅ · Family profiles ✅ · Personal health profile ✅ · M5 Reminders ✅ · M4 Scanner + safety engine ✅ · Voice alerts ✅ · M6 Polish ◐ (language, voice, privacy done) |
 | Live | Web: https://medimind-medimind3.vercel.app · API: Railway (`/health` shows version + model) · Accounts/DB: Supabase |
 | Native build needed | **None.** Everything runs in Expo Go — no Xcode, no Mac, no Android Studio, no Apple developer account |
@@ -400,6 +400,23 @@ SCAN → CHECK → CONFIRM is now real. Built 19 Sep 2026.
   Supabase mirror updated.
 - **Entry points**: the Home hero card and a **Scan a label** button on the
   Medicines tab.
+- **Which reader runs is never silent** (15 Oct 2026). Demo Mode defaults
+  on only when no server address is configured, is healed off on existing
+  installs that never chose it, has a switch under **Settings → Scanner**,
+  and the scan screens show a banner — "Demo reader is on: the result will
+  be a fixed example" with **Use the real reader**, or "Real label reading
+  is not set up" with **Use the demo reader**. With Demo Mode off the photo
+  always goes to the server; a missing address is an error, never an example.
+- **Grounding** (`groundResult` in `src/domain/scan.ts`, applied by
+  `ProxyScanner`): the server prompt is transcription-first ("fill the
+  fields only by copying words from the transcription; identify the product
+  only from the printed text, never from colour, shape or logo; never
+  substitute a common medicine"), and the app cross-checks: a name whose
+  words are not in the label text, a strength whose numbers are not, or an
+  expiry whose year is not, is capped at 0.5 confidence and warned about —
+  so the user confirms the name ("Medicine not identified") instead of a
+  wrong medicine being saved. The printed dosage form is read (`form`) and
+  mapped to the app's list; supplement wording sets the kind.
 
 ### 4.4g Voice alerts
 
@@ -652,13 +669,14 @@ demo cannot be broken by a missing key or a dead network.
 
 ## 9. Testing and verification
 
-**360 tests in 22 suites**, all passing:
+**371 tests in 23 suites**, all passing:
 
 | Suite | Covers |
 |---|---|
 | `domain/safety` | SAFE / EXPIRING_SOON / EXPIRED / NEEDS_REVIEW boundaries against a fixed today; missing dosage, frequency, expiry; scan-confidence threshold applies to scans only; reason ordering |
-| `domain/scan` | result schema (trim, blank → null, malformed date dropped, confidence range, lengths), name confirmation rule, "check this" per field, overall confidence, scan → medicine input (label-read fields only, confirmed name wins, no name → null), duplicate detection (normalised name, same member, archived ignored), the three demo readings ; Arabic translation block (validated, display fallback to the printed text, never for dates or manufacturer, demo readings carry it only in Arabic) |
+| `domain/scan` | result schema (trim, blank → null, malformed date dropped, confidence range, lengths), name confirmation rule, "check this" per field, overall confidence, scan → medicine input (label-read fields only, confirmed name wins, no name → null), duplicate detection (normalised name, same member, archived ignored), the three demo readings ; Arabic translation block (validated, display fallback to the printed text, never for dates or manufacturer, demo readings carry it only in Arabic) ; grounding (a name, strength or expiry year not found in the transcription is capped below the threshold and flagged — a guessed "Paracetamol" on an iron label asks for the name), printed form → TABLET/CAPSULE/…, supplement wording → SUPPLEMENT |
 | `components/scanSpeech` | the spoken reading: name, dosage, frequency, instructions, expiry; expired warning without advice; unreadable sentence; asks for the name and to check low-confidence fields; Arabic wording in Arabic |
+| `services/sentences` | speech chunking: sentence ends and newlines, Arabic punctuation, decimals kept, long sentences broken under the engine limit |
 | `i18n/translate` | every English key has an Arabic string with matching placeholders, interpolation, `localizeMessage` lookup, counts, 12-hour times per language, expiry wording, frequency display, possessives |
 | `db/ReminderRepository` | reminder CRUD, one per medicine, notification ids, per-user isolation; doses created once per occurrence, status kept on re-seed, missed sweep only touches UPCOMING before the cutoff, follow-up id; cascades from medicine and family member — **both** backends |
 | `domain/reminder` | suggestion from the label (blocked when expired, none when not understood, as-needed), input schema (sorted unique times, days rules, date order), occurrences per day, grace window, wording helpers |
@@ -751,7 +769,11 @@ Scan the QR code with the iPhone Camera app (opens Expo Go). Then:
    banner "Adding medicine for: Fatima · Mother" → save. Back on **Medicines**,
    switch between Me and Fatima with the chips; each list is separate.
    **Remove family member** → the confirmation lists her medicines.
-9. **Home → Scan Medicine** (Demo Mode is on by default): pick *Safe
+9. **Home → Scan Medicine**. With a server configured the real reader is
+   on: photograph a real pack (iron supplement, paracetamol) — the details
+   must match that label, and a doubtful name says "Medicine not
+   identified". To show the fixed examples instead, turn on **Settings →
+   Scanner → Demo Mode** (or the banner's **Use the demo reader**): pick *Safe
    medicine* under the camera, photograph anything → the result screen shows
    the photo beside the label text, the fields badged "Read from label", and
    "Demo Medicine" is added to the list automatically. **Scan another** with
@@ -1023,6 +1045,7 @@ with no internet and no API key — exactly as the brief requires.
 ## 16. Commit history
 
 ```
+2026-10-15  Fix: Demo Mode no longer hijacks real scans; grounding check; clearer sentence-by-sentence voice (server 1.7.0)
 2026-10-15  Scan result: large-print details, Arabic translation of the reading, spoken reading (server 1.6.1)
 2026-09-19  Milestone 4 + voice: camera scanning, label text panel, auto-add with safety engine, voice alerts, snooze, privacy page (schema v6, server 1.6.0)
 2026-09-13  Chatbot: complete answers (8192-token budget), answer-first tone, new closing line, narrower client screen (server 1.4.1)
@@ -1122,6 +1145,33 @@ with no internet and no API key — exactly as the brief requires.
 Newest first. Every commit that changes the app adds an entry here **in the
 same commit**, and updates the sections above that it touches (rule in
 `AGENTS.md`, "Verify before claiming done").
+
+### 2026-10-15 — Fix: real labels were never read; grounding; clearer voice
+- **Cause of "my iron supplement came back as paracetamol"**: `demoMode`
+  defaulted to `true`, Settings had no switch for it, and the scanner
+  factory used the demo reader whenever Demo Mode was on (and silently when
+  no server address existed). Every scan returned the fixed "Demo Medicine
+  (Paracetamol)" example. Fixed: default off when a server is configured,
+  one-time heal of stored installs (`demoModeChosen`), **Settings →
+  Scanner → Demo Mode** switch, `ScanModeBanner` on both scan screens with
+  one-tap switching, and the factory never falls back to the mock —
+  `SCANNER_NOT_CONFIGURED` is a friendly error instead.
+- **OCR accuracy**: server prompt rewritten transcription-first with
+  explicit "copy, never recognise or substitute" rules and a printed `form`
+  field (server **1.7.0**); app-side `groundResult` caps the confidence of a
+  name / strength / expiry year that is not in the transcription and adds a
+  warning; capture quality raised to 0.85 for both the camera and the photo
+  picker; result screen says **Medicine not identified** and asks to scan
+  again or type the name when the name is not confident; `form` row shown
+  and spoken; printed form → `form`, supplement wording → `kind`.
+- **Voice**: `ExpoVoiceService` now picks the best installed voice per
+  language (enhanced / premium / neural when available), speaks one
+  sentence at a time with a short pause (no cut-offs, natural pacing,
+  immediate Stop), rate 0.95 / 0.9; the spoken reading includes the form
+  and active ingredient.
+- Tests +11 (371 in 23 suites): grounding, form/kind mapping, sentence
+  splitting. Not tested here: a physical label through the live server —
+  see §11 for the on-device steps.
 
 ### 2026-10-15 — Scan result: large print, Arabic translation, spoken reading
 - **Large-print details card** on the scan result: the medicine name in

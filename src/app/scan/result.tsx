@@ -270,7 +270,11 @@ export default function ScanResultScreen() {
     ) : nameNeeded ? (
       <Card>
         <View style={{ gap: theme.spacing.md }}>
-          {nothingRead ? <InlineMessage tone="warning" message={t('scan.notReadable')} /> : null}
+          <InlineMessage
+            tone="warning"
+            title={t('scan.notIdentified')}
+            message={nothingRead ? t('scan.notReadable') : t('scan.notIdentifiedBody')}
+          />
           <AppText variant="heading">{t('scan.confirmNameTitle')}</AppText>
           <AppText variant="bodyLarge" color="textSecondary">
             {t('scan.confirmNameBody')}
@@ -335,6 +339,7 @@ export default function ScanResultScreen() {
         <FieldRow label={t('detail.instructions')} field="instructions" result={result} language={language} />
         <FieldRow label={t('detail.expiryDate')} field="expirationDate" result={result} language={language} />
         <FieldRow label={t('scan.activeIngredients')} field="activeIngredients" result={result} language={language} />
+        <FieldRow label={t('scan.form')} field="form" result={result} language={language} />
         <FieldRow label={t('scan.manufacturer')} field="manufacturer" result={result} language={language} />
 
         {translation ? (
@@ -464,7 +469,7 @@ function NameBlock({ result, language }: { result: ScanResult; language: 'en' | 
         </AppText>
       ) : (
         <AppText variant="title" color="textMuted" style={{ fontStyle: 'italic' }}>
-          {t('scan.nameUnknown')}
+          {t('scan.notIdentified')}
         </AppText>
       )}
       {shown && printed && shown !== printed ? (

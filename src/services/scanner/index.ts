@@ -1,8 +1,12 @@
 /**
  * Scanner factory — the only place that decides which reader runs.
  *
- *   Demo Mode on, or no server configured  → MockScanner
- *   otherwise                              → ProxyScanner (vision model via Railway)
+ *   Demo Mode on   → MockScanner: fixed example readings, chosen on screen.
+ *                    Never used for a real label without the screen saying so.
+ *   Demo Mode off  → ProxyScanner: the photo goes to the MediMind server,
+ *                    which runs a vision model on it. If no server address is
+ *                    configured the scan fails with a clear message — it
+ *                    never quietly falls back to an example.
  */
 
 import { MockScanner } from './MockScanner';
@@ -17,11 +21,9 @@ export function isRealScannerAvailable(): boolean {
 }
 
 export function getScannerService(demoMode: boolean): MedicationScannerService {
-  if (!demoMode && isRealScannerAvailable()) {
-    proxy ??= new ProxyScanner();
-    return proxy;
-  }
-  return mock;
+  if (demoMode) return mock;
+  proxy ??= new ProxyScanner();
+  return proxy;
 }
 
 export type { MedicationScannerService, ScanImage, ScanRequest } from './MedicationScannerService';

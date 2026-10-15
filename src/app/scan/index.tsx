@@ -18,6 +18,7 @@ import { ActivityIndicator, Linking, Pressable, StyleSheet, View } from 'react-n
 
 import { MemberContextBanner } from '@/components/family/MemberContextBanner';
 import { DemoScenarioPicker } from '@/components/scan/DemoScenarioPicker';
+import { ScanModeBanner } from '@/components/scan/ScanModeBanner';
 import { pickLabelPhoto } from '@/components/scan/pickLabelPhoto';
 import { useStartScan } from '@/components/scan/useStartScan';
 import { AppText, Button, Card, Screen } from '@/components/ui';
@@ -26,7 +27,7 @@ import { memberById, selectActiveMemberId, selectMembers, useFamilyStore } from 
 import { useTheme } from '@/theme/ThemeContext';
 
 /** Compression for the shutter photo; label text survives this easily. */
-const CAPTURE_QUALITY = 0.6;
+const CAPTURE_QUALITY = 0.85;
 
 export default function ScanScreen() {
   const theme = useTheme();
@@ -78,6 +79,7 @@ export default function ScanScreen() {
       <Screen scroll>
         <View style={{ gap: theme.spacing.lg }}>
           {member && !member.isSelf ? <MemberContextBanner member={member} prefix={t('scan.scanningFor')} /> : null}
+          <ScanModeBanner />
           <Card>
             <View style={{ alignItems: 'center', gap: theme.spacing.md, paddingVertical: theme.spacing.md }}>
               <Ionicons name="camera-outline" size={44} color={theme.colors.primary} />
@@ -153,6 +155,7 @@ export default function ScanScreen() {
               gap: theme.spacing.md,
             },
           ]}>
+          <ScanModeBanner compact />
           {demoMode ? <DemoScenarioPicker value={scenario} onChange={setScenario} compact /> : null}
 
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>

@@ -10,6 +10,10 @@ import {
   DEMO_SCENARIOS,
   demoScanResult,
   displayField,
+  formFromLabel,
+  groundResult,
+  kindFromLabel,
+  UNGROUNDED_CONFIDENCE,
   FIELD_CONFIDENCE_THRESHOLD,
   findDuplicate,
   isUncertain,
@@ -33,6 +37,7 @@ const READ: ScanResult = {
     expirationDate: '2028-04-30',
     manufacturer: null,
     activeIngredients: 'Paracetamol',
+    form: null,
   },
   confidence: { name: 0.95, dosage: 0.9, frequency: 0, instructions: 0, expirationDate: 0.8 },
   warnings: [],
@@ -108,6 +113,8 @@ describe('scanToMedicationInput', () => {
     const input = scanToMedicationInput(READ, { memberId: 'self', imageUri: 'file:///scan.jpg' });
     expect(input).toEqual({
       name: 'Panadol',
+      kind: null,
+      form: 'TABLET', // "20 tablets" is printed on the label
       dosage: '500 mg',
       frequency: null,
       instructions: null,
@@ -205,5 +212,73 @@ describe('translation (Arabic display)', () => {
     expect(scanResultSchema.safeParse(ar).success).toBe(true);
     // The stored fields stay as printed.
     expect(scanToMedicationInput(ar, { memberId: 'self', imageUri: null })?.name).toBe('Demo Medicine');
+  });
+});
+
+describe('groundResult — a value not in the transcription is not trusted', () => {
+  const messages = { nameNotOnLabel: 'NAME?', dosageNotOnLabel: 'DOSE?', expiryNotOnLabel: 'EXPIRY?' };
+  const iron: ScanResult = {
+    ...READ,
+    rawText: 'FERROUS SULPHATE 200mg\n28 tablets\nIron supplement\nEXP 03/2027',
+    fields: { ...READ.fields, name: 'Ferrous Sulphate', dosage: '200 mg', expirationDate: '2027-03-31', activeIngredients: 'Ferrous sulphate' },
+    confidence: { name: 0.95, dosage: 0.95, frequency: 0, instructions: 0, expirationDate: 0.9 },
+  };
+
+  it('keeps a reading whose name, strength and expiry year are printed', () => {
+    expect(groundResult(iron, messages)).toEqual(iron);
+  });
+
+  it('caps the name when the picked-out name is not printed (e.g. a guessed paracetamol)', () => {
+    const guessed = groundResult({ ...iron, fields: { ...iron.fields, name: 'Paracetamol' } }, messages);
+    expect(guessed.confidence.name).toBe(UNGROUNDED_CONFIDENCE);
+    expect(needsNameConfirmation(guessed)).toBe(true);
+    expect(guessed.warnings).toContain('NAME?');
+    // The printed text and other fields are untouched.
+    expect(guessed.rawText).toBe(iron.rawText);
+    expect(guessed.confidence.dosage).toBe(0.95);
+  });
+
+  it('caps the strength and the expiry when their numbers are not printed', () => {
+    const wrong = groundResult({ ...iron, fields: { ...iron.fields, dosage: '500 mg', expirationDate: '2029-03-31' } }, messages);
+    expect(wrong.confidence.dosage).toBe(UNGROUNDED_CONFIDENCE);
+    expect(wrong.confidence.expirationDate).toBe(UNGROUNDED_CONFIDENCE);
+    expect(wrong.warnings).toEqual(['DOSE?', 'EXPIRY?']);
+  });
+
+  it('ignores case, punctuation and run-together words, and leaves an empty transcription alone', () => {
+    const ok = groundResult({ ...iron, rawText: 'ferrous-sulphate 200MG exp 2027' }, messages);
+    expect(ok.confidence.name).toBe(0.95);
+    const empty = groundResult({ ...iron, rawText: '' }, messages);
+    expect(empty).toEqual({ ...iron, rawText: '' });
+  });
+});
+
+describe('form and kind from the printed words', () => {
+  it('maps the printed dosage form to the list and leaves unknown forms null', () => {
+    expect(formFromLabel('Film-coated tablets')).toBe('TABLET');
+    expect(formFromLabel('30 capsules')).toBe('CAPSULE');
+    expect(formFromLabel('Oral drops')).toBe('DROPS');
+    expect(formFromLabel('شراب')).toBe('LIQUID');
+    expect(formFromLabel('Pessary')).toBeNull();
+    expect(formFromLabel(null)).toBeNull();
+  });
+
+  it('recognises a supplement only from supplement wording', () => {
+    expect(kindFromLabel('Ferrous Sulphate 200 mg Iron food supplement')).toBe('SUPPLEMENT');
+    expect(kindFromLabel('Vitamin D3 1000 IU')).toBe('SUPPLEMENT');
+    expect(kindFromLabel('Paracetamol 500 mg tablets')).toBeNull();
+  });
+
+  it('carries form and kind into the medicine created from a scan', () => {
+    const iron: ScanResult = {
+      ...READ,
+      rawText: 'Ferrous Sulphate 200 mg\nIron supplement\n28 tablets',
+      fields: { ...READ.fields, name: 'Ferrous Sulphate', dosage: '200 mg', form: 'tablets' },
+    };
+    const input = scanToMedicationInput(iron, { memberId: 'self', imageUri: null });
+    expect(input?.name).toBe('Ferrous Sulphate');
+    expect(input?.form).toBe('TABLET');
+    expect(input?.kind).toBe('SUPPLEMENT');
+    expect(scanToMedicationInput({ ...READ, rawText: 'Panadol 500 mg' }, { memberId: 'self', imageUri: null })?.form).toBeNull();
   });
 });

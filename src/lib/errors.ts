@@ -22,6 +22,7 @@ export type AppErrorCode =
   | 'STORAGE_UNAVAILABLE'
   | 'NETWORK_UNAVAILABLE'
   | 'ASSISTANT_UNAVAILABLE'
+  | 'SCANNER_NOT_CONFIGURED'
   | 'UNKNOWN';
 
 export type AppError = {
@@ -48,6 +49,8 @@ const FRIENDLY_MESSAGES: Record<AppErrorCode, string> = {
     'You appear to be offline. Your saved medicines and reminders still work without internet.',
   ASSISTANT_UNAVAILABLE:
     'The assistant could not be reached right now. Your saved medicines are not affected. Please try again later, or ask a pharmacist.',
+  SCANNER_NOT_CONFIGURED:
+    'Real label reading is not set up on this build: the MediMind server address is missing. Turn on Demo Mode to see example readings, or enter the medicine by hand.',
   UNKNOWN: 'Something went wrong. Please try again.',
 };
 

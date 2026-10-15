@@ -15,8 +15,10 @@ import { formatIsoDate } from '@/lib/datetime';
 
 type T = (key: TranslationKey, params?: Record<string, string | number>) => string;
 
-const SPOKEN_FIELDS: readonly { field: 'dosage' | 'frequency' | 'instructions'; label: TranslationKey }[] = [
+const SPOKEN_FIELDS: readonly { field: 'dosage' | 'form' | 'activeIngredients' | 'frequency' | 'instructions'; label: TranslationKey }[] = [
   { field: 'dosage', label: 'detail.dosage' },
+  { field: 'form', label: 'scan.form' },
+  { field: 'activeIngredients', label: 'scan.activeIngredients' },
   { field: 'frequency', label: 'detail.howOften' },
   { field: 'instructions', label: 'detail.instructions' },
 ];

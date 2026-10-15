@@ -12,7 +12,7 @@ import * as ImagePicker from 'expo-image-picker';
 import type { ScanImage } from '@/services/scanner';
 
 /** Keep uploads comfortably under the server's limit. */
-const PICKER_QUALITY = 0.7;
+const PICKER_QUALITY = 0.85;
 
 /** The web picker sometimes hands back a full data URI; the reader wants bare base64. */
 function stripDataPrefix(base64: string): string {

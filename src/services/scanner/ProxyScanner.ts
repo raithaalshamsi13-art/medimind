@@ -8,7 +8,8 @@
  */
 
 import { env } from '@/config/env';
-import { scanResultSchema, type ScanResult } from '@/domain/scan';
+import { groundResult, scanResultSchema, type ScanResult } from '@/domain/scan';
+import { tNow } from '@/i18n';
 import { appError, toAppError } from '@/lib/errors';
 import { fail, ok, type Result } from '@/lib/result';
 
@@ -31,7 +32,7 @@ export class ProxyScanner implements MedicationScannerService {
 
   async scan(request: ScanRequest): Promise<Result<ScanResult>> {
     if (!this.endpoint) {
-      return fail(appError('ASSISTANT_UNAVAILABLE', 'no scan endpoint configured'));
+      return fail(appError('SCANNER_NOT_CONFIGURED', 'no scan endpoint configured'));
     }
 
     const controller = new AbortController();
@@ -62,7 +63,15 @@ export class ProxyScanner implements MedicationScannerService {
       if (!parsed.success) {
         return fail(appError('ASSISTANT_UNAVAILABLE', `scan server returned an unexpected shape: ${parsed.error.message.slice(0, 200)}`));
       }
-      return ok(parsed.data);
+      // Cross-check the fields against the transcription: anything the reader
+      // did not actually read is flagged, never trusted.
+      return ok(
+        groundResult(parsed.data, {
+          nameNotOnLabel: tNow('scan.ground.name'),
+          dosageNotOnLabel: tNow('scan.ground.dosage'),
+          expiryNotOnLabel: tNow('scan.ground.expiry'),
+        }),
+      );
     } catch (error) {
       if (error instanceof TypeError) return fail(toAppError(error, 'NETWORK_UNAVAILABLE'));
       return fail(toAppError(error, 'ASSISTANT_UNAVAILABLE'));

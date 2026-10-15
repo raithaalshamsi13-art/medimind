@@ -141,6 +141,10 @@ It reads a medicine label, verifies it, and only then schedules reminders.
   to the printed text (never to blank) and never translates dates or the
   manufacturer. The spoken reading (`scanSpeech.ts`) is built from the
   reading alone.
+  Demo Mode is never silent: `getScannerService(false)` must always return
+  the real reader (an error when unconfigured, never the mock), the scan
+  screens show `ScanModeBanner`, and `groundResult` runs on every real
+  reading so a field that is not in the transcription is never trusted.
 - **Voice says what the record says.** `VoiceService` (`expo-speech`) speaks
   the medicine name and dose label from the reminder — never an added
   instruction — and only when `voiceAlertsEnabled` and the alert style allow.

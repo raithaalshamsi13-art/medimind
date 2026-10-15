@@ -12,6 +12,7 @@ import { View } from 'react-native';
 
 import { MemberContextBanner } from '@/components/family/MemberContextBanner';
 import { DemoScenarioPicker } from '@/components/scan/DemoScenarioPicker';
+import { ScanModeBanner } from '@/components/scan/ScanModeBanner';
 import { pickLabelPhoto } from '@/components/scan/pickLabelPhoto';
 import { useStartScan } from '@/components/scan/useStartScan';
 import { AppText, Button, Card, Screen } from '@/components/ui';
@@ -44,6 +45,8 @@ export default function ScanScreen() {
     <Screen scroll>
       <View style={{ gap: theme.spacing.lg }}>
         {member && !member.isSelf ? <MemberContextBanner member={member} prefix={t('scan.scanningFor')} /> : null}
+
+        <ScanModeBanner />
 
         <Card>
           <View style={{ alignItems: 'center', gap: theme.spacing.md, paddingVertical: theme.spacing.md }}>

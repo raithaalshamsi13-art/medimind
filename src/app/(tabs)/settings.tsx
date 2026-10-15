@@ -33,6 +33,7 @@ import { applyDirection, LANGUAGES, reloadApp, useT, type Language } from '@/i18
 import { confirmAction } from '@/lib/confirm';
 import { isStoragePersistent } from '@/lib/storage';
 import { getNotificationService } from '@/services/notifications';
+import { isRealScannerAvailable } from '@/services/scanner';
 import { getVoiceService } from '@/services/voice/VoiceService';
 import { selectUser, useAuthStore } from '@/stores/useAuthStore';
 import { selectSelf, useFamilyStore } from '@/stores/useFamilyStore';
@@ -68,6 +69,7 @@ export default function SettingsScreen() {
 
   const notificationsEnabled = useSettingsStore((state) => state.notificationsEnabled);
   const voiceAlertsEnabled = useSettingsStore((state) => state.voiceAlertsEnabled);
+  const demoMode = useSettingsStore((state) => state.demoMode);
   const alertStyle = useSettingsStore((state) => state.alertStyle);
   const largeText = useSettingsStore((state) => state.largeText);
   const highContrast = useSettingsStore((state) => state.highContrast);
@@ -295,6 +297,28 @@ export default function SettingsScreen() {
 
           <AppText variant="caption" color="textMuted">
             {t('settings.accessibilityNote')}
+          </AppText>
+        </View>
+
+        {/* ---------- Scanner ---------- */}
+        <View style={{ gap: theme.spacing.md }}>
+          <AppText variant="heading">{t('settings.scanner')}</AppText>
+          <Card>
+            <View style={{ gap: theme.spacing.base }}>
+              <ToggleRow
+                icon="flask-outline"
+                title={t('settings.demoModeTitle')}
+                description={t('settings.demoModeDesc')}
+                value={demoMode}
+                onValueChange={(next) => {
+                  setSetting('demoMode', next);
+                  setSetting('demoModeChosen', true);
+                }}
+              />
+            </View>
+          </Card>
+          <AppText variant="caption" color="textMuted">
+            {isRealScannerAvailable() ? t('settings.readerReal') : t('settings.readerMissing')}
           </AppText>
         </View>
 

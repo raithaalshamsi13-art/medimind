@@ -7,6 +7,7 @@
 
 import { create } from 'zustand';
 
+import { isAssistantConfigured } from '@/config/env';
 import { readJson, STORAGE_KEYS, writeJson } from '@/lib/storage';
 import { DEFAULT_PALETTE_ID, PALETTES, type PaletteId } from '@/theme/palettes';
 
@@ -28,11 +29,13 @@ export type SettingsFlags = {
   /** Set once the user finishes the 3 onboarding slides. */
   hasCompletedOnboarding: boolean;
   /**
-   * Demo mode routes scanning through MockMedicationScanner instead of the
-   * real AI service (Phase 19). Defaults on so the app is fully demonstrable
-   * before any API key exists.
+   * Demo mode routes scanning through MockScanner instead of the real reader
+   * (Phase 19). Defaults ON only when no server is configured, so a build that
+   * can read real labels does so from the first scan.
    */
   demoMode: boolean;
+  /** True once the user has set Demo Mode by hand; until then the default may be healed on load. */
+  demoModeChosen: boolean;
   /** Light / dark / follow the system. */
   appearance: AppearancePreference;
   /** Which colour palette from `theme/palettes.ts` is in use. */
@@ -51,7 +54,8 @@ const defaultFlags: SettingsFlags = {
   largeText: false,
   highContrast: false,
   hasCompletedOnboarding: false,
-  demoMode: true,
+  demoMode: !isAssistantConfigured,
+  demoModeChosen: false,
   appearance: 'system',
   paletteId: DEFAULT_PALETTE_ID,
   assistantDisclaimerAcknowledged: false,
@@ -84,6 +88,7 @@ function pickFlags(state: SettingsFlags): SettingsFlags {
     highContrast: state.highContrast,
     hasCompletedOnboarding: state.hasCompletedOnboarding,
     demoMode: state.demoMode,
+    demoModeChosen: state.demoModeChosen,
     appearance: state.appearance,
     paletteId: state.paletteId,
     assistantDisclaimerAcknowledged: state.assistantDisclaimerAcknowledged,
@@ -126,7 +131,12 @@ export const useSettingsStore = create<SettingsState>((set, get) => {
       if (stored.ok && stored.value) {
         // Spread defaults first so a preference added in a later version gets
         // its default instead of becoming undefined.
-        set({ ...defaultFlags, ...sanitise(stored.value), isHydrated: true });
+        const next = { ...defaultFlags, ...sanitise(stored.value) };
+        // Older installs stored demoMode: true before Demo Mode could be
+        // switched off. If the user never chose it and a real reader is
+        // configured, read real labels — that is what a scan is for.
+        if (!next.demoModeChosen && isAssistantConfigured) next.demoMode = false;
+        set({ ...next, isHydrated: true });
         return;
       }
       set({ isHydrated: true });

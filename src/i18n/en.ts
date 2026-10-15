@@ -895,4 +895,29 @@ export const en = {
   'voice.scanCheck': 'Please compare the details marked “check this” with the pack.',
   'voice.scanUnreadable': 'The label could not be read clearly. Please try another photo or enter the medicine by hand.',
   'voice.scanExpired': 'Warning. This medicine appears to be expired. Please check it before using it.',
+  // --------------------------------------------- scan: reader choice, grounding, not identified
+  'scan.demoOnTitle': 'Demo reader is on',
+  'scan.demoOnBody':
+    'The result will be a fixed example (“Demo Medicine”), not what is printed on your label. Switch to the real reader to read this medicine.',
+  'scan.demoOnBodyNoServer':
+    'The result will be a fixed example (“Demo Medicine”), not what is printed on your label. This build has no server address for real reading.',
+  'scan.useRealReader': 'Use the real reader',
+  'scan.noServerTitle': 'Real label reading is not set up',
+  'scan.noServerBody':
+    'This build has no MediMind server address, so a photo cannot be read. Enter the medicine by hand, or use the demo reader to see an example.',
+  'scan.useDemoReader': 'Use the demo reader',
+  'scan.notIdentified': 'Medicine not identified',
+  'scan.notIdentifiedBody':
+    'The name could not be read from this label with confidence, so nothing has been added. Scan again in good light with the name filling the frame, or type the name exactly as printed.',
+  'scan.ground.name': 'The name picked out does not appear in the text read from the label — compare it with the pack.',
+  'scan.ground.dosage': 'The strength picked out does not appear in the text read from the label — compare it with the pack.',
+  'scan.ground.expiry': 'The expiry date picked out does not appear in the text read from the label — compare it with the pack.',
+  'scan.form': 'Form',
+  'settings.scanner': 'Scanner',
+  'settings.demoModeTitle': 'Demo Mode',
+  'settings.demoModeDesc': 'Scans return fixed example readings instead of reading your label. For demonstrations only.',
+  'settings.readerReal': 'Real label reading is set up: photos are read by the MediMind server.',
+  'settings.readerMissing': 'Real label reading is not set up on this build (no server address). Scans need Demo Mode or manual entry.',
+  'error.SCANNER_NOT_CONFIGURED':
+    'Real label reading is not set up on this build: the MediMind server address is missing. Turn on Demo Mode to see example readings, or enter the medicine by hand.',
 } as const;
