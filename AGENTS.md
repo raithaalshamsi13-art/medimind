@@ -151,6 +151,12 @@ It reads a medicine label, verifies it, and only then schedules reminders.
   read", which is reserved for an empty reading. The server returns a `code`
   on every error and never forwards a provider's raw message (it can carry
   the request URL and therefore the key).
+- **The API is one portable handler.** All routes live in
+  `server/src/app.ts` (`handleRequest`), used by `server/src/index.ts`
+  (Node/Railway) and `api/[...path].ts` (Vercel function). Keep the server
+  free of runtime dependencies (plain `fetch` to every provider) so the
+  Vercel bundle needs nothing from `server/package.json`; run
+  `npm run typecheck` in `server/` (it checks `api/` too).
 - **On-device reading copies words; it never recognises medicines.**
   `modules/label-ocr/` (Swift, Apple Vision) only returns recognised lines;
   every field comes from `extractFromLines` in `src/domain/labelText.ts`,

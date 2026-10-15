@@ -24,6 +24,7 @@ import * as Speech from 'expo-speech';
 import type { Language } from '@/i18n';
 
 import { splitIntoSentences } from './sentences';
+import { speakable } from './speakable';
 
 const VOICE_LOCALES: Record<Language, string> = { en: 'en-GB', ar: 'ar-SA' };
 /** Any voice whose language starts with this is acceptable for the language. */
@@ -96,7 +97,7 @@ export class ExpoVoiceService implements VoiceService {
   }
 
   async speak(text: string, language: Language): Promise<void> {
-    const sentences = splitIntoSentences(text);
+    const sentences = splitIntoSentences(speakable(text, language));
     if (sentences.length === 0) return;
 
     const myRun = ++this.run;

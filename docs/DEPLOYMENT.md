@@ -37,7 +37,39 @@ Do them in this order — each later step needs a value from an earlier one.
 
 ---
 
-## 2. Railway — the API server (5 minutes)
+## 2a. The API on Vercel — free, no Railway (recommended)
+
+Since 15 Oct 2026 the same API code also runs as a **Vercel serverless
+function** (`api/[...path].ts` → `server/src/app.ts`), inside the project
+that already hosts the web app. Nothing extra to deploy, nothing to pay for:
+Vercel's Hobby plan is free, and the Gemini key is free.
+
+1. In the Vercel project → **Settings → Environment Variables** add, for
+   *Production* (and Preview if you use it):
+
+   | Variable | Value |
+   |---|---|
+   | `GEMINI_API_KEY` | from https://aistudio.google.com/apikey (free, no card). **Not** prefixed `EXPO_PUBLIC_`, so it stays on the server and never reaches the app bundle. |
+   | `APP_ACCESS_KEY` | any long random string |
+   | `EXPO_PUBLIC_ASSISTANT_ENDPOINT` | `https://<your-vercel-domain>/api/assistant` — the app derives `/api/scan` and `/api/health` from it |
+   | `EXPO_PUBLIC_ASSISTANT_ACCESS_KEY` | the same string as `APP_ACCESS_KEY` |
+
+2. **Deployments → Redeploy** the latest deployment (environment variables
+   are baked into the web build at deploy time).
+3. Open `https://<your-vercel-domain>/api/health`. You should see
+   `{"ok":true,"service":"medimind-server","version":"1.8.0","assistant":true,"scan":true,"provider":"gemini",...}`.
+   `assistant:false` means the `GEMINI_API_KEY` variable is missing or was
+   added after the last deploy.
+4. On the PC, put the same `EXPO_PUBLIC_ASSISTANT_ENDPOINT` and
+   `EXPO_PUBLIC_ASSISTANT_ACCESS_KEY` in `medimind/.env.local` so Expo Go uses it.
+
+Limits of the free function: 60 s per request (set in `vercel.json`; label
+reading takes 5–15 s) and a 4.5 MB request body — the app resizes photos to
+about 300 KB before sending, so this is never reached.
+
+The Railway route below still works and is unchanged; use one or the other.
+
+## 2b. Railway — the API server (alternative, about US$5 a month)
 
 1. https://railway.app → **New Project → Deploy from GitHub repo** →
    choose `raithaalshamsi13-art/medimind`.
@@ -57,7 +89,7 @@ Do them in this order — each later step needs a value from an earlier one.
 4. **Settings → Networking → Generate Domain**. Copy it, e.g.
    `https://medimind-server-production.up.railway.app`.
 5. Check it works: open `<that domain>/health` in a browser. You should see
-   `{"ok":true,"service":"medimind-server","version":"1.7.1","assistant":true,"scan":true,"assistant":true,...}`.
+   `{"ok":true,"service":"medimind-server","version":"1.8.0","assistant":true,"scan":true,"assistant":true,...}`.
    If `version` is older than the one in `server/src/index.ts`, Railway has
    not picked up the latest push: open the service → **Deployments →
    Redeploy**, or connect the Railway GitHub App so pushes deploy automatically.
@@ -99,15 +131,16 @@ model, so with only a Groq key the app's scanner stays on the demo reader and
    |---|---|
    | `EXPO_PUBLIC_SUPABASE_URL` | from Supabase step 4 |
    | `EXPO_PUBLIC_SUPABASE_ANON_KEY` | from Supabase step 4 |
-   | `EXPO_PUBLIC_ASSISTANT_ENDPOINT` | Railway domain + `/assistant` |
+   | `EXPO_PUBLIC_ASSISTANT_ENDPOINT` | `https://<your-vercel-domain>/api/assistant` (API on Vercel, §2a) or Railway domain + `/assistant` (§2b) |
    | `EXPO_PUBLIC_ASSISTANT_ACCESS_KEY` | the same string you used for `APP_ACCESS_KEY` on Railway |
    | `EXPO_PUBLIC_SCAN_ENDPOINT` | optional — only if the scanner should use a different URL than Railway domain + `/scan` |
 
 4. **Deploy**. About two minutes later you get a URL like
    `https://medimind-xyz.vercel.app`.
-5. Go back to Railway and set `ALLOWED_ORIGIN` to that URL.
+5. If you use Railway, go back to it and set `ALLOWED_ORIGIN` to that URL.
 
-Every push to `main` on GitHub now redeploys Vercel and Railway automatically.
+Every push to `main` on GitHub now redeploys Vercel (web app + API function)
+and, if connected, Railway automatically.
 
 ---
 

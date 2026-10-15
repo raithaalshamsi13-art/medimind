@@ -20,10 +20,10 @@ step adds an entry to §18 (change log) and updates the sections it touches._
 | Platform | iPhone via Expo Go (primary); web browser (UI work only) |
 | Stack | Expo SDK 57 · React Native 0.86 · React 19.2 · TypeScript 6 · Expo Router · SQLite · Zustand · Zod |
 | Source | 217 tracked files · ~29,000 lines across `src/`, tests, the API server, scripts and SQL |
-| Tests | **385 passing** in 25 suites — including real-SQLite tests and a WCAG contrast checker |
-| Commits | 50, all verified (typecheck + tests + iOS and web bundles) before committing |
+| Tests | **388 passing** in 26 suites — including real-SQLite tests and a WCAG contrast checker |
+| Commits | 51, all verified (typecheck + tests + iOS and web bundles) before committing |
 | Milestones | M1 Foundation ✅ · M2 UI & Auth ✅ · M3 Database & CRUD ✅ · Assistant ✅ · Deployment ✅ · Structured entry + health conditions ✅ · Family profiles ✅ · Personal health profile ✅ · M5 Reminders ✅ · M4 Scanner + safety engine ✅ · Voice alerts ✅ · M6 Polish ◐ (language, voice, privacy done) |
-| Live | Web: https://medimind-medimind3.vercel.app · API: Railway (`/health` shows version + model) · Accounts/DB: Supabase |
+| Live | Web + API: https://medimind-medimind3.vercel.app (`/api/health` shows version + model; API also deployable on Railway) · Accounts/DB: Supabase |
 | Native build needed | **None for Expo Go** (everything but on-device reading). **On-device label reading (Apple Vision) needs the MediMind development build** — built in the cloud with EAS, no Mac, but an Apple Developer account for a physical iPhone |
 
 ---
@@ -683,7 +683,7 @@ demo cannot be broken by a missing key or a dead network.
 
 ## 9. Testing and verification
 
-**385 tests in 25 suites**, all passing:
+**388 tests in 26 suites**, all passing:
 
 | Suite | Covers |
 |---|---|
@@ -691,6 +691,7 @@ demo cannot be broken by a missing key or a dead network.
 | `domain/scan` | result schema (trim, blank → null, malformed date dropped, confidence range, lengths), name confirmation rule, "check this" per field, overall confidence, scan → medicine input (label-read fields only, confirmed name wins, no name → null), duplicate detection (normalised name, same member, archived ignored), the three demo readings ; Arabic translation block (validated, display fallback to the printed text, never for dates or manufacturer, demo readings carry it only in Arabic) ; grounding (a name, strength or expiry year not found in the transcription is capped below the threshold and flagged — a guessed "Paracetamol" on an iron label asks for the name), printed form → TABLET/CAPSULE/…, supplement wording → SUPPLEMENT |
 | `components/scanSpeech` | the spoken reading: name, dosage, frequency, instructions, expiry; expired warning without advice; unreadable sentence; asks for the name and to check low-confidence fields; Arabic wording in Arabic |
 | `services/sentences` | speech chunking: sentence ends and newlines, Arabic punctuation, decimals kept, long sentences broken under the engine limit |
+| `services/speakable` | spoken form of label text: units expanded to words in English and Arabic ("500 mg" → "500 milligrams", "10 mg/5 ml" → "per"), ALL-CAPS names made pronounceable, everything else untouched |
 | `services/scanErrors` | a failed scan names what happened: server error codes and HTTP statuses → app key rejected / AI key rejected / no vision provider / busy / too large / timed out / server fault / nothing deployed (404); request never answered → offline vs. server unreachable vs. dropped, from the two probes |
 | `domain/labelText` | on-device extraction from recognised lines: printed date formats and month-only expiry, expiry only after an EXP / Use by marker (a lone date is never the expiry), strength / form / ingredient / frequency / instruction / manufacturer copied from the words, name = most prominent line and trusted only when clearly taller than the rest, empty or blurred photo → nulls + warning, lot / manufacturer / number lines never taken as the name, "PANADOL 500mg" split, reading order |
 | `i18n/translate` | every English key has an Arabic string with matching placeholders, interpolation, `localizeMessage` lookup, counts, 12-hour times per language, expiry wording, frequency display, possessives |
@@ -1061,6 +1062,7 @@ with no internet and no API key — exactly as the brief requires.
 ## 16. Commit history
 
 ```
+2026-10-15  API as a free Vercel function (server 1.8.0, no SDK), demo ingredient renamed, spoken units and names
 2026-10-15  On-device label reading with Apple Vision: local Expo module, labelText extraction, dev-build path (eas.json)
 2026-10-15  Scan connection: Railway 404 diagnosed, precise failure codes, probes, Test connection, photo downscaling (server 1.7.1)
 2026-10-15  Fix: Demo Mode no longer hijacks real scans; grounding check; clearer sentence-by-sentence voice (server 1.7.0)
@@ -1148,7 +1150,7 @@ with no internet and no API key — exactly as the brief requires.
 | Assistant safety screen and wording | `src/domain/assistant.ts` |
 | Dose scheduling | `src/domain/dosing.ts` |
 | Offline assistant | `src/services/assistant/OfflineAssistant.ts` |
-| API server (Railway) | `server/src/index.ts` |
+| API server — handler (portable) / Node entry / Vercel function | `server/src/app.ts` / `server/src/index.ts` / `api/[...path].ts` |
 | AI providers (Gemini / Groq / Claude) | `server/src/providers.ts` |
 | Web page shell, PWA metas, home-screen sizing | `src/app/+html.tsx`, `public/manifest.json` |
 | Tab bar (icon-only portrait / labels landscape) | `src/app/(tabs)/_layout.tsx` |
@@ -1166,6 +1168,32 @@ with no internet and no API key — exactly as the brief requires.
 Newest first. Every commit that changes the app adds an entry here **in the
 same commit**, and updates the sections above that it touches (rule in
 `AGENTS.md`, "Verify before claiming done").
+
+### 2026-10-15 — Free API on Vercel; demo ingredient renamed; spoken units and names
+- **Cause of "every scan says Paracetamol", restated for the record**: no
+  real reader was reachable (the Railway deployment is gone — 404 at its
+  domain), so the only reader that could answer was the demo one, whose
+  fixed "Safe medicine" example listed *Paracetamol* as its ingredient. The
+  demo reading now says **"Example active ingredient"** (English and
+  Arabic) so it can never be mistaken for a reading of a real pack.
+- **Free hosting for the real reader**: the API now runs as a Vercel
+  serverless function next to the web app (`api/[...path].ts` →
+  `server/src/app.ts`, which holds the whole API as one portable handler;
+  `server/src/index.ts` is a thin Node entry for Railway). `/api` prefix
+  stripped in the router; `vercel.json` excludes `/api/*` from the SPA
+  rewrite and allows 60 s. The Anthropic SDK was replaced by plain `fetch`,
+  so the server has **no runtime dependencies**. Server **1.8.0**. Verified
+  locally by running the built handler and hitting `/api/health`, `/health`
+  and `/api/scan` (correct 500 `NO_PROVIDER` without a key). The live
+  function is verified after the push and the Vercel variables are set —
+  see `docs/DEPLOYMENT.md` §2a.
+- **Voice**: `speakable()` runs before every utterance — units become words
+  in English and Arabic ("500 mg" → "500 milligrams", "10 mg/5 ml" → "10
+  milligrams per 5 millilitres", "IU" → "international units") and
+  ALL-CAPS names are capitalised so the voice says "Panadol Extra" instead
+  of spelling it. Sentence-by-sentence reading with pauses stays.
+- Tests +3 (388 in 26 suites); `server/tsconfig.vercel.json` type-checks
+  the function with the server.
 
 ### 2026-10-15 — On-device label reading with Apple Vision (no server needed)
 - **Why**: Omar wants to stop paying for Railway. Apple's Vision framework

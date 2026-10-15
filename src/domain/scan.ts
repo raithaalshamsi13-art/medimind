@@ -304,7 +304,7 @@ function demoReading(scenario: DemoScenario, year: number): Omit<ScanResult, 'tr
     case 'SAFE':
       return {
         rawText:
-          `Demo Medicine 500 mg\nParacetamol\n20 film-coated tablets\n` +
+          `Demo Medicine 500 mg\nExample active ingredient\n20 film-coated tablets\n` +
           `Adults and children over 16: take 1 or 2 tablets every 4 to 6 hours. Do not take more than 8 tablets in 24 hours.\n` +
           `Store below 25°C. Keep out of the sight and reach of children.\n` +
           `EXP ${year + 2}-04-30  LOT 4471A\nDemo Pharma Ltd`,
@@ -315,7 +315,7 @@ function demoReading(scenario: DemoScenario, year: number): Omit<ScanResult, 'tr
           instructions: 'Do not take more than 8 tablets in 24 hours',
           expirationDate: `${year + 2}-04-30`,
           manufacturer: 'Demo Pharma Ltd',
-          activeIngredients: 'Paracetamol',
+          activeIngredients: 'Example active ingredient',
           form: 'film-coated tablets',
         },
         confidence: { name: 0.96, dosage: 0.94, frequency: 0.85, instructions: 0.9, expirationDate: 0.93 },
@@ -368,10 +368,10 @@ function demoTranslation(scenario: DemoScenario, year: number): ScanTranslation 
         dosage: '500 ملغ',
         frequency: 'كل 6 ساعات',
         instructions: 'لا تتناول أكثر من 8 أقراص خلال 24 ساعة',
-        activeIngredients: 'باراسيتامول',
+        activeIngredients: 'مادة فعالة تجريبية',
         rawText:
           `دواء تجريبي 500 ملغ
-باراسيتامول
+مادة فعالة تجريبية
 20 قرصًا مغلفًا
 ` +
           `البالغون والأطفال فوق 16 عامًا: تناول قرصًا أو قرصين كل 4 إلى 6 ساعات. لا تتناول أكثر من 8 أقراص خلال 24 ساعة.

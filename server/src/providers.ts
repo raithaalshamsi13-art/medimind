@@ -11,11 +11,10 @@
  *
  * If more than one key is set, AI_PROVIDER=gemini|groq|anthropic picks.
  *
- * Gemini and Groq are called with plain `fetch` against their REST APIs — no
- * extra dependencies. Anthropic uses its official SDK.
+ * All three are called with plain `fetch` against their REST APIs — the server
+ * has no runtime dependencies, so the same code runs on Railway, on Vercel
+ * serverless functions, or on any Node 20+ host.
  */
-
-import Anthropic from '@anthropic-ai/sdk';
 
 export type Turn = { role: 'user' | 'assistant'; content: string };
 
@@ -235,70 +234,63 @@ export function createGroqProvider(apiKey: string, model: string): LlmProvider {
 // ---------------------------------------------------------------------------
 
 export function createAnthropicProvider(apiKey: string, model: string): LlmProvider {
-  const client = new Anthropic({ apiKey });
+  const ANTHROPIC_URL = 'https://api.anthropic.com/v1/messages';
+  const headers = {
+    'Content-Type': 'application/json',
+    'x-api-key': apiKey,
+    'anthropic-version': '2023-06-01',
+  };
+
+  type AnthropicReply = { content?: { type: string; text?: string }[]; stop_reason?: string; model?: string };
+
+  async function call(body: unknown): Promise<AnthropicReply> {
+    const res = await fetch(ANTHROPIC_URL, { method: 'POST', headers, body: JSON.stringify(body) });
+    if (!res.ok) {
+      const text = await res.text().catch(() => '');
+      throw new ProviderError(`Anthropic ${res.status}: ${text.slice(0, 300)}`, res.status, 'anthropic');
+    }
+    return (await res.json()) as AnthropicReply;
+  }
+
+  const textOf = (reply: AnthropicReply) =>
+    (reply.content ?? [])
+      .filter((b) => b.type === 'text')
+      .map((b) => b.text ?? '')
+      .join('\n')
+      .trim();
+
   return {
     name: 'anthropic',
     model,
     async complete(input) {
-      try {
-        const response = await client.messages.create({
-          model,
-          max_tokens: MAX_OUTPUT_TOKENS,
-          system: [
-            { type: 'text', text: input.system, cache_control: { type: 'ephemeral' } },
-            { type: 'text', text: input.medicationsText },
-          ],
-          messages: [...input.history, { role: 'user', content: input.question }],
-        });
-        const text = response.content
-          .filter((b): b is Anthropic.TextBlock => b.type === 'text')
-          .map((b) => b.text)
-          .join('\n')
-          .trim();
-        return { text, refused: response.stop_reason === 'refusal', model: response.model };
-      } catch (error) {
-        if (error instanceof Anthropic.APIError) {
-          throw new ProviderError(
-            `Anthropic ${error.status ?? 'error'}: ${error.message}`,
-            error.status ?? 502,
-            'anthropic',
-          );
-        }
-        throw error;
-      }
+      const reply = await call({
+        model,
+        max_tokens: MAX_OUTPUT_TOKENS,
+        system: [
+          { type: 'text', text: input.system, cache_control: { type: 'ephemeral' } },
+          { type: 'text', text: input.medicationsText },
+        ],
+        messages: [...input.history, { role: 'user', content: input.question }],
+      });
+      return { text: textOf(reply), refused: reply.stop_reason === 'refusal', model: reply.model ?? model };
     },
 
     async readLabel(input) {
-      try {
-        const mediaType = input.mimeType === 'image/png' ? 'image/png' : 'image/jpeg';
-        const response = await client.messages.create({
-          model,
-          max_tokens: MAX_OUTPUT_TOKENS,
-          messages: [
-            {
-              role: 'user',
-              content: [
-                { type: 'image', source: { type: 'base64', media_type: mediaType, data: input.imageBase64 } },
-                { type: 'text', text: input.prompt },
-              ],
-            },
-          ],
-        });
-        return response.content
-          .filter((b): b is Anthropic.TextBlock => b.type === 'text')
-          .map((b) => b.text)
-          .join('\n')
-          .trim();
-      } catch (error) {
-        if (error instanceof Anthropic.APIError) {
-          throw new ProviderError(
-            `Anthropic ${error.status ?? 'error'}: ${error.message}`,
-            error.status ?? 502,
-            'anthropic',
-          );
-        }
-        throw error;
-      }
+      const mediaType = input.mimeType === 'image/png' ? 'image/png' : 'image/jpeg';
+      const reply = await call({
+        model,
+        max_tokens: MAX_OUTPUT_TOKENS,
+        messages: [
+          {
+            role: 'user',
+            content: [
+              { type: 'image', source: { type: 'base64', media_type: mediaType, data: input.imageBase64 } },
+              { type: 'text', text: input.prompt },
+            ],
+          },
+        ],
+      });
+      return textOf(reply);
     },
   };
 }

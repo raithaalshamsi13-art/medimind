@@ -345,7 +345,7 @@ in dark mode.
 | **M1** | Project setup, design system, navigation | ✅ Complete |
 | **M2** | Splash, onboarding, auth, home dashboard, accessibility settings | ✅ Complete |
 | **M3** | SQLite schema + migrations, repositories, medication CRUD, structured manual entry (chips, date picker), health conditions, family profiles (one account, many people) | ✅ Complete |
-| **M4** | Camera, scanner abstraction + mock + server vision reader, label text panel, auto-add with confirmation, safety engine, demo scenarios | ✅ Complete |
+| **M4** | Camera, scanner abstraction + mock + server vision reader (free Vercel function or Railway) + on-device Apple Vision (dev build), label text panel, auto-add with confirmation, safety engine, demo scenarios | ✅ Complete |
 | **M5** | Suggested reminders, local notifications, dose tracking, missed doses | ✅ Complete |
 | **M6** | Voice alerts, offline sync, settings, accessibility, error handling, tests | ◐ Language (English / Arabic, RTL), voice alerts + snooze, privacy page done |
 
