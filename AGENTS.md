@@ -151,6 +151,15 @@ It reads a medicine label, verifies it, and only then schedules reminders.
   read", which is reserved for an empty reading. The server returns a `code`
   on every error and never forwards a provider's raw message (it can carry
   the request URL and therefore the key).
+- **On-device reading copies words; it never recognises medicines.**
+  `modules/label-ocr/` (Swift, Apple Vision) only returns recognised lines;
+  every field comes from `extractFromLines` in `src/domain/labelText.ts`,
+  which must keep its rules: a date only after an expiry marker, ingredients
+  only after a "contains" marker, the name trusted only when it is clearly
+  the most prominent line, nulls and a warning for an unreadable photo. The
+  module is optional (`requireOptionalNativeModule`): Expo Go, Android and
+  web must keep working without it. Never add a medicine database lookup
+  that silently changes a printed name.
 - **Voice says what the record says.** `VoiceService` (`expo-speech`) speaks
   the medicine name and dose label from the reminder — never an added
   instruction — and only when `voiceAlertsEnabled` and the alert style allow.

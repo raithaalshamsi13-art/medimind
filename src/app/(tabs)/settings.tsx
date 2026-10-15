@@ -34,7 +34,7 @@ import { applyDirection, LANGUAGES, reloadApp, useT, type Language } from '@/i18
 import { confirmAction } from '@/lib/confirm';
 import { isStoragePersistent } from '@/lib/storage';
 import { getNotificationService } from '@/services/notifications';
-import { isRealScannerAvailable } from '@/services/scanner';
+import { isRealScannerAvailable, readerKind } from '@/services/scanner';
 import { getVoiceService } from '@/services/voice/VoiceService';
 import { selectUser, useAuthStore } from '@/stores/useAuthStore';
 import { selectSelf, useFamilyStore } from '@/stores/useFamilyStore';
@@ -321,7 +321,11 @@ export default function SettingsScreen() {
             </View>
           </Card>
           <AppText variant="caption" color="textMuted">
-            {isRealScannerAvailable() ? t('settings.readerReal') : t('settings.readerMissing')}
+            {readerKind(false) === 'device'
+              ? t('settings.readerDevice')
+              : isRealScannerAvailable()
+                ? t('settings.readerReal')
+                : t('settings.readerMissing')}
           </AppText>
         </View>
 

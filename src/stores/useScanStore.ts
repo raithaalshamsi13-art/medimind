@@ -71,7 +71,7 @@ export const useScanStore = create<ScanState>((set, get) => ({
       const scanner = getScannerService(options.demoMode);
       // Shrink a multi-megabyte camera photo before it travels; the resized
       // copy is also what gets kept with the medicine.
-      const prepared = scanner.kind === 'ai' ? await prepareScanImage(image) : image;
+      const prepared = scanner.kind === 'mock' ? image : await prepareScanImage(image);
       set({ image: prepared });
       const result = await scanner.scan({ image: prepared, language: options.language, demoScenario: options.demoScenario });
       if (!result.ok) {

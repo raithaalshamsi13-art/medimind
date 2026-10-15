@@ -163,7 +163,7 @@ const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/;
  * True only for dates that exist on the calendar. A regex alone would happily
  * accept 2026-02-30, and `new Date()` would silently roll it over to 2 March.
  */
-function isRealCalendarDate(value: string): boolean {
+export function isRealCalendarDate(value: string): boolean {
   const [year, month, day] = value.split('-').map(Number);
   const date = new Date(Date.UTC(year, month - 1, day));
   return (

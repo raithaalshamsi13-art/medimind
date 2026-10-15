@@ -128,6 +128,56 @@ The Ask tab then chats through the server automatically — its header reads
 
 ---
 
+## 5. On-device label reading — the development build (no Railway needed)
+
+Scanning can run entirely on the iPhone with Apple's Vision framework
+(`modules/label-ocr/`). That code is native, and **Expo Go cannot load
+native code**, so it needs a *development build* of MediMind — a one-off
+build made in the cloud by Expo's EAS service. No Mac is needed. What is
+needed:
+
+- an **Apple Developer Program** membership (US$99 / year) — Apple requires
+  it to install a self-built app on a physical iPhone. (Without it the only
+  route is a Mac with Xcode and a free Apple ID, which installs for 7 days
+  at a time.) If you keep Railway instead, the hobby plan is about US$5 /
+  month — pick whichever is cheaper for you; the app works with either.
+- a free Expo account (expo.dev).
+
+Steps, once, on the PC:
+
+```powershell
+cd medimind
+npm install -g eas-cli
+eas login
+eas build --profile development --platform ios
+```
+
+The first run asks you to sign in to your Apple account and lets EAS create
+the signing certificate and register your iPhone (it shows a QR code to
+register the device — scan it on the iPhone). The build takes 10–20
+minutes; EAS then shows a link / QR code to install "MediMind" on the phone.
+
+Then, every day:
+
+```powershell
+npm start
+```
+
+and open the **MediMind** app (not Expo Go) — it connects to the same dev
+server. Settings → Scanner should say *Label reading happens on this
+iPhone (Apple Vision)*, and the scan screen shows *Reading on this iPhone*.
+With that build, `EXPO_PUBLIC_ASSISTANT_ENDPOINT` is only needed for the
+chat; scanning works in Airplane Mode.
+
+What on-device reading does and does not do: it reads the printed words
+and copies the strength, form, ingredients, expiry (only after an EXP /
+Use by marker) and the most prominent line as the name — which it trusts
+only when that line is clearly the largest text, otherwise it asks you to
+confirm. It does **not** verify what the medicine is, whether it is safe,
+or how much to take, and it does not translate to Arabic.
+
+---
+
 ## What each secret is, and where it lives
 
 | Value | Secret? | Where it is allowed |

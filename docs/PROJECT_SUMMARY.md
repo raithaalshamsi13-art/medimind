@@ -20,11 +20,11 @@ step adds an entry to §18 (change log) and updates the sections it touches._
 | Platform | iPhone via Expo Go (primary); web browser (UI work only) |
 | Stack | Expo SDK 57 · React Native 0.86 · React 19.2 · TypeScript 6 · Expo Router · SQLite · Zustand · Zod |
 | Source | 217 tracked files · ~29,000 lines across `src/`, tests, the API server, scripts and SQL |
-| Tests | **376 passing** in 24 suites — including real-SQLite tests and a WCAG contrast checker |
-| Commits | 49, all verified (typecheck + tests + iOS and web bundles) before committing |
+| Tests | **385 passing** in 25 suites — including real-SQLite tests and a WCAG contrast checker |
+| Commits | 50, all verified (typecheck + tests + iOS and web bundles) before committing |
 | Milestones | M1 Foundation ✅ · M2 UI & Auth ✅ · M3 Database & CRUD ✅ · Assistant ✅ · Deployment ✅ · Structured entry + health conditions ✅ · Family profiles ✅ · Personal health profile ✅ · M5 Reminders ✅ · M4 Scanner + safety engine ✅ · Voice alerts ✅ · M6 Polish ◐ (language, voice, privacy done) |
 | Live | Web: https://medimind-medimind3.vercel.app · API: Railway (`/health` shows version + model) · Accounts/DB: Supabase |
-| Native build needed | **None.** Everything runs in Expo Go — no Xcode, no Mac, no Android Studio, no Apple developer account |
+| Native build needed | **None for Expo Go** (everything but on-device reading). **On-device label reading (Apple Vision) needs the MediMind development build** — built in the cloud with EAS, no Mac, but an Apple Developer account for a physical iPhone |
 
 ---
 
@@ -407,8 +407,22 @@ SCAN → CHECK → CONFIRM is now real. Built 19 Sep 2026.
   be a fixed example" with **Use the real reader**, or "Real label reading
   is not set up" with **Use the demo reader**. With Demo Mode off the photo
   always goes to the server; a missing address is an error, never an example.
+- **On-device reading (Apple Vision)** (15 Oct 2026): a local Expo module
+  (`modules/label-ocr/`, Swift) runs `VNRecognizeTextRequest` on the photo
+  with language correction off and returns the printed lines with their
+  confidence and size. `src/domain/labelText.ts` copies the fields from
+  those words — strength, printed form, ingredients only after "contains /
+  each … contains", a date only after an EXP / Use by marker, frequency and
+  direction phrases, and the name as the most prominent line, trusted only
+  when it is clearly the tallest text (otherwise the user confirms it). No
+  server, key or internet is needed; nothing verifies the medicine itself,
+  and the screen says so. The module compiles only into the **MediMind
+  development build** (EAS, see `docs/DEPLOYMENT.md` §5); in Expo Go it is
+  absent and the factory uses the server reader. **Not yet run on a
+  device** — the Swift module and the extraction rules are written and the
+  rules are unit-tested; the first EAS build is the remaining step.
 - **Grounding** (`groundResult` in `src/domain/scan.ts`, applied by
-  `ProxyScanner`): the server prompt is transcription-first ("fill the
+  `ProxyScanner` and `OnDeviceScanner`): the server prompt is transcription-first ("fill the
   fields only by copying words from the transcription; identify the product
   only from the printed text, never from colour, shape or logo; never
   substitute a common medicine"), and the app cross-checks: a name whose
@@ -669,7 +683,7 @@ demo cannot be broken by a missing key or a dead network.
 
 ## 9. Testing and verification
 
-**376 tests in 24 suites**, all passing:
+**385 tests in 25 suites**, all passing:
 
 | Suite | Covers |
 |---|---|
@@ -678,6 +692,7 @@ demo cannot be broken by a missing key or a dead network.
 | `components/scanSpeech` | the spoken reading: name, dosage, frequency, instructions, expiry; expired warning without advice; unreadable sentence; asks for the name and to check low-confidence fields; Arabic wording in Arabic |
 | `services/sentences` | speech chunking: sentence ends and newlines, Arabic punctuation, decimals kept, long sentences broken under the engine limit |
 | `services/scanErrors` | a failed scan names what happened: server error codes and HTTP statuses → app key rejected / AI key rejected / no vision provider / busy / too large / timed out / server fault / nothing deployed (404); request never answered → offline vs. server unreachable vs. dropped, from the two probes |
+| `domain/labelText` | on-device extraction from recognised lines: printed date formats and month-only expiry, expiry only after an EXP / Use by marker (a lone date is never the expiry), strength / form / ingredient / frequency / instruction / manufacturer copied from the words, name = most prominent line and trusted only when clearly taller than the rest, empty or blurred photo → nulls + warning, lot / manufacturer / number lines never taken as the name, "PANADOL 500mg" split, reading order |
 | `i18n/translate` | every English key has an Arabic string with matching placeholders, interpolation, `localizeMessage` lookup, counts, 12-hour times per language, expiry wording, frequency display, possessives |
 | `db/ReminderRepository` | reminder CRUD, one per medicine, notification ids, per-user isolation; doses created once per occurrence, status kept on re-seed, missed sweep only touches UPCOMING before the cutoff, follow-up id; cascades from medicine and family member — **both** backends |
 | `domain/reminder` | suggestion from the label (blocked when expired, none when not understood, as-needed), input schema (sorted unique times, days rules, date order), occurrences per day, grace window, wording helpers |
@@ -1046,6 +1061,7 @@ with no internet and no API key — exactly as the brief requires.
 ## 16. Commit history
 
 ```
+2026-10-15  On-device label reading with Apple Vision: local Expo module, labelText extraction, dev-build path (eas.json)
 2026-10-15  Scan connection: Railway 404 diagnosed, precise failure codes, probes, Test connection, photo downscaling (server 1.7.1)
 2026-10-15  Fix: Demo Mode no longer hijacks real scans; grounding check; clearer sentence-by-sentence voice (server 1.7.0)
 2026-10-15  Scan result: large-print details, Arabic translation of the reading, spoken reading (server 1.6.1)
@@ -1125,6 +1141,7 @@ with no internet and no API key — exactly as the brief requires.
 | Server `/scan` route and vision prompt | `handleScan`, `SCAN_PROMPT` in `server/src/index.ts`; `readLabel` in `server/src/providers.ts` |
 | Scan failure classification and connectivity probes | `src/services/scanner/scanErrors.ts`, `src/services/scanner/connectivity.ts`; Settings → Scanner → Test connection in `src/components/settings/ConnectionTest.tsx` |
 | Photo downscaling before upload | `prepareScanImage` in `src/lib/scanImage.ts` (expo-image-manipulator, 1600 px, JPEG 0.8) |
+| On-device reader (Apple Vision) | native module `modules/label-ocr/` (Swift + podspec + JS bridge), `src/services/scanner/OnDeviceScanner.ts`, field extraction in `src/domain/labelText.ts`, build profile `eas.json` |
 | Reminder screen, Schedule tab, dose row | `src/app/reminder/[medicationId].tsx`, `src/app/(tabs)/schedule.tsx`, `src/components/schedule/DoseRow.tsx` |
 | The medicine form | `src/components/medication/MedicationForm.tsx` |
 | Chips, date picker, collapsible, form section | `src/components/ui/ChoiceChips.tsx`, `DateField.tsx` + `DateField.web.tsx`, `Collapsible.tsx`, `FormSection.tsx` |
@@ -1149,6 +1166,33 @@ with no internet and no API key — exactly as the brief requires.
 Newest first. Every commit that changes the app adds an entry here **in the
 same commit**, and updates the sections above that it touches (rule in
 `AGENTS.md`, "Verify before claiming done").
+
+### 2026-10-15 — On-device label reading with Apple Vision (no server needed)
+- **Why**: Omar wants to stop paying for Railway. Apple's Vision framework
+  reads printed text on the iPhone itself, so a scan needs no server, AI key
+  or internet. It cannot run inside Expo Go (custom native code), so the app
+  gains a **development build** path (`expo-dev-client`, `eas.json`).
+- **Native module** `modules/label-ocr/` (local Expo module, Swift):
+  `recognize(uri, languages)` → recognised lines with confidence and
+  position; accurate level, language correction off (so drug names are not
+  "fixed" into dictionary words), languages filtered to what the phone
+  supports; discovered by Expo autolinking (verified with
+  `expo-modules-autolinking search`). `index.ts` uses
+  `requireOptionalNativeModule`, so Expo Go, Android and web simply report
+  it absent.
+- **Extraction** `src/domain/labelText.ts` (pure, 9 tests): fields are only
+  ever copied from the printed words — see §4.4f. `OnDeviceScanner` wraps it
+  behind the existing `MedicationScannerService`; the factory order is Demo
+  Mode → on-device → server → "not set up". Photos are downscaled for every
+  real reader. New error `SCAN_DEVICE_ERROR`; warnings "No printed text
+  could be recognised" / "Much of the text was unclear"; banner "Reading on
+  this iPhone" and a note on the result card that text recognition does
+  not verify identity, safety or dose; Settings shows which reader is active.
+- Arabic: no on-device translation — the reading is shown as printed; the
+  Arabic voice reads the printed words.
+- **Not verified on a device yet**: no Mac or iPhone build is possible from
+  this machine. Typecheck, 385 tests and both bundle exports pass; the
+  Swift compiles only in the EAS build (§5 of `docs/DEPLOYMENT.md`).
 
 ### 2026-10-15 — Scan connection: real cause found, precise failures, Test connection
 - **Cause of "could not be read — you appear to be offline"**: the Railway

@@ -958,4 +958,17 @@ export const en = {
   'settings.conn.scanOk': 'Label reading: available ({provider})',
   'settings.conn.scanNoVision': 'Label reading: not available — the server’s provider ({provider}) cannot read images',
   'settings.conn.scanNoProvider': 'Label reading: not available — no AI key on the server',
+  // --------------------------------------------- scan: on-device reading (Apple Vision)
+  'scan.deviceTitle': 'Reading on this iPhone',
+  'scan.deviceBody':
+    'The printed words are read on the phone itself — no internet needed. Text recognition reads what is printed; it does not check what the medicine is, whether it is safe, or how much to take.',
+  'scan.deviceNote':
+    'Read on this iPhone from the printed words only. Nothing here verifies the medicine’s identity, safety or correct dose — compare the details with the pack and ask a pharmacist if unsure.',
+  'scan.warn.noText': 'No printed text could be recognised in this photo.',
+  'scan.warn.lowQuality': 'Much of the text was unclear. Try better light, hold the label flat, and fill the frame.',
+  'settings.readerDevice': 'Label reading happens on this iPhone (Apple Vision). No server or internet is needed for a scan.',
+  'settings.readerDeviceAbsent':
+    'On-device reading is not in this build (Expo Go cannot load it). Photos are read by the MediMind server when it is configured.',
+  'error.SCAN_DEVICE_ERROR': 'The phone could not read text from this photo. Please take it again.',
+  'scan.fail.SCAN_DEVICE_ERROR': 'The photo could not be read',
 } as const;

@@ -43,6 +43,7 @@ import {
 import { useT, type TranslationKey } from '@/i18n';
 import { localizeMessage } from '@/i18n/labels';
 import { formatIsoDate } from '@/lib/datetime';
+import { readerKind } from '@/services/scanner';
 import { getVoiceService } from '@/services/voice/VoiceService';
 import { selectUser, useAuthStore } from '@/stores/useAuthStore';
 import { memberById, selectActiveMemberId, selectMembers, useFamilyStore } from '@/stores/useFamilyStore';
@@ -65,6 +66,7 @@ const FAILURE_TITLES: readonly string[] = [
   'SCAN_IMAGE_TOO_LARGE',
   'SCAN_TIMEOUT',
   'SCAN_SERVER_ERROR',
+  'SCAN_DEVICE_ERROR',
   'SCANNER_NOT_CONFIGURED',
 ];
 
@@ -379,6 +381,11 @@ export default function ScanResultScreen() {
         {translation ? (
           <AppText variant="caption" color="textMuted">
             {t('scan.translationNote')}
+          </AppText>
+        ) : null}
+        {readerKind(demoMode) === 'device' ? (
+          <AppText variant="caption" color="textMuted">
+            {t('scan.deviceNote')}
           </AppText>
         ) : null}
       </View>

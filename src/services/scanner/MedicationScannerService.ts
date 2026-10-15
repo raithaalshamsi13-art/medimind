@@ -33,6 +33,6 @@ export type ScanRequest = {
 };
 
 export interface MedicationScannerService {
-  readonly kind: 'mock' | 'ai';
+  readonly kind: 'mock' | 'device' | 'ai';
   scan(request: ScanRequest): Promise<Result<ScanResult>>;
 }

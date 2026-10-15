@@ -1,0 +1,10 @@
+{
+  "name": "label-ocr",
+  "version": "1.0.0",
+  "description": "On-device printed-text recognition for medicine labels using Apple's Vision framework (iOS only).",
+  "main": "index.ts",
+  "license": "MIT",
+  "author": "MediMind",
+  "homepage": "https://github.com/omaralshamsi/medimind",
+  "private": true
+}

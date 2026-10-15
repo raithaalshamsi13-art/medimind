@@ -56,8 +56,13 @@ straight into the graduation report.
 - **Node.js 22.13+** (this project is developed on Node 24)
 - An **iPhone** with the free **Expo Go** app
 - No Xcode, no Mac, no Android Studio, no Apple Developer account, and **no
-  native build step** — every MediMind feature, including local notifications
-  with action buttons, runs inside Expo Go on iOS.
+  native build step** for everything that runs inside Expo Go on iOS —
+  including local notifications with action buttons.
+- **Except on-device label reading** (Apple Vision, `modules/label-ocr/`):
+  that is native code, so it needs the MediMind *development build* made in
+  the cloud by EAS (free Expo account + Apple Developer membership). See
+  `docs/DEPLOYMENT.md` §5. In Expo Go the scanner uses the MediMind server
+  instead.
 
 ### Run it
 

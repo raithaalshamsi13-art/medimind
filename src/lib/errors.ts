@@ -32,6 +32,7 @@ export type AppErrorCode =
   | 'SCAN_IMAGE_TOO_LARGE'
   | 'SCAN_TIMEOUT'
   | 'SCAN_SERVER_ERROR'
+  | 'SCAN_DEVICE_ERROR'
   | 'UNKNOWN';
 
 export type AppError = {
@@ -72,6 +73,7 @@ const FRIENDLY_MESSAGES: Record<AppErrorCode, string> = {
   SCAN_IMAGE_TOO_LARGE: 'The photo was too large to send. Please take it again a little further from the label.',
   SCAN_TIMEOUT: 'Reading the label took too long and was stopped. Check your connection and try again.',
   SCAN_SERVER_ERROR: 'The MediMind server could not read this photo right now. Please try again in a moment.',
+  SCAN_DEVICE_ERROR: 'The phone could not read text from this photo. Please take it again.',
   UNKNOWN: 'Something went wrong. Please try again.',
 };
 
