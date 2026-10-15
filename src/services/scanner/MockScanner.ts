@@ -18,6 +18,6 @@ export class MockScanner implements MedicationScannerService {
 
   async scan(request: ScanRequest): Promise<Result<ScanResult>> {
     await new Promise((resolve) => setTimeout(resolve, THINK_MS));
-    return ok(demoScanResult(request.demoScenario ?? 'SAFE'));
+    return ok(demoScanResult(request.demoScenario ?? 'SAFE', new Date(), request.language));
   }
 }

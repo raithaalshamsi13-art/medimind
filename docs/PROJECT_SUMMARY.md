@@ -20,8 +20,8 @@ step adds an entry to §18 (change log) and updates the sections it touches._
 | Platform | iPhone via Expo Go (primary); web browser (UI work only) |
 | Stack | Expo SDK 57 · React Native 0.86 · React 19.2 · TypeScript 6 · Expo Router · SQLite · Zustand · Zod |
 | Source | 217 tracked files · ~29,000 lines across `src/`, tests, the API server, scripts and SQL |
-| Tests | **352 passing** in 21 suites — including real-SQLite tests and a WCAG contrast checker |
-| Commits | 46, all verified (typecheck + tests + iOS and web bundles) before committing |
+| Tests | **360 passing** in 22 suites — including real-SQLite tests and a WCAG contrast checker |
+| Commits | 47, all verified (typecheck + tests + iOS and web bundles) before committing |
 | Milestones | M1 Foundation ✅ · M2 UI & Auth ✅ · M3 Database & CRUD ✅ · Assistant ✅ · Deployment ✅ · Structured entry + health conditions ✅ · Family profiles ✅ · Personal health profile ✅ · M5 Reminders ✅ · M4 Scanner + safety engine ✅ · Voice alerts ✅ · M6 Polish ◐ (language, voice, privacy done) |
 | Live | Web: https://medimind-medimind3.vercel.app · API: Railway (`/health` shows version + model) · Accounts/DB: Supabase |
 | Native build needed | **None.** Everything runs in Expo Go — no Xcode, no Mac, no Android Studio, no Apple developer account |
@@ -356,11 +356,26 @@ SCAN → CHECK → CONFIRM is now real. Built 19 Sep 2026.
   and structured fields in strict JSON. Everything that comes back is
   validated with `scanResultSchema` (`src/domain/scan.ts`): blanks → `null`,
   a date that is not `yyyy-MM-dd` → `null`, confidence clamped 0–1.
-- **Result screen** (`src/app/scan/result.tsx`): the photo (tap to enlarge,
-  pinch-zoom) beside a **selectable, scrollable panel with the exact label
-  text**; side by side from 720 px, stacked on a phone. Below it, the fields
-  MediMind picked out, each badged **Read from label**, **Check this** (read
-  below 0.7 confidence) or **Not on the label**, plus any reader warnings.
+- **Result screen** (`src/app/scan/result.tsx`): **Medicine details** first,
+  in large print — the name in the biggest type on the page, every other
+  field in heading size, each badged **Read from label**, **Check this** (read
+  below 0.7 confidence) or **Not on the label** — then the photo (tap to
+  enlarge, pinch-zoom) and a **selectable, scrollable panel with the exact
+  label text** in large body text. On a wide screen the photo sits on the
+  left with the details and text on the right; stacked on a phone. Reader
+  warnings are shown above.
+- **Arabic**: when the app is in Arabic the reader also returns the wording
+  in Arabic (`translation` in the result; the server prompt asks for a
+  faithful rendering, numbers and units kept; the demo readings carry one
+  too). The details show the Arabic with "Printed as: …" underneath, and the
+  text panel has **In Arabic / As printed** chips. The medicine is always
+  saved with the printed wording, and a note says so.
+- **Voice**: the reading is spoken once when it arrives (voice alerts on), in
+  the app's language — name, dosage, how often, instructions, expiry, an
+  expired warning, and "compare the details marked check this with the pack"
+  when anything was weak. **Read aloud / Stop reading** on the details card.
+  `src/components/scan/scanSpeech.ts` builds the sentence from the reading
+  only.
 - **Adding to the list, without guessing**: when the name was read
   confidently the medicine is saved automatically (source `SCAN`, confidence,
   photo and label text kept) and the screen says so, with **Open medicine**,
@@ -637,12 +652,13 @@ demo cannot be broken by a missing key or a dead network.
 
 ## 9. Testing and verification
 
-**352 tests in 21 suites**, all passing:
+**360 tests in 22 suites**, all passing:
 
 | Suite | Covers |
 |---|---|
 | `domain/safety` | SAFE / EXPIRING_SOON / EXPIRED / NEEDS_REVIEW boundaries against a fixed today; missing dosage, frequency, expiry; scan-confidence threshold applies to scans only; reason ordering |
-| `domain/scan` | result schema (trim, blank → null, malformed date dropped, confidence range, lengths), name confirmation rule, "check this" per field, overall confidence, scan → medicine input (label-read fields only, confirmed name wins, no name → null), duplicate detection (normalised name, same member, archived ignored), the three demo readings |
+| `domain/scan` | result schema (trim, blank → null, malformed date dropped, confidence range, lengths), name confirmation rule, "check this" per field, overall confidence, scan → medicine input (label-read fields only, confirmed name wins, no name → null), duplicate detection (normalised name, same member, archived ignored), the three demo readings ; Arabic translation block (validated, display fallback to the printed text, never for dates or manufacturer, demo readings carry it only in Arabic) |
+| `components/scanSpeech` | the spoken reading: name, dosage, frequency, instructions, expiry; expired warning without advice; unreadable sentence; asks for the name and to check low-confidence fields; Arabic wording in Arabic |
 | `i18n/translate` | every English key has an Arabic string with matching placeholders, interpolation, `localizeMessage` lookup, counts, 12-hour times per language, expiry wording, frequency display, possessives |
 | `db/ReminderRepository` | reminder CRUD, one per medicine, notification ids, per-user isolation; doses created once per occurrence, status kept on re-seed, missed sweep only touches UPCOMING before the cutoff, follow-up id; cascades from medicine and family member — **both** backends |
 | `domain/reminder` | suggestion from the label (blocked when expired, none when not understood, as-needed), input schema (sorted unique times, days rules, date order), occurrences per day, grace window, wording helpers |
@@ -1007,6 +1023,7 @@ with no internet and no API key — exactly as the brief requires.
 ## 16. Commit history
 
 ```
+2026-10-15  Scan result: large-print details, Arabic translation of the reading, spoken reading (server 1.6.1)
 2026-09-19  Milestone 4 + voice: camera scanning, label text panel, auto-add with safety engine, voice alerts, snooze, privacy page (schema v6, server 1.6.0)
 2026-09-13  Chatbot: complete answers (8192-token budget), answer-first tone, new closing line, narrower client screen (server 1.4.1)
 2026-09-13  Ask MediMind as a chatbot: messenger UI, AI by default with offline fallback, general info in plain language (server 1.4.0)
@@ -1105,6 +1122,26 @@ with no internet and no API key — exactly as the brief requires.
 Newest first. Every commit that changes the app adds an entry here **in the
 same commit**, and updates the sections above that it touches (rule in
 `AGENTS.md`, "Verify before claiming done").
+
+### 2026-10-15 — Scan result: large print, Arabic translation, spoken reading
+- **Large-print details card** on the scan result: the medicine name in
+  display size, dosage / how often / instructions / expiry / ingredients /
+  manufacturer in heading size, each with its Read from label / Check this /
+  Not on the label badge; the label text panel moves to large body text. On
+  wide screens the photo is on the left and the details + text on the right.
+- **Arabic translation of the reading**: `translation` added to the scan
+  contract (`scanResultSchema`, `displayField`), the server prompt asks for a
+  faithful Arabic rendering when the app language is Arabic (server
+  **1.6.1**), the demo readings carry Arabic wording. Shown with "Printed
+  as: …" and In Arabic / As printed chips; the saved medicine keeps the
+  printed wording.
+- **Spoken reading**: `scanSpeech.ts` builds a sentence from the reading only
+  (name, dosage, frequency, instructions, expiry, expired warning, "check
+  this" reminder, or "could not be read"); spoken once when the reading
+  arrives if voice alerts are on, in English or Arabic; **Read aloud / Stop
+  reading** button. Voice rate lowered slightly for clarity.
+- Tests +8 (360 in 22 suites): translation schema and display fallback,
+  demo translation, `scanSpeech` suite.
 
 ### 2026-09-19 — Milestone 4 (scanner + safety engine) and voice alerts
 - **Camera scanning** (`src/app/scan/`): `expo-camera` preview with a

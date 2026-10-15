@@ -876,4 +876,23 @@ export const en = {
   'privacy.notificationsBody': 'Reminders are scheduled on the phone itself. Spoken alerts use the voices built into your phone or browser. Nothing is recorded.',
   'privacy.delete': 'DELETING EVERYTHING',
   'privacy.deleteBody': 'Deleting your account from Settings removes the account and every medicine, profile, reminder and photo stored with it.',
+  // --------------------------------------------------- scan: large summary, translation, speech
+  'scan.summaryTitle': 'Medicine details',
+  'scan.summaryBody': 'Large print, read from the label. Anything marked “Check this” should be compared with the pack.',
+  'scan.nameUnknown': 'Name not read',
+  'scan.printedAs': 'Printed as: {text}',
+  'scan.translatedTab': 'In Arabic',
+  'scan.originalTab': 'As printed',
+  'scan.translationNote':
+    'The Arabic wording is an automatic translation for reading only. The medicine is saved with the words printed on the pack.',
+  'scan.readAloud': 'Read aloud',
+  'scan.stopReading': 'Stop reading',
+  'scan.readAloudHint': 'Reads the medicine details out loud',
+  'voice.scanIntro': 'Here is what the label says.',
+  'voice.scanName': 'Medicine name: {name}.',
+  'voice.scanNameUnknown': 'The medicine name could not be read. Please type it or check the pack.',
+  'voice.scanField': '{label}: {value}.',
+  'voice.scanCheck': 'Please compare the details marked “check this” with the pack.',
+  'voice.scanUnreadable': 'The label could not be read clearly. Please try another photo or enter the medicine by hand.',
+  'voice.scanExpired': 'Warning. This medicine appears to be expired. Please check it before using it.',
 } as const;

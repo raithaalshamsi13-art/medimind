@@ -31,7 +31,7 @@ export class ExpoVoiceService implements VoiceService {
     return new Promise((resolve) => {
       Speech.speak(text, {
         language: VOICE_LOCALES[language],
-        rate: 0.92,
+        rate: 0.88,
         pitch: 1,
         onDone: () => resolve(),
         onStopped: () => resolve(),

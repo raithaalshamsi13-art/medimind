@@ -63,10 +63,35 @@ export const scanResultSchema = z.object({
     expirationDate: confidence.default(0),
   }),
   warnings: z.array(z.string().max(200)).max(10).default([]),
+  /**
+   * The same reading in the app's language (Arabic today), for display and
+   * speech only. The stored medicine always keeps the printed wording.
+   */
+  translation: z
+    .object({
+      language: z.enum(['ar']),
+      name: nullableText(100),
+      dosage: nullableText(60),
+      frequency: nullableText(60),
+      instructions: nullableText(300),
+      activeIngredients: nullableText(200),
+      rawText: z.preprocess((v) => (typeof v === 'string' ? v.trim() : ''), z.string().max(6000)),
+    })
+    .nullable()
+    .default(null),
 });
 
 export type ScanResult = z.infer<typeof scanResultSchema>;
 export type ScanField = keyof ScanResult['fields'];
+export type ScanTranslation = NonNullable<ScanResult['translation']>;
+
+/** A field's wording in the given language, falling back to what was printed. */
+export function displayField(result: ScanResult, field: ScanField, language: 'en' | 'ar'): string | null {
+  const printed = result.fields[field];
+  if (language === 'en' || !result.translation || printed === null) return printed;
+  if (field === 'expirationDate' || field === 'manufacturer') return printed;
+  return result.translation[field] ?? printed;
+}
 
 /** Fields the app saves onto a medicine, with their confidence. */
 export const SCANNED_MEDICATION_FIELDS = ['name', 'dosage', 'frequency', 'instructions', 'expirationDate'] as const;
@@ -160,8 +185,16 @@ export const DEMO_SCENARIOS = ['SAFE', 'EXPIRED', 'UNREADABLE'] as const;
 export type DemoScenario = (typeof DEMO_SCENARIOS)[number];
 
 /** Fixed results, so the demonstration is identical every time. */
-export function demoScanResult(scenario: DemoScenario, today: Date = new Date()): ScanResult {
-  const year = today.getFullYear();
+export function demoScanResult(
+  scenario: DemoScenario,
+  today: Date = new Date(),
+  language: 'en' | 'ar' = 'en',
+): ScanResult {
+  const base = demoReading(scenario, today.getFullYear());
+  return { ...base, translation: language === 'ar' ? demoTranslation(scenario, today.getFullYear()) : null };
+}
+
+function demoReading(scenario: DemoScenario, year: number): Omit<ScanResult, 'translation'> {
   switch (scenario) {
     case 'SAFE':
       return {
@@ -213,6 +246,62 @@ export function demoScanResult(scenario: DemoScenario, today: Date = new Date())
         },
         confidence: { name: 0.2, dosage: 0.1, frequency: 0, instructions: 0, expirationDate: 0.1 },
         warnings: ['Most of the label is scratched or blurred. Nothing could be read with confidence.'],
+      };
+  }
+}
+
+/** Arabic wording for the demo readings, so Demo Mode shows the translation too. */
+function demoTranslation(scenario: DemoScenario, year: number): ScanTranslation {
+  switch (scenario) {
+    case 'SAFE':
+      return {
+        language: 'ar',
+        name: 'دواء تجريبي',
+        dosage: '500 ملغ',
+        frequency: 'كل 6 ساعات',
+        instructions: 'لا تتناول أكثر من 8 أقراص خلال 24 ساعة',
+        activeIngredients: 'باراسيتامول',
+        rawText:
+          `دواء تجريبي 500 ملغ
+باراسيتامول
+20 قرصًا مغلفًا
+` +
+          `البالغون والأطفال فوق 16 عامًا: تناول قرصًا أو قرصين كل 4 إلى 6 ساعات. لا تتناول أكثر من 8 أقراص خلال 24 ساعة.
+` +
+          `يُحفظ دون 25 درجة مئوية. يُحفظ بعيدًا عن متناول الأطفال وأنظارهم.
+` +
+          `تاريخ الانتهاء -04-30  رقم التشغيلة 4471A
+شركة ديمو فارما المحدودة`,
+      };
+    case 'EXPIRED':
+      return {
+        language: 'ar',
+        name: 'دواء تجريبي منتهي الصلاحية',
+        dosage: '10 ملغ',
+        frequency: 'مرة واحدة يوميًا',
+        instructions: null,
+        activeIngredients: 'سيتريزين ثنائي هيدروكلوريد',
+        rawText:
+          `دواء تجريبي منتهي الصلاحية 10 ملغ
+سيتريزين ثنائي هيدروكلوريد
+14 قرصًا
+` +
+          `البالغون: قرص واحد يوميًا.
+تاريخ الانتهاء -01-31  رقم التشغيلة 2209
+شركة ديمو فارما المحدودة`,
+      };
+    case 'UNREADABLE':
+      return {
+        language: 'ar',
+        name: null,
+        dosage: null,
+        frequency: null,
+        instructions: null,
+        activeIngredients: null,
+        rawText: `...ول 2..ملغ
+...أقراص
+(الملصق مخدوش)
+تاريخ الانتهاء 0?/2?`,
       };
   }
 }

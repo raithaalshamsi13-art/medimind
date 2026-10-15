@@ -136,6 +136,11 @@ It reads a medicine label, verifies it, and only then schedules reminders.
   The exact label text is stored in `label_text` and shown verbatim. No
   reminder is ever created from a scan. The server's `SCAN_PROMPT` must keep
   the "null when not printed or not legible" rule.
+  The Arabic `translation` block is for display and speech only — the
+  medicine is saved with the printed wording, and `displayField` falls back
+  to the printed text (never to blank) and never translates dates or the
+  manufacturer. The spoken reading (`scanSpeech.ts`) is built from the
+  reading alone.
 - **Voice says what the record says.** `VoiceService` (`expo-speech`) speaks
   the medicine name and dose label from the reminder — never an added
   instruction — and only when `voiceAlertsEnabled` and the alert style allow.

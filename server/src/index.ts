@@ -37,7 +37,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { ProviderError, selectProvider, type Turn } from './providers.js';
 
 /** Bumped on every change so /health shows which code is live. */
-const VERSION = '1.6.0';
+const VERSION = '1.6.1';
 
 const MAX_QUESTION_LENGTH = 500;
 const MAX_HISTORY_TURNS = 10;
@@ -91,7 +91,7 @@ const SCAN_PROMPT = `You are reading a photo of a medicine package, bottle or bl
 {
   "rawText": "every piece of legible printed text on the packaging, in reading order, one line per printed line, wording and numbers preserved exactly (do not translate, do not summarise; keep units, lot numbers and warnings)",
   "fields": {
-    "name": "the medicine's brand or product name as printed, or null",
+    "name": "the medicine's name: the brand or product name printed most prominently on the front of the pack (e.g. \"Panadol Extra\"); if only the generic name is printed use that; or null",
     "dosage": "the strength of ONE unit as printed, e.g. \\"500 mg\\" or \\"10 mg/5 ml\\", or null",
     "frequency": "how often to take it, only if printed (e.g. \\"Twice daily\\", \\"Every 6 hours\\", \\"As needed\\"), or null",
     "instructions": "printed directions such as \\"Take with food\\" or a maximum per day, or null",
@@ -100,14 +100,32 @@ const SCAN_PROMPT = `You are reading a photo of a medicine package, bottle or bl
     "activeIngredients": "the active ingredient(s) as printed, or null"
   },
   "confidence": { "name": 0-1, "dosage": 0-1, "frequency": 0-1, "instructions": 0-1, "expirationDate": 0-1 },
-  "warnings": ["short plain-language notes about anything unclear, cut off, blurred or hidden, in {language}"]
+  "warnings": ["short plain-language notes about anything unclear, cut off, blurred or hidden, in {language}"],
+  "translation": {translationShape}
 }
 
 Rules:
 - Never invent a value. If something is not printed, or you cannot read it clearly, set the field to null and its confidence low. A confidence of 0.9 or more means you can read it clearly; below 0.7 means the user must check it.
 - "dosage" is the strength printed on the pack, never how much to take. "frequency" is only what the label itself says about timing.
 - Do not add medical advice, uses or side effects — only what is printed.
-- If the image does not show a medicine package, return empty rawText, all fields null, all confidences 0, and one warning saying so.`;
+- If the image does not show a medicine package, return empty rawText, all fields null, all confidences 0, and one warning saying so.
+{translationRule}`;
+
+const TRANSLATION_SHAPE: Record<string, string> = {
+  en: 'null',
+  ar: '{ "language": "ar", "name": "the name in Arabic script (transliterate a brand name), or null", "dosage": "the dosage in Arabic, or null", "frequency": "the frequency in Arabic, or null", "instructions": "the instructions in Arabic, or null", "activeIngredients": "the active ingredients in Arabic, or null", "rawText": "a faithful Arabic translation of rawText, line by line, numbers and units kept" }',
+};
+const TRANSLATION_RULE: Record<string, string> = {
+  en: '- "translation" must be null.',
+  ar: '- "translation" is a faithful Arabic rendering of the fields and of rawText for display only. Translate; never add, interpret or summarise. Keep every number, unit, date and lot number exactly. A field that is null in "fields" is null in "translation" too.',
+};
+
+function scanPrompt(language: string): string {
+  const lang = language === 'ar' ? 'ar' : 'en';
+  return SCAN_PROMPT.replace('{language}', language)
+    .replace('{translationShape}', TRANSLATION_SHAPE[lang])
+    .replace('{translationRule}', TRANSLATION_RULE[lang]);
+}
 
 const MAX_IMAGE_BASE64 = 8 * 1024 * 1024; // ~6 MB of image
 const MAX_SCAN_BODY_BYTES = MAX_IMAGE_BASE64 + 64 * 1024;
@@ -406,10 +424,25 @@ function normaliseScan(raw: unknown) {
   const confidence: Record<string, number> = {};
   for (const key of CONFIDENCE_FIELDS) confidence[key] = fields[key] === null ? 0 : number01(confIn[key]);
 
+  const trIn = (typeof r.translation === 'object' && r.translation !== null ? r.translation : null) as Record<string, unknown> | null;
+  const translation =
+    trIn && trIn.language === 'ar'
+      ? {
+          language: 'ar',
+          name: text(trIn.name, 100),
+          dosage: text(trIn.dosage, 60),
+          frequency: text(trIn.frequency, 60),
+          instructions: text(trIn.instructions, 300),
+          activeIngredients: text(trIn.activeIngredients, 200),
+          rawText: typeof trIn.rawText === 'string' ? trIn.rawText.slice(0, 6000) : '',
+        }
+      : null;
+
   return {
     rawText: typeof r.rawText === 'string' ? r.rawText.slice(0, 6000) : '',
     fields,
     confidence,
+    translation,
     warnings: Array.isArray(r.warnings)
       ? r.warnings.filter((w): w is string => typeof w === 'string').map((w) => w.slice(0, 200)).slice(0, 10)
       : [],
@@ -453,7 +486,7 @@ async function handleScan(req: IncomingMessage, res: ServerResponse): Promise<vo
     const reply = await provider.readLabel({
       imageBase64: image,
       mimeType,
-      prompt: SCAN_PROMPT.replace('{language}', language),
+      prompt: scanPrompt(language),
     });
     let parsed: unknown;
     try {

@@ -1,11 +1,21 @@
 /**
- * CHECK → CONFIRM — what the reader found, side by side with the photo.
+ * CHECK → CONFIRM — what the reader found, beside the photo.
  *
- * Layout: on a wide screen the photo sits beside the label text; on a phone
- * they stack. The text panel is exactly what was read, selectable and
- * scrollable, so the user can compare it with the pack. Under it, the fields
- * MediMind picked out, each marked "Read from label" or "Check this" (read
- * with low confidence) or "Not on the label".
+ * Layout: the medicine details come first, in large print (this screen is
+ * for people who may not see well — nothing here is smaller than body text,
+ * and the name is the biggest thing on the page). On a wide screen the photo
+ * sits on the left and the details + exact label text on the right; on a
+ * phone they stack. The text panel is exactly what was read, selectable and
+ * scrollable, so the user can compare it with the pack. Each field is marked
+ * "Read from label", "Check this" (read with low confidence) or "Not on the
+ * label".
+ *
+ * Arabic: when the app is in Arabic the reader also returns the wording in
+ * Arabic; the details and the text panel show it, with the printed original
+ * one tap away. The medicine is always saved with the printed wording.
+ *
+ * Voice: the details are read aloud once when the reading arrives (if voice
+ * alerts are on), in the app's language, and again on "Read aloud".
  *
  * Saving: when the name was read confidently the medicine is added to the
  * list automatically as soon as the reading arrives. Otherwise the user is
@@ -20,8 +30,10 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Image, Modal, Pressable, ScrollView, useWindowDimensions, View } from 'react-native';
 
 import { MemberContextBanner } from '@/components/family/MemberContextBanner';
-import { AppText, Badge, Button, Card, InlineMessage, Screen, TextField } from '@/components/ui';
+import { scanAnnouncement } from '@/components/scan/scanSpeech';
+import { AppText, Badge, Button, Card, ChoiceChips, InlineMessage, Screen, TextField, type ChipOption } from '@/components/ui';
 import {
+  displayField,
   isUncertain,
   needsNameConfirmation,
   SCANNED_MEDICATION_FIELDS,
@@ -31,18 +43,22 @@ import {
 import { useT } from '@/i18n';
 import { localizeMessage } from '@/i18n/labels';
 import { formatIsoDate } from '@/lib/datetime';
+import { getVoiceService } from '@/services/voice/VoiceService';
 import { selectUser, useAuthStore } from '@/stores/useAuthStore';
 import { memberById, selectActiveMemberId, selectMembers, useFamilyStore } from '@/stores/useFamilyStore';
 import { useMedicationStore } from '@/stores/useMedicationStore';
 import { useScanStore } from '@/stores/useScanStore';
+import { useSettingsStore } from '@/stores/useSettingsStore';
 import { useTheme } from '@/theme/ThemeContext';
 
-/** Photo and text sit side by side from this width up. */
+/** Photo and details sit side by side from this width up. */
 const SIDE_BY_SIDE_MIN_WIDTH = 720;
+
+type TextTab = 'translated' | 'original';
 
 export default function ScanResultScreen() {
   const theme = useTheme();
-  const { t } = useT();
+  const { t, language } = useT();
   const router = useRouter();
   const { width } = useWindowDimensions();
   const sideBySide = width >= SIDE_BY_SIDE_MIN_WIDTH;
@@ -51,6 +67,7 @@ export default function ScanResultScreen() {
   const members = useFamilyStore(selectMembers);
   const activeMemberId = useFamilyStore(selectActiveMemberId);
   const member = useMemo(() => memberById(members, activeMemberId), [members, activeMemberId]);
+  const voiceAlertsEnabled = useSettingsStore((state) => state.voiceAlertsEnabled);
 
   const phase = useScanStore((state) => state.phase);
   const image = useScanStore((state) => state.image);
@@ -69,6 +86,8 @@ export default function ScanResultScreen() {
   const [confirmedName, setConfirmedName] = useState('');
   const [nameError, setNameError] = useState<string | null>(null);
   const [isEnlarged, setEnlarged] = useState(false);
+  const [textTab, setTextTab] = useState<TextTab>('translated');
+  const [isSpeaking, setSpeaking] = useState(false);
 
   // Auto-add: once the reading is in and the name is trustworthy, save it —
   // once. `useRef` so a re-render never triggers a second save.
@@ -79,6 +98,28 @@ export default function ScanResultScreen() {
     autoSaved.current = true;
     void save(user.id, member.id);
   }, [phase, result, user, member, save]);
+
+  // Speak the reading once when it arrives, in the app's language.
+  const speak = async (reading: ScanResult) => {
+    setSpeaking(true);
+    try {
+      await getVoiceService().speak(scanAnnouncement(reading, t, language), language);
+    } finally {
+      setSpeaking(false);
+    }
+  };
+  const stopSpeaking = () => {
+    getVoiceService().stop();
+    setSpeaking(false);
+  };
+  const announced = useRef<ScanResult | null>(null);
+  useEffect(() => {
+    if (!result || (phase !== 'reviewing' && phase !== 'saved') || announced.current === result) return;
+    announced.current = result;
+    if (voiceAlertsEnabled) void speak(result);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [result, phase]);
+  useEffect(() => () => getVoiceService().stop(), []);
 
   const submitName = async (force = false) => {
     if (!user || !member) return;
@@ -99,22 +140,16 @@ export default function ScanResultScreen() {
     });
   };
 
-  const retake = () => {
+  const leave = (go: () => void) => {
+    stopSpeaking();
     reset();
-    router.back();
+    go();
   };
-  const scanAnother = () => {
-    reset();
-    router.replace('/scan');
-  };
-  const enterManually = () => {
-    reset();
-    router.replace({ pathname: '/medication/add', params: member ? { memberId: member.id } : {} });
-  };
-  const finish = () => {
-    reset();
-    router.replace('/medications');
-  };
+  const retake = () => leave(() => router.back());
+  const scanAnother = () => leave(() => router.replace('/scan'));
+  const enterManually = () =>
+    leave(() => router.replace({ pathname: '/medication/add', params: member ? { memberId: member.id } : {} }));
+  const finish = () => leave(() => router.replace('/medications'));
 
   // ---- Reading -------------------------------------------------------------
   if (phase === 'idle' || phase === 'scanning') {
@@ -126,7 +161,7 @@ export default function ScanResultScreen() {
           <AppText variant="heading" align="center">
             {t('scan.reading')}
           </AppText>
-          <AppText variant="body" color="textSecondary" align="center">
+          <AppText variant="bodyLarge" color="textSecondary" align="center">
             {t('scan.readingBody')}
           </AppText>
         </View>
@@ -153,188 +188,236 @@ export default function ScanResultScreen() {
   }
 
   const nameNeeded = needsNameConfirmation(result);
-  const nothingRead = result.rawText.trim().length === 0 && SCANNED_MEDICATION_FIELDS.every((f) => result.fields[f] === null);
+  const nothingRead =
+    result.rawText.trim().length === 0 && SCANNED_MEDICATION_FIELDS.every((f) => result.fields[f] === null);
   const memberName = member?.name ?? '';
+
+  const translation = language === 'ar' ? result.translation : null;
+  const hasTranslatedText = Boolean(translation && translation.rawText.trim().length > 0);
+  const panelText = hasTranslatedText && textTab === 'translated' ? translation!.rawText : result.rawText;
+  const textTabs: readonly ChipOption<TextTab>[] = [
+    { value: 'translated', label: t('scan.translatedTab') },
+    { value: 'original', label: t('scan.originalTab') },
+  ];
+
+  const outcome =
+    phase === 'saved' && saved ? (
+      <View style={{ gap: theme.spacing.md }}>
+        <InlineMessage
+          tone="success"
+          title={t('scan.addedTitle')}
+          message={
+            member?.isSelf === false
+              ? t('scan.addedBody', { name: saved.name, member: memberName })
+              : t('scan.addedBodyMe', { name: saved.name })
+          }
+        />
+        {saved.safetyStatus === 'EXPIRED' ? (
+          <InlineMessage tone="danger" message={t('scan.expiredNote')} />
+        ) : saved.safetyStatus === 'NEEDS_REVIEW' ? (
+          <InlineMessage tone="warning" message={t('scan.needsReviewNote')} />
+        ) : null}
+        <Button
+          label={t('scan.openMedicine')}
+          icon="open-outline"
+          onPress={() => leave(() => router.replace({ pathname: '/medication/[id]', params: { id: saved.id } }))}
+        />
+        {saved.safetyStatus === 'EXPIRED' ? null : (
+          <Button
+            label={t('scan.setReminder')}
+            icon="alarm-outline"
+            variant="secondary"
+            onPress={() =>
+              leave(() =>
+                router.replace({ pathname: '/reminder/[medicationId]', params: { medicationId: saved.id, new: '1' } }),
+              )
+            }
+          />
+        )}
+        <View style={{ flexDirection: 'row', gap: theme.spacing.md }}>
+          <Button label={t('scan.scanAnother')} icon="camera-outline" variant="secondary" onPress={scanAnother} style={{ flex: 1 }} />
+          <Button label={t('scan.done')} icon="checkmark" variant="ghost" onPress={finish} style={{ flex: 1 }} />
+        </View>
+      </View>
+    ) : duplicateOf ? (
+      <View style={{ gap: theme.spacing.md }}>
+        <InlineMessage
+          tone="warning"
+          title={t('scan.duplicateTitle')}
+          message={
+            member?.isSelf === false
+              ? t('scan.duplicateBody', { name: duplicateOf.name, member: memberName })
+              : t('scan.duplicateBodyMe', { name: duplicateOf.name })
+          }
+        />
+        <Button
+          label={t('scan.openExisting')}
+          icon="open-outline"
+          onPress={() => leave(() => router.replace({ pathname: '/medication/[id]', params: { id: duplicateOf.id } }))}
+        />
+        <Button label={t('scan.saveAnyway')} icon="add" variant="secondary" onPress={saveAnyway} loading={isSaving} />
+        <Button label={t('scan.scanAnother')} icon="camera-outline" variant="ghost" onPress={scanAnother} />
+      </View>
+    ) : isSaving || (!nameNeeded && phase === 'reviewing' && !error) ? (
+      <Card>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
+          <ActivityIndicator color={theme.colors.primary} />
+          <AppText variant="bodyLarge" color="textSecondary">
+            {t('scan.adding')}
+          </AppText>
+        </View>
+      </Card>
+    ) : nameNeeded ? (
+      <Card>
+        <View style={{ gap: theme.spacing.md }}>
+          {nothingRead ? <InlineMessage tone="warning" message={t('scan.notReadable')} /> : null}
+          <AppText variant="heading">{t('scan.confirmNameTitle')}</AppText>
+          <AppText variant="bodyLarge" color="textSecondary">
+            {t('scan.confirmNameBody')}
+          </AppText>
+          <TextField
+            label={t('scan.nameLabel')}
+            value={confirmedName}
+            onChangeText={(next) => {
+              setConfirmedName(next);
+              if (nameError) setNameError(null);
+            }}
+            placeholder={result.fields.name ?? undefined}
+            autoCapitalize="words"
+            error={nameError}
+            returnKeyType="done"
+            onSubmitEditing={() => void submitName()}
+          />
+          {error ? <InlineMessage tone="danger" message={localizeMessage(error.message)} /> : null}
+          <Button label={t('scan.saveToList')} icon="checkmark" onPress={() => void submitName()} loading={isSaving} />
+          <View style={{ flexDirection: 'row', gap: theme.spacing.md }}>
+            <Button label={t('scan.retake')} icon="camera-outline" variant="secondary" onPress={retake} style={{ flex: 1 }} />
+            <Button label={t('scan.enterManually')} icon="create-outline" variant="ghost" onPress={enterManually} style={{ flex: 1 }} />
+          </View>
+        </View>
+      </Card>
+    ) : error ? (
+      <View style={{ gap: theme.spacing.md }}>
+        <InlineMessage tone="danger" message={localizeMessage(error.message)} />
+        <Button label={t('scan.retake')} icon="camera-outline" variant="secondary" onPress={retake} />
+      </View>
+    ) : null;
+
+  const details = (
+    <Card>
+      <View style={{ gap: theme.spacing.lg }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
+          <View style={{ flex: 1, gap: theme.spacing.xxs }}>
+            <AppText variant="label" color="textMuted">
+              {t('scan.summaryTitle').toUpperCase()}
+            </AppText>
+            <AppText variant="caption" color="textSecondary">
+              {t('scan.summaryBody')}
+            </AppText>
+          </View>
+          <Button
+            label={isSpeaking ? t('scan.stopReading') : t('scan.readAloud')}
+            icon={isSpeaking ? 'stop-circle-outline' : 'volume-high-outline'}
+            variant="secondary"
+            fullWidth={false}
+            onPress={() => (isSpeaking ? stopSpeaking() : void speak(result))}
+            accessibilityHint={t('scan.readAloudHint')}
+          />
+        </View>
+
+        {/* The name — the biggest text on the page. */}
+        <NameBlock result={result} language={language} />
+
+        <View style={{ height: 1, backgroundColor: theme.colors.border }} />
+
+        <FieldRow label={t('detail.dosage')} field="dosage" result={result} language={language} />
+        <FieldRow label={t('detail.howOften')} field="frequency" result={result} language={language} />
+        <FieldRow label={t('detail.instructions')} field="instructions" result={result} language={language} />
+        <FieldRow label={t('detail.expiryDate')} field="expirationDate" result={result} language={language} />
+        <FieldRow label={t('scan.activeIngredients')} field="activeIngredients" result={result} language={language} />
+        <FieldRow label={t('scan.manufacturer')} field="manufacturer" result={result} language={language} />
+
+        {translation ? (
+          <AppText variant="caption" color="textMuted">
+            {t('scan.translationNote')}
+          </AppText>
+        ) : null}
+      </View>
+    </Card>
+  );
+
+  const photo = image ? (
+    <View style={{ gap: theme.spacing.sm }}>
+      <AppText variant="label" color="textMuted">
+        {t('scan.photo').toUpperCase()}
+      </AppText>
+      <LabelPhoto uri={image.uri} onPress={() => setEnlarged(true)} height={sideBySide ? 420 : 240} />
+      <AppText variant="caption" color="textMuted" align="center">
+        {t('scan.tapToEnlarge')}
+      </AppText>
+    </View>
+  ) : null;
+
+  const textPanel = (
+    <View style={{ gap: theme.spacing.sm }}>
+      <AppText variant="label" color="textMuted">
+        {t('scan.textTitle').toUpperCase()}
+      </AppText>
+      <AppText variant="caption" color="textSecondary">
+        {t('scan.textBody')}
+      </AppText>
+      {hasTranslatedText ? (
+        <ChoiceChips options={textTabs} value={textTab} onChange={(next) => next && setTextTab(next)} accessibilityLabel={t('scan.textTitle')} allowClear={false} />
+      ) : null}
+      <View
+        style={{
+          backgroundColor: theme.colors.surface,
+          borderWidth: 1,
+          borderColor: theme.colors.borderStrong,
+          borderRadius: theme.radius.lg,
+          maxHeight: sideBySide ? 380 : 300,
+        }}>
+        <ScrollView nestedScrollEnabled style={{ maxHeight: sideBySide ? 380 : 300 }} contentContainerStyle={{ padding: theme.spacing.base }}>
+          {panelText.trim().length > 0 ? (
+            <AppText variant="bodyLarge" selectable style={{ lineHeight: 30 }}>
+              {panelText}
+            </AppText>
+          ) : (
+            <AppText variant="bodyLarge" color="textMuted" style={{ fontStyle: 'italic' }}>
+              {t('scan.noText')}
+            </AppText>
+          )}
+        </ScrollView>
+      </View>
+    </View>
+  );
 
   return (
     <Screen scroll keyboardAvoiding>
       <View style={{ gap: theme.spacing.xl }}>
         {member && !member.isSelf ? <MemberContextBanner member={member} prefix={t('scan.scanningFor')} /> : null}
 
-        {/* ---------- Outcome ---------- */}
-        {phase === 'saved' && saved ? (
-          <View style={{ gap: theme.spacing.md }}>
-            <InlineMessage
-              tone="success"
-              title={t('scan.addedTitle')}
-              message={
-                member?.isSelf === false
-                  ? t('scan.addedBody', { name: saved.name, member: memberName })
-                  : t('scan.addedBodyMe', { name: saved.name })
-              }
-            />
-            {saved.safetyStatus === 'EXPIRED' ? (
-              <InlineMessage tone="danger" message={t('scan.expiredNote')} />
-            ) : saved.safetyStatus === 'NEEDS_REVIEW' ? (
-              <InlineMessage tone="warning" message={t('scan.needsReviewNote')} />
-            ) : null}
-            <Button
-              label={t('scan.openMedicine')}
-              icon="open-outline"
-              onPress={() => {
-                reset();
-                router.replace({ pathname: '/medication/[id]', params: { id: saved.id } });
-              }}
-            />
-            {saved.safetyStatus === 'EXPIRED' ? null : (
-              <Button
-                label={t('scan.setReminder')}
-                icon="alarm-outline"
-                variant="secondary"
-                onPress={() => {
-                  reset();
-                  router.replace({ pathname: '/reminder/[medicationId]', params: { medicationId: saved.id, new: '1' } });
-                }}
-              />
-            )}
-            <View style={{ flexDirection: 'row', gap: theme.spacing.md }}>
-              <Button label={t('scan.scanAnother')} icon="camera-outline" variant="secondary" onPress={scanAnother} style={{ flex: 1 }} />
-              <Button label={t('scan.done')} icon="checkmark" variant="ghost" onPress={finish} style={{ flex: 1 }} />
-            </View>
-          </View>
-        ) : duplicateOf ? (
-          <View style={{ gap: theme.spacing.md }}>
-            <InlineMessage
-              tone="warning"
-              title={t('scan.duplicateTitle')}
-              message={
-                member?.isSelf === false
-                  ? t('scan.duplicateBody', { name: duplicateOf.name, member: memberName })
-                  : t('scan.duplicateBodyMe', { name: duplicateOf.name })
-              }
-            />
-            <Button
-              label={t('scan.openExisting')}
-              icon="open-outline"
-              onPress={() => {
-                reset();
-                router.replace({ pathname: '/medication/[id]', params: { id: duplicateOf.id } });
-              }}
-            />
-            <Button label={t('scan.saveAnyway')} icon="add" variant="secondary" onPress={saveAnyway} loading={isSaving} />
-            <Button label={t('scan.scanAnother')} icon="camera-outline" variant="ghost" onPress={scanAnother} />
-          </View>
-        ) : isSaving || (!nameNeeded && phase === 'reviewing' && !error) ? (
-          <Card>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.md }}>
-              <ActivityIndicator color={theme.colors.primary} />
-              <AppText variant="body" color="textSecondary">
-                {t('scan.adding')}
-              </AppText>
-            </View>
-          </Card>
-        ) : nameNeeded ? (
-          <Card>
-            <View style={{ gap: theme.spacing.md }}>
-              {nothingRead ? <InlineMessage tone="warning" message={t('scan.notReadable')} /> : null}
-              <AppText variant="heading">{t('scan.confirmNameTitle')}</AppText>
-              <AppText variant="body" color="textSecondary">
-                {t('scan.confirmNameBody')}
-              </AppText>
-              <TextField
-                label={t('scan.nameLabel')}
-                value={confirmedName}
-                onChangeText={(next) => {
-                  setConfirmedName(next);
-                  if (nameError) setNameError(null);
-                }}
-                placeholder={result.fields.name ?? undefined}
-                autoCapitalize="words"
-                error={nameError}
-                returnKeyType="done"
-                onSubmitEditing={() => void submitName()}
-              />
-              {error ? <InlineMessage tone="danger" message={localizeMessage(error.message)} /> : null}
-              <Button label={t('scan.saveToList')} icon="checkmark" onPress={() => void submitName()} loading={isSaving} />
-              <View style={{ flexDirection: 'row', gap: theme.spacing.md }}>
-                <Button label={t('scan.retake')} icon="camera-outline" variant="secondary" onPress={retake} style={{ flex: 1 }} />
-                <Button label={t('scan.enterManually')} icon="create-outline" variant="ghost" onPress={enterManually} style={{ flex: 1 }} />
-              </View>
-            </View>
-          </Card>
-        ) : error ? (
-          <View style={{ gap: theme.spacing.md }}>
-            <InlineMessage tone="danger" message={localizeMessage(error.message)} />
-            <Button label={t('scan.retake')} icon="camera-outline" variant="secondary" onPress={retake} />
-          </View>
-        ) : null}
+        {outcome}
 
-        {/* ---------- Photo + label text ---------- */}
-        <View style={{ flexDirection: sideBySide ? 'row' : 'column', gap: theme.spacing.lg }}>
-          <View style={{ flex: sideBySide ? 1 : undefined, gap: theme.spacing.sm }}>
-            <AppText variant="label" color="textMuted">
-              {t('scan.photo').toUpperCase()}
-            </AppText>
-            {image ? (
-              <>
-                <LabelPhoto uri={image.uri} onPress={() => setEnlarged(true)} height={sideBySide ? 360 : 240} />
-                <AppText variant="caption" color="textMuted" align="center">
-                  {t('scan.tapToEnlarge')}
-                </AppText>
-              </>
-            ) : null}
-          </View>
-
-          <View style={{ flex: sideBySide ? 1.2 : undefined, gap: theme.spacing.sm }}>
-            <AppText variant="label" color="textMuted">
-              {t('scan.textTitle').toUpperCase()}
-            </AppText>
-            <AppText variant="caption" color="textSecondary">
-              {t('scan.textBody')}
-            </AppText>
-            <View
-              style={{
-                backgroundColor: theme.colors.surface,
-                borderWidth: 1,
-                borderColor: theme.colors.borderStrong,
-                borderRadius: theme.radius.lg,
-                maxHeight: sideBySide ? 360 : 260,
-              }}>
-              <ScrollView nestedScrollEnabled style={{ maxHeight: sideBySide ? 360 : 260 }} contentContainerStyle={{ padding: theme.spacing.base }}>
-                {result.rawText.trim().length > 0 ? (
-                  <AppText variant="body" selectable style={{ fontFamily: 'monospace', lineHeight: 24 }}>
-                    {result.rawText}
-                  </AppText>
-                ) : (
-                  <AppText variant="body" color="textMuted" style={{ fontStyle: 'italic' }}>
-                    {t('scan.noText')}
-                  </AppText>
-                )}
-              </ScrollView>
-            </View>
-          </View>
-        </View>
-
-        {/* ---------- Warnings from the reader ---------- */}
         {result.warnings.length > 0 ? (
           <InlineMessage tone="warning" title={t('scan.warnings')} message={result.warnings.join('\n')} />
         ) : null}
 
-        {/* ---------- Picked-out fields ---------- */}
-        <Card>
-          <View style={{ gap: theme.spacing.lg }}>
-            <AppText variant="label" color="textMuted">
-              {t('scan.fieldsTitle').toUpperCase()}
-            </AppText>
-            <FieldRow label={t('form.name')} field="name" result={result} />
-            <FieldRow label={t('detail.dosage')} field="dosage" result={result} />
-            <FieldRow label={t('detail.howOften')} field="frequency" result={result} />
-            <FieldRow label={t('detail.instructions')} field="instructions" result={result} />
-            <FieldRow label={t('detail.expiryDate')} field="expirationDate" result={result} />
-            <FieldRow label={t('scan.activeIngredients')} field="activeIngredients" result={result} />
-            <FieldRow label={t('scan.manufacturer')} field="manufacturer" result={result} />
+        {sideBySide ? (
+          <View style={{ flexDirection: 'row', gap: theme.spacing.lg, alignItems: 'flex-start' }}>
+            <View style={{ flex: 1 }}>{photo}</View>
+            <View style={{ flex: 1.3, gap: theme.spacing.lg }}>
+              {details}
+              {textPanel}
+            </View>
           </View>
-        </Card>
+        ) : (
+          <>
+            {details}
+            {photo}
+            {textPanel}
+          </>
+        )}
 
         {phase === 'saved' ? null : (
           <View style={{ flexDirection: 'row', gap: theme.spacing.md }}>
@@ -351,13 +434,64 @@ export default function ScanResultScreen() {
 
 // ---------------------------------------------------------------------------
 
-function FieldRow({ label, field, result }: { label: string; field: ScanField; result: ScanResult }) {
-  const theme = useTheme();
+function StatusBadge({ result, field }: { result: ScanResult; field: ScanField }) {
   const { t } = useT();
   const value = result.fields[field];
   const hasConfidence = (SCANNED_MEDICATION_FIELDS as readonly string[]).includes(field);
   const uncertain = hasConfidence && isUncertain(result, field as (typeof SCANNED_MEDICATION_FIELDS)[number]);
-  const display = field === 'expirationDate' && value ? formatIsoDate(value) : value;
+  if (value === null) return <Badge label={t('scan.notOnLabel')} tone="neutral" icon="remove-circle-outline" />;
+  if (uncertain) return <Badge label={t('scan.checkThis')} tone="warning" icon="alert-circle-outline" />;
+  return <Badge label={t('scan.readFromLabel')} tone="success" icon="checkmark-circle-outline" />;
+}
+
+function NameBlock({ result, language }: { result: ScanResult; language: 'en' | 'ar' }) {
+  const theme = useTheme();
+  const { t } = useT();
+  const shown = displayField(result, 'name', language);
+  const printed = result.fields.name;
+
+  return (
+    <View style={{ gap: theme.spacing.xs }}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: theme.spacing.sm }}>
+        <AppText variant="label" color="textMuted" style={{ flex: 1 }}>
+          {t('form.name').toUpperCase()}
+        </AppText>
+        <StatusBadge result={result} field="name" />
+      </View>
+      {shown ? (
+        <AppText variant="display" selectable>
+          {shown}
+        </AppText>
+      ) : (
+        <AppText variant="title" color="textMuted" style={{ fontStyle: 'italic' }}>
+          {t('scan.nameUnknown')}
+        </AppText>
+      )}
+      {shown && printed && shown !== printed ? (
+        <AppText variant="body" color="textSecondary" selectable>
+          {t('scan.printedAs', { text: printed })}
+        </AppText>
+      ) : null}
+    </View>
+  );
+}
+
+function FieldRow({
+  label,
+  field,
+  result,
+  language,
+}: {
+  label: string;
+  field: ScanField;
+  result: ScanResult;
+  language: 'en' | 'ar';
+}) {
+  const theme = useTheme();
+  const { t } = useT();
+  const printed = result.fields[field];
+  const shown = displayField(result, field, language);
+  const display = field === 'expirationDate' && shown ? formatIsoDate(shown) : shown;
 
   return (
     <View style={{ gap: theme.spacing.xs }}>
@@ -365,23 +499,22 @@ function FieldRow({ label, field, result }: { label: string; field: ScanField; r
         <AppText variant="label" color="textMuted" style={{ flex: 1 }}>
           {label.toUpperCase()}
         </AppText>
-        {value === null ? (
-          <Badge label={t('scan.notOnLabel')} tone="neutral" icon="remove-circle-outline" />
-        ) : uncertain ? (
-          <Badge label={t('scan.checkThis')} tone="warning" icon="alert-circle-outline" />
-        ) : (
-          <Badge label={t('scan.readFromLabel')} tone="success" icon="checkmark-circle-outline" />
-        )}
+        <StatusBadge result={result} field={field} />
       </View>
       {display === null ? (
-        <AppText variant="body" color="textMuted" style={{ fontStyle: 'italic' }}>
+        <AppText variant="bodyLarge" color="textMuted" style={{ fontStyle: 'italic' }}>
           {t('common.couldNotBeDetermined')}
         </AppText>
       ) : (
-        <AppText variant="bodyLarge" selectable>
+        <AppText variant="heading" selectable style={{ fontWeight: '600' }}>
           {display}
         </AppText>
       )}
+      {shown && printed && shown !== printed ? (
+        <AppText variant="body" color="textSecondary" selectable>
+          {t('scan.printedAs', { text: printed })}
+        </AppText>
+      ) : null}
     </View>
   );
 }

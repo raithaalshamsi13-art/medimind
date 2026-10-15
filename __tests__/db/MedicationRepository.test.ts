@@ -161,13 +161,13 @@ describe.each(backends)('$name', ({ make }) => {
 
       expect((await repository.setSafetyStatus(ALICE, created.value.id, 'EXPIRING_SOON')).ok).toBe(true);
       const fetched = await repository.getById(ALICE, created.value.id);
-      expect(fetched.ok && fetched.value.safetyStatus).toBe('EXPIRING_SOON');
-      expect(fetched.ok && fetched.value.name).toBe('Paracetamol');
+      expect(fetched.ok && fetched.value?.safetyStatus).toBe('EXPIRING_SOON');
+      expect(fetched.ok && fetched.value?.name).toBe('Paracetamol');
 
       const other = await repository.setSafetyStatus(BOB, created.value.id, 'EXPIRED');
       expect(other.ok).toBe(false);
       const unchanged = await repository.getById(ALICE, created.value.id);
-      expect(unchanged.ok && unchanged.value.safetyStatus).toBe('EXPIRING_SOON');
+      expect(unchanged.ok && unchanged.value?.safetyStatus).toBe('EXPIRING_SOON');
     });
   });
 

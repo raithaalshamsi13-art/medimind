@@ -9,6 +9,7 @@
 import {
   DEMO_SCENARIOS,
   demoScanResult,
+  displayField,
   FIELD_CONFIDENCE_THRESHOLD,
   findDuplicate,
   isUncertain,
@@ -35,6 +36,7 @@ const READ: ScanResult = {
   },
   confidence: { name: 0.95, dosage: 0.9, frequency: 0, instructions: 0, expirationDate: 0.8 },
   warnings: [],
+  translation: null,
 };
 
 describe('scanResultSchema', () => {
@@ -164,5 +166,44 @@ describe('demo scenarios', () => {
     expect(demoScanResult('EXPIRED', TODAY).fields.expirationDate).toBe('2025-01-31');
     expect(needsNameConfirmation(demoScanResult('UNREADABLE', TODAY))).toBe(true);
     expect(demoScanResult('UNREADABLE', TODAY).warnings.length).toBeGreaterThan(0);
+  });
+});
+
+describe('translation (Arabic display)', () => {
+  it('is null by default and validated when present', () => {
+    expect(scanResultSchema.safeParse(READ).success && scanResultSchema.parse(READ).translation).toBeNull();
+    const parsed = scanResultSchema.safeParse({
+      ...READ,
+      translation: { language: 'ar', name: ' بانادول ', dosage: '500 ملغ', frequency: '', instructions: null, activeIngredients: null, rawText: 'بانادول 500 ملغ' },
+    });
+    expect(parsed.success).toBe(true);
+    if (!parsed.success) return;
+    expect(parsed.data.translation?.name).toBe('بانادول');
+    expect(parsed.data.translation?.frequency).toBeNull();
+    expect(scanResultSchema.safeParse({ ...READ, translation: { language: 'fr', rawText: '' } }).success).toBe(false);
+  });
+
+  it('displayField shows the translation in Arabic and the printed text otherwise', () => {
+    const translated: ScanResult = {
+      ...READ,
+      translation: { language: 'ar', name: 'بانادول', dosage: null, frequency: null, instructions: null, activeIngredients: null, rawText: '' },
+    };
+    expect(displayField(translated, 'name', 'ar')).toBe('بانادول');
+    expect(displayField(translated, 'name', 'en')).toBe('Panadol');
+    // No translation for that field → the printed wording, never blank.
+    expect(displayField(translated, 'dosage', 'ar')).toBe('500 mg');
+    // Dates and manufacturer are never translated.
+    expect(displayField(translated, 'expirationDate', 'ar')).toBe('2028-04-30');
+    expect(displayField(READ, 'name', 'ar')).toBe('Panadol');
+  });
+
+  it('demo readings carry an Arabic translation only when asked in Arabic', () => {
+    expect(demoScanResult('SAFE', TODAY, 'en').translation).toBeNull();
+    const ar = demoScanResult('SAFE', TODAY, 'ar');
+    expect(ar.translation?.language).toBe('ar');
+    expect(ar.translation?.name).toBeTruthy();
+    expect(scanResultSchema.safeParse(ar).success).toBe(true);
+    // The stored fields stay as printed.
+    expect(scanToMedicationInput(ar, { memberId: 'self', imageUri: null })?.name).toBe('Demo Medicine');
   });
 });
