@@ -920,4 +920,42 @@ export const en = {
   'settings.readerMissing': 'Real label reading is not set up on this build (no server address). Scans need Demo Mode or manual entry.',
   'error.SCANNER_NOT_CONFIGURED':
     'Real label reading is not set up on this build: the MediMind server address is missing. Turn on Demo Mode to see example readings, or enter the medicine by hand.',
+  // --------------------------------------------- scan: precise failures, connection test
+  'error.SERVER_UNREACHABLE':
+    'You are online, but the MediMind server did not answer at its address. It may be stopped or not deployed. The server owner can check it under Settings → Scanner → Test connection.',
+  'error.SCAN_APP_KEY_REJECTED':
+    'The server refused this app’s access key. The key in the app build and the APP_ACCESS_KEY on the server must match.',
+  'error.SCAN_PROVIDER_KEY_INVALID':
+    'The server reached the AI provider, but its AI key was rejected. The server owner needs to check the Gemini key on Railway.',
+  'error.SCAN_NO_VISION':
+    'The server’s AI provider cannot read images. Label reading needs a Gemini or Claude key on the server.',
+  'error.SCAN_RATE_LIMITED': 'Too many scans in a short time. Please wait a minute and try again.',
+  'error.SCAN_IMAGE_TOO_LARGE': 'The photo was too large to send. Please take it again a little further from the label.',
+  'error.SCAN_TIMEOUT': 'Reading the label took too long and was stopped. Check your connection and try again.',
+  'error.SCAN_SERVER_ERROR': 'The MediMind server could not read this photo right now. Please try again in a moment.',
+  'scan.fail.NETWORK_UNAVAILABLE': 'No internet connection',
+  'scan.fail.SERVER_UNREACHABLE': 'The MediMind server is not reachable',
+  'scan.fail.SCAN_APP_KEY_REJECTED': 'The server refused the app',
+  'scan.fail.SCAN_PROVIDER_KEY_INVALID': 'The server’s AI key was rejected',
+  'scan.fail.SCAN_NO_VISION': 'The server cannot read images',
+  'scan.fail.SCAN_RATE_LIMITED': 'Too many scans',
+  'scan.fail.SCAN_IMAGE_TOO_LARGE': 'Photo too large',
+  'scan.fail.SCAN_TIMEOUT': 'Reading timed out',
+  'scan.fail.SCAN_SERVER_ERROR': 'The server could not read the photo',
+  'scan.fail.SCANNER_NOT_CONFIGURED': 'Real label reading is not set up',
+  'scan.fail.other': 'The label could not be read',
+  'scan.tryAgain': 'Try again',
+  'scan.offlineNote':
+    'Reading a label needs the internet: the photo is read by the MediMind server. Your saved medicines, reminders and manual entry work offline.',
+  'settings.testConnection': 'Test connection',
+  'settings.testing': 'Testing…',
+  'settings.conn.internetOk': 'Internet: connected',
+  'settings.conn.internetDown': 'Internet: no connection',
+  'settings.conn.serverOk': 'MediMind server: reachable (version {version})',
+  'settings.conn.serverDown': 'MediMind server: not reachable at its address (nothing is answering there — it may be stopped or not deployed)',
+  'settings.conn.serverStatus': 'MediMind server: answered with HTTP {status}',
+  'settings.conn.serverNone': 'MediMind server: no address in this build',
+  'settings.conn.scanOk': 'Label reading: available ({provider})',
+  'settings.conn.scanNoVision': 'Label reading: not available — the server’s provider ({provider}) cannot read images',
+  'settings.conn.scanNoProvider': 'Label reading: not available — no AI key on the server',
 } as const;

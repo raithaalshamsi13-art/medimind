@@ -15,6 +15,7 @@ import { Switch, View } from 'react-native';
 
 import { isAssistantConfigured, isSupabaseConfigured } from '@/config/env';
 import { Logo } from '@/components/brand/Logo';
+import { ConnectionTest } from '@/components/settings/ConnectionTest';
 import {
   AppText,
   Badge,
@@ -315,6 +316,8 @@ export default function SettingsScreen() {
                   setSetting('demoModeChosen', true);
                 }}
               />
+              <View style={{ height: 1, backgroundColor: theme.colors.border }} />
+              <ConnectionTest />
             </View>
           </Card>
           <AppText variant="caption" color="textMuted">

@@ -37,7 +37,7 @@ import { createServer, type IncomingMessage, type ServerResponse } from 'node:ht
 import { ProviderError, selectProvider, type Turn } from './providers.js';
 
 /** Bumped on every change so /health shows which code is live. */
-const VERSION = '1.7.0';
+const VERSION = '1.7.1';
 
 const MAX_QUESTION_LENGTH = 500;
 const MAX_HISTORY_TURNS = 10;
@@ -452,13 +452,42 @@ function normaliseScan(raw: unknown) {
   };
 }
 
+/**
+ * Turn a provider failure into something the app can act on, without ever
+ * forwarding the provider's raw message (it may include the request URL).
+ */
+function classifyProviderError(error: ProviderError): { http: number; code: string; message: string } {
+  const text = error.message.toLowerCase();
+  if (error.status === 501) {
+    return { http: 501, code: 'NO_VISION_PROVIDER', message: 'Label scanning needs the Gemini or Claude provider.' };
+  }
+  if (error.status === 504) {
+    return { http: 504, code: 'PROVIDER_TIMEOUT', message: 'The label reader took too long. Please try again.' };
+  }
+  if (
+    error.status === 401 ||
+    error.status === 403 ||
+    (error.status === 400 && (text.includes('api key') || text.includes('api_key') || text.includes('permission_denied')))
+  ) {
+    return { http: 503, code: 'PROVIDER_KEY_INVALID', message: 'The AI key on the server was rejected. The server owner needs to check it.' };
+  }
+  if (error.status === 429) {
+    return { http: 429, code: 'PROVIDER_RATE_LIMITED', message: 'The label reader is busy. Please wait a minute and try again.' };
+  }
+  return { http: 502, code: 'PROVIDER_UNAVAILABLE', message: 'The label reader is unavailable right now.' };
+}
+
 async function handleScan(req: IncomingMessage, res: ServerResponse): Promise<void> {
   if (!provider) {
-    json(res, 500, { error: 'No AI provider is configured on the server' });
+    json(res, 500, { error: 'No AI provider is configured on the server', code: 'NO_PROVIDER' });
+    return;
+  }
+  if (provider.name === 'groq') {
+    json(res, 501, { error: 'Label scanning needs the Gemini or Claude provider.', code: 'NO_VISION_PROVIDER' });
     return;
   }
   if (APP_ACCESS_KEY && req.headers['x-app-key'] !== APP_ACCESS_KEY) {
-    json(res, 401, { error: 'Missing or invalid app key' });
+    json(res, 401, { error: 'Missing or invalid app key', code: 'APP_KEY_REJECTED' });
     return;
   }
   const ip =
@@ -466,20 +495,28 @@ async function handleScan(req: IncomingMessage, res: ServerResponse): Promise<vo
     req.socket.remoteAddress ??
     'unknown';
   if (isRateLimited(ip)) {
-    json(res, 429, { error: 'Too many requests. Please wait a few minutes.' });
+    json(res, 429, { error: 'Too many requests. Please wait a few minutes.', code: 'RATE_LIMITED' });
     return;
   }
 
   let body: { image?: unknown; mimeType?: unknown; language?: unknown };
   try {
     body = JSON.parse(await readBody(req, MAX_SCAN_BODY_BYTES));
-  } catch {
-    json(res, 400, { error: 'Request body must be JSON with a base64 image under 6 MB' });
+  } catch (error) {
+    const tooLarge = error instanceof Error && error.message === 'body too large';
+    json(res, tooLarge ? 413 : 400, {
+      error: tooLarge ? 'The photo is too large. Please send one under 6 MB.' : 'Request body must be JSON with a base64 image',
+      code: tooLarge ? 'IMAGE_TOO_LARGE' : 'BAD_REQUEST',
+    });
     return;
   }
   const image = typeof body.image === 'string' ? body.image.replace(/^data:[^,]+,/, '') : '';
-  if (image.length === 0 || image.length > MAX_IMAGE_BASE64 || !/^[A-Za-z0-9+/=\s]+$/.test(image.slice(0, 200))) {
-    json(res, 400, { error: 'image must be base64 (JPEG or PNG) and under 6 MB' });
+  if (image.length > MAX_IMAGE_BASE64) {
+    json(res, 413, { error: 'The photo is too large. Please send one under 6 MB.', code: 'IMAGE_TOO_LARGE' });
+    return;
+  }
+  if (image.length === 0 || !/^[A-Za-z0-9+/=\s]+$/.test(image.slice(0, 200))) {
+    json(res, 400, { error: 'image must be base64 (JPEG or PNG)', code: 'BAD_REQUEST' });
     return;
   }
   const mimeType = body.mimeType === 'image/png' ? 'image/png' : 'image/jpeg';
@@ -496,22 +533,26 @@ async function handleScan(req: IncomingMessage, res: ServerResponse): Promise<vo
       parsed = extractJson(reply);
     } catch (error) {
       console.error('Scan reply was not JSON', reply.slice(0, 200));
-      json(res, 502, { error: 'The label reader returned something unexpected. Please try again.', detail: String(error) });
+      json(res, 502, { error: 'The label reader returned something unexpected. Please try again.', code: 'BAD_REPLY' });
       return;
     }
     json(res, 200, { result: normaliseScan(parsed), provider: provider.name, model: provider.model });
   } catch (error) {
     if (error instanceof ProviderError) {
-      console.error('Scan provider error', error.provider, error.status, error.message);
-      if (error.status === 501) {
-        json(res, 501, { error: 'Label scanning needs the Gemini or Claude provider.', detail: error.message });
-        return;
-      }
-      json(res, error.status === 429 ? 429 : 502, { error: 'The label reader is unavailable right now.', detail: error.message });
+      // Never echo the provider's raw message to the app or the log in full:
+      // it can carry the request URL, and the Gemini URL carries the key.
+      console.error(
+        'Scan provider error',
+        error.provider,
+        error.status,
+        error.message.slice(0, 160).replace(/key=[^&\s]+/g, 'key=***'),
+      );
+      const classified = classifyProviderError(error);
+      json(res, classified.http, { error: classified.message, code: classified.code });
       return;
     }
     console.error('Unexpected scan error', error);
-    json(res, 500, { error: 'Unexpected server error.', detail: error instanceof Error ? error.message : String(error) });
+    json(res, 500, { error: 'Unexpected server error.', code: 'SERVER_ERROR' });
   }
 }
 
@@ -529,6 +570,8 @@ const server = createServer(async (req, res) => {
       service: 'medimind-server',
       version: VERSION,
       assistant: Boolean(provider),
+      /** Label reading needs a vision model: Gemini or Claude, not Groq. */
+      scan: Boolean(provider) && provider?.name !== 'groq',
       provider: provider?.name ?? null,
       model: provider?.model ?? null,
     });

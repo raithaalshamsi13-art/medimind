@@ -24,7 +24,7 @@ import {
 import type { Medication } from '@/domain/medication';
 import type { AppError } from '@/lib/errors';
 import { appError, toAppError } from '@/lib/errors';
-import { persistScanImage } from '@/lib/scanImage';
+import { persistScanImage, prepareScanImage } from '@/lib/scanImage';
 import { getScannerService, type ScanImage } from '@/services/scanner';
 
 import { useMedicationStore } from './useMedicationStore';
@@ -69,7 +69,11 @@ export const useScanStore = create<ScanState>((set, get) => ({
     set({ phase: 'scanning', image, result: null, error: null, savedMedicationId: null, duplicateOf: null });
     try {
       const scanner = getScannerService(options.demoMode);
-      const result = await scanner.scan({ image, language: options.language, demoScenario: options.demoScenario });
+      // Shrink a multi-megabyte camera photo before it travels; the resized
+      // copy is also what gets kept with the medicine.
+      const prepared = scanner.kind === 'ai' ? await prepareScanImage(image) : image;
+      set({ image: prepared });
+      const result = await scanner.scan({ image: prepared, language: options.language, demoScenario: options.demoScenario });
       if (!result.ok) {
         set({ phase: 'failed', error: result.error });
         return;

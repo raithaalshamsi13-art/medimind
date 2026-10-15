@@ -23,6 +23,15 @@ export type AppErrorCode =
   | 'NETWORK_UNAVAILABLE'
   | 'ASSISTANT_UNAVAILABLE'
   | 'SCANNER_NOT_CONFIGURED'
+  // Scanning — each one says what actually happened
+  | 'SERVER_UNREACHABLE'
+  | 'SCAN_APP_KEY_REJECTED'
+  | 'SCAN_PROVIDER_KEY_INVALID'
+  | 'SCAN_NO_VISION'
+  | 'SCAN_RATE_LIMITED'
+  | 'SCAN_IMAGE_TOO_LARGE'
+  | 'SCAN_TIMEOUT'
+  | 'SCAN_SERVER_ERROR'
   | 'UNKNOWN';
 
 export type AppError = {
@@ -51,6 +60,18 @@ const FRIENDLY_MESSAGES: Record<AppErrorCode, string> = {
     'The assistant could not be reached right now. Your saved medicines are not affected. Please try again later, or ask a pharmacist.',
   SCANNER_NOT_CONFIGURED:
     'Real label reading is not set up on this build: the MediMind server address is missing. Turn on Demo Mode to see example readings, or enter the medicine by hand.',
+  SERVER_UNREACHABLE:
+    'You are online, but the MediMind server did not answer at its address. It may be stopped or not deployed. The server owner can check it under Settings → Scanner → Test connection.',
+  SCAN_APP_KEY_REJECTED:
+    'The server refused this app’s access key. The key in the app build and the APP_ACCESS_KEY on the server must match.',
+  SCAN_PROVIDER_KEY_INVALID:
+    'The server reached the AI provider, but its AI key was rejected. The server owner needs to check the Gemini key on Railway.',
+  SCAN_NO_VISION:
+    'The server’s AI provider cannot read images. Label reading needs a Gemini or Claude key on the server.',
+  SCAN_RATE_LIMITED: 'Too many scans in a short time. Please wait a minute and try again.',
+  SCAN_IMAGE_TOO_LARGE: 'The photo was too large to send. Please take it again a little further from the label.',
+  SCAN_TIMEOUT: 'Reading the label took too long and was stopped. Check your connection and try again.',
+  SCAN_SERVER_ERROR: 'The MediMind server could not read this photo right now. Please try again in a moment.',
   UNKNOWN: 'Something went wrong. Please try again.',
 };
 

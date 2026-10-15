@@ -20,8 +20,8 @@ step adds an entry to §18 (change log) and updates the sections it touches._
 | Platform | iPhone via Expo Go (primary); web browser (UI work only) |
 | Stack | Expo SDK 57 · React Native 0.86 · React 19.2 · TypeScript 6 · Expo Router · SQLite · Zustand · Zod |
 | Source | 217 tracked files · ~29,000 lines across `src/`, tests, the API server, scripts and SQL |
-| Tests | **371 passing** in 23 suites — including real-SQLite tests and a WCAG contrast checker |
-| Commits | 48, all verified (typecheck + tests + iOS and web bundles) before committing |
+| Tests | **376 passing** in 24 suites — including real-SQLite tests and a WCAG contrast checker |
+| Commits | 49, all verified (typecheck + tests + iOS and web bundles) before committing |
 | Milestones | M1 Foundation ✅ · M2 UI & Auth ✅ · M3 Database & CRUD ✅ · Assistant ✅ · Deployment ✅ · Structured entry + health conditions ✅ · Family profiles ✅ · Personal health profile ✅ · M5 Reminders ✅ · M4 Scanner + safety engine ✅ · Voice alerts ✅ · M6 Polish ◐ (language, voice, privacy done) |
 | Live | Web: https://medimind-medimind3.vercel.app · API: Railway (`/health` shows version + model) · Accounts/DB: Supabase |
 | Native build needed | **None.** Everything runs in Expo Go — no Xcode, no Mac, no Android Studio, no Apple developer account |
@@ -669,7 +669,7 @@ demo cannot be broken by a missing key or a dead network.
 
 ## 9. Testing and verification
 
-**371 tests in 23 suites**, all passing:
+**376 tests in 24 suites**, all passing:
 
 | Suite | Covers |
 |---|---|
@@ -677,6 +677,7 @@ demo cannot be broken by a missing key or a dead network.
 | `domain/scan` | result schema (trim, blank → null, malformed date dropped, confidence range, lengths), name confirmation rule, "check this" per field, overall confidence, scan → medicine input (label-read fields only, confirmed name wins, no name → null), duplicate detection (normalised name, same member, archived ignored), the three demo readings ; Arabic translation block (validated, display fallback to the printed text, never for dates or manufacturer, demo readings carry it only in Arabic) ; grounding (a name, strength or expiry year not found in the transcription is capped below the threshold and flagged — a guessed "Paracetamol" on an iron label asks for the name), printed form → TABLET/CAPSULE/…, supplement wording → SUPPLEMENT |
 | `components/scanSpeech` | the spoken reading: name, dosage, frequency, instructions, expiry; expired warning without advice; unreadable sentence; asks for the name and to check low-confidence fields; Arabic wording in Arabic |
 | `services/sentences` | speech chunking: sentence ends and newlines, Arabic punctuation, decimals kept, long sentences broken under the engine limit |
+| `services/scanErrors` | a failed scan names what happened: server error codes and HTTP statuses → app key rejected / AI key rejected / no vision provider / busy / too large / timed out / server fault / nothing deployed (404); request never answered → offline vs. server unreachable vs. dropped, from the two probes |
 | `i18n/translate` | every English key has an Arabic string with matching placeholders, interpolation, `localizeMessage` lookup, counts, 12-hour times per language, expiry wording, frequency display, possessives |
 | `db/ReminderRepository` | reminder CRUD, one per medicine, notification ids, per-user isolation; doses created once per occurrence, status kept on re-seed, missed sweep only touches UPCOMING before the cutoff, follow-up id; cascades from medicine and family member — **both** backends |
 | `domain/reminder` | suggestion from the label (blocked when expired, none when not understood, as-needed), input schema (sorted unique times, days rules, date order), occurrences per day, grace window, wording helpers |
@@ -1045,6 +1046,7 @@ with no internet and no API key — exactly as the brief requires.
 ## 16. Commit history
 
 ```
+2026-10-15  Scan connection: Railway 404 diagnosed, precise failure codes, probes, Test connection, photo downscaling (server 1.7.1)
 2026-10-15  Fix: Demo Mode no longer hijacks real scans; grounding check; clearer sentence-by-sentence voice (server 1.7.0)
 2026-10-15  Scan result: large-print details, Arabic translation of the reading, spoken reading (server 1.6.1)
 2026-09-19  Milestone 4 + voice: camera scanning, label text panel, auto-add with safety engine, voice alerts, snooze, privacy page (schema v6, server 1.6.0)
@@ -1121,6 +1123,8 @@ with no internet and no API key — exactly as the brief requires.
 | Voice (text-to-speech, announcer, snooze handling) | `src/services/voice/VoiceService.ts`, `src/components/voice/useVoiceAnnouncer.ts` |
 | Privacy page | `src/app/about/privacy.tsx` |
 | Server `/scan` route and vision prompt | `handleScan`, `SCAN_PROMPT` in `server/src/index.ts`; `readLabel` in `server/src/providers.ts` |
+| Scan failure classification and connectivity probes | `src/services/scanner/scanErrors.ts`, `src/services/scanner/connectivity.ts`; Settings → Scanner → Test connection in `src/components/settings/ConnectionTest.tsx` |
+| Photo downscaling before upload | `prepareScanImage` in `src/lib/scanImage.ts` (expo-image-manipulator, 1600 px, JPEG 0.8) |
 | Reminder screen, Schedule tab, dose row | `src/app/reminder/[medicationId].tsx`, `src/app/(tabs)/schedule.tsx`, `src/components/schedule/DoseRow.tsx` |
 | The medicine form | `src/components/medication/MedicationForm.tsx` |
 | Chips, date picker, collapsible, form section | `src/components/ui/ChoiceChips.tsx`, `DateField.tsx` + `DateField.web.tsx`, `Collapsible.tsx`, `FormSection.tsx` |
@@ -1145,6 +1149,42 @@ with no internet and no API key — exactly as the brief requires.
 Newest first. Every commit that changes the app adds an entry here **in the
 same commit**, and updates the sections above that it touches (rule in
 `AGENTS.md`, "Verify before claiming done").
+
+### 2026-10-15 — Scan connection: real cause found, precise failures, Test connection
+- **Cause of "could not be read — you appear to be offline"**: the Railway
+  domain in the build (`…-622b.up.railway.app`) answers **HTTP 404 from
+  Railway's edge with an empty body** on `/`, `/health` and `/scan` — no
+  deployment is running there (the service is stopped, removed or its
+  domain changed). On the web the CORS preflight to that 404 fails, the
+  browser reports a bare network error, and the app mapped every such
+  error to "offline". The app code path itself (camera → resize → POST
+  /scan → validate → ground → screen) is intact; nothing works until the
+  server is deployed again (`docs/DEPLOYMENT.md` §2 and §5).
+- **Failures now say what happened** (`scanErrors.ts`): after a request
+  with no answer the app probes the internet (Google generate_204) and the
+  server (`/health`) and reports *No internet connection* / *The MediMind
+  server is not reachable* / timed out / dropped; HTTP answers map to *app
+  key rejected* (401), *AI key rejected on the server* (503 /
+  `PROVIDER_KEY_INVALID`), *server cannot read images* (501), *too many
+  scans* (429), *photo too large* (413), *timed out* (504), *server fault*
+  (5xx), *nothing deployed at the address* (404). The failure screen has a
+  headline per case, an offline note, and **Try again** for connection
+  problems. "The label could not be read" is now only for an empty reading.
+- **Server 1.7.1**: every error carries a `code`; provider errors are
+  classified (key invalid / rate limited / timeout / unavailable) and the
+  raw provider message is never forwarded or fully logged (it can carry the
+  request URL, which holds the key); 413 for a too-large body; 50 s timeout
+  on the Gemini call; `/health` reports `scan: true|false`.
+- **Photo size**: `prepareScanImage` (expo-image-manipulator) resizes to
+  1600 px / JPEG 0.8 before upload — a 12 MP photo no longer risks the 6 MB
+  limit or a dropped connection.
+- **Settings → Scanner → Test connection**: internet, server (version) and
+  label-reading availability as three lines, so a stopped server is seen in
+  the app, not guessed.
+- Not possible in Expo Go: on-device OCR (ML Kit needs a development build);
+  the offline note says reading a label needs the internet.
+- Tests +5 (376 in 24 suites). Live scan against the server **not
+  verified** — the server is not running at its address.
 
 ### 2026-10-15 — Fix: real labels were never read; grounding; clearer voice
 - **Cause of "my iron supplement came back as paracetamol"**: `demoMode`

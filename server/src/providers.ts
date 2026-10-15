@@ -71,6 +71,9 @@ export interface LlmProvider {
  * mid-sentence. The prompt itself keeps answers short.
  */
 const MAX_OUTPUT_TOKENS = 8192;
+/** The vision model must answer within this, or the server reports a timeout. */
+const VISION_TIMEOUT_MS = 50_000;
+
 /** Low temperature: we want the label read back faithfully, not creatively. */
 const TEMPERATURE = 0.3;
 
@@ -138,9 +141,14 @@ export function createGeminiProvider(apiKey: string, model: string): LlmProvider
       const url =
         `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}` +
         `:generateContent?key=${encodeURIComponent(apiKey)}`;
+      // A vision call that hangs must not hold the request open forever:
+      // the app gives up at 60 s, so the server gives up first and says why.
+      const controller = new AbortController();
+      const timer = setTimeout(() => controller.abort(), VISION_TIMEOUT_MS);
       const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
+        signal: controller.signal,
         body: JSON.stringify({
           contents: [
             {
@@ -157,7 +165,15 @@ export function createGeminiProvider(apiKey: string, model: string): LlmProvider
             responseMimeType: 'application/json',
           },
         }),
-      });
+      })
+        .catch((error: unknown) => {
+          throw new ProviderError(
+            error instanceof Error && error.name === 'AbortError' ? 'Gemini timed out' : `Gemini unreachable: ${String(error)}`,
+            504,
+            'gemini',
+          );
+        })
+        .finally(() => clearTimeout(timer));
       if (!res.ok) {
         const body = await res.text().catch(() => '');
         throw new ProviderError(`Gemini ${res.status}: ${body.slice(0, 300)}`, res.status, 'gemini');

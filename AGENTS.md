@@ -145,6 +145,12 @@ It reads a medicine label, verifies it, and only then schedules reminders.
   the real reader (an error when unconfigured, never the mock), the scan
   screens show `ScanModeBanner`, and `groundResult` runs on every real
   reading so a field that is not in the transcription is never trusted.
+- **A failed scan names its cause.** `ProxyScanner` must map every failure
+  through `scanErrors.ts` (server `code` / HTTP status, or the internet +
+  `/health` probes when no answer came) — never a generic "could not be
+  read", which is reserved for an empty reading. The server returns a `code`
+  on every error and never forwards a provider's raw message (it can carry
+  the request URL and therefore the key).
 - **Voice says what the record says.** `VoiceService` (`expo-speech`) speaks
   the medicine name and dose label from the reminder — never an added
   instruction — and only when `voiceAlertsEnabled` and the alert style allow.

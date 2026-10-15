@@ -57,10 +57,27 @@ Do them in this order — each later step needs a value from an earlier one.
 4. **Settings → Networking → Generate Domain**. Copy it, e.g.
    `https://medimind-server-production.up.railway.app`.
 5. Check it works: open `<that domain>/health` in a browser. You should see
-   `{"ok":true,"service":"medimind-server","version":"1.7.0","assistant":true,...}`.
+   `{"ok":true,"service":"medimind-server","version":"1.7.1","assistant":true,"scan":true,"assistant":true,...}`.
    If `version` is older than the one in `server/src/index.ts`, Railway has
    not picked up the latest push: open the service → **Deployments →
    Redeploy**, or connect the Railway GitHub App so pushes deploy automatically.
+
+   **If you get a plain 404 (empty page, response header `server:
+   railway-hikari`) on `/health`** — this is what happened on 15 Oct 2026 —
+   nothing is deployed at that domain any more. Railway's edge answers 404
+   when the service has been stopped or removed, when the project is paused
+   (trial or credit exhausted), or when the public domain was deleted or
+   regenerated. Open the Railway project and check: is the service there, is
+   its latest deployment **Active**, and does **Settings → Networking** still
+   show this exact domain? Fix whichever it is (redeploy, add credit, or
+   generate a domain again and put the new one in Vercel's
+   `EXPO_PUBLIC_ASSISTANT_ENDPOINT` and in `.env.local`, then redeploy Vercel).
+   In the app, **Settings → Scanner → Test connection** shows the same three
+   checks (internet, server, label reading) on the phone.
+
+   `scan` in the health reply is `true` when label reading is possible
+   (Gemini or Claude key). With only a Groq key it is `false`: chat works,
+   scanning does not.
 
 The app will talk to `<that domain>/assistant` (the chat) and
 `<that domain>/scan` (label reading — the app derives it from the assistant

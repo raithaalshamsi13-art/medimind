@@ -40,7 +40,7 @@ import {
   type ScanField,
   type ScanResult,
 } from '@/domain/scan';
-import { useT } from '@/i18n';
+import { useT, type TranslationKey } from '@/i18n';
 import { localizeMessage } from '@/i18n/labels';
 import { formatIsoDate } from '@/lib/datetime';
 import { getVoiceService } from '@/services/voice/VoiceService';
@@ -53,6 +53,20 @@ import { useTheme } from '@/theme/ThemeContext';
 
 /** Photo and details sit side by side from this width up. */
 const SIDE_BY_SIDE_MIN_WIDTH = 720;
+
+/** Error codes that have their own headline on the failure screen. */
+const FAILURE_TITLES: readonly string[] = [
+  'NETWORK_UNAVAILABLE',
+  'SERVER_UNREACHABLE',
+  'SCAN_APP_KEY_REJECTED',
+  'SCAN_PROVIDER_KEY_INVALID',
+  'SCAN_NO_VISION',
+  'SCAN_RATE_LIMITED',
+  'SCAN_IMAGE_TOO_LARGE',
+  'SCAN_TIMEOUT',
+  'SCAN_SERVER_ERROR',
+  'SCANNER_NOT_CONFIGURED',
+];
 
 type TextTab = 'translated' | 'original';
 
@@ -78,6 +92,10 @@ export default function ScanResultScreen() {
   const savedMedicationId = useScanStore((state) => state.savedMedicationId);
   const save = useScanStore((state) => state.save);
   const reset = useScanStore((state) => state.reset);
+  const run = useScanStore((state) => state.run);
+  const demoMode = useSettingsStore((state) => state.demoMode);
+  /** Send the same photo again after a connection problem. */
+  const rerun = (photo: NonNullable<typeof image>) => run(photo, { demoMode, language });
 
   const saved = useMedicationStore((state) =>
     savedMedicationId ? (state.medications.find((m) => m.id === savedMedicationId) ?? null) : null,
@@ -172,15 +190,31 @@ export default function ScanResultScreen() {
 
   // ---- Failed --------------------------------------------------------------
   if (phase === 'failed' || !result) {
+    // Say what actually happened — offline, server down, key rejected, too
+    // large, timed out — not a generic "could not be read".
+    const code = error?.code;
+    const title =
+      code && FAILURE_TITLES.includes(code) ? t(`scan.fail.${code}` as TranslationKey) : t('scan.fail.other');
+    const connectionProblem = code === 'NETWORK_UNAVAILABLE' || code === 'SERVER_UNREACHABLE' || code === 'SCAN_TIMEOUT';
     return (
       <Screen scroll>
         <View style={{ gap: theme.spacing.lg }}>
           <InlineMessage
             tone="danger"
-            title={t('scan.failedTitle')}
+            title={title}
             message={error ? localizeMessage(error.message) : t('scan.notReadable')}
           />
-          <Button label={t('scan.retake')} icon="camera-outline" onPress={retake} />
+          {code === 'NETWORK_UNAVAILABLE' ? <InlineMessage tone="info" message={t('scan.offlineNote')} /> : null}
+          {connectionProblem && image ? (
+            <Button
+              label={t('scan.tryAgain')}
+              icon="refresh"
+              onPress={() => {
+                if (user) void rerun(image);
+              }}
+            />
+          ) : null}
+          <Button label={t('scan.retake')} icon="camera-outline" variant={connectionProblem ? 'secondary' : 'primary'} onPress={retake} />
           <Button label={t('scan.enterManually')} icon="create-outline" variant="secondary" onPress={enterManually} />
         </View>
       </Screen>

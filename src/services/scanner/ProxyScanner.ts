@@ -5,6 +5,10 @@
  *
  * PRIVACY: exactly one photo is sent, and nothing else — no name, no account
  * id, no other medicines. The server does not store the image.
+ *
+ * FAILURES are named precisely (see `scanErrors.ts`): a request that never
+ * got an answer is followed by two quick probes so the screen can say "no
+ * internet" or "the server is not reachable" instead of guessing.
  */
 
 import { env } from '@/config/env';
@@ -13,7 +17,9 @@ import { tNow } from '@/i18n';
 import { appError, toAppError } from '@/lib/errors';
 import { fail, ok, type Result } from '@/lib/result';
 
+import { probeInternet, probeServer } from './connectivity';
 import type { MedicationScannerService, ScanRequest } from './MedicationScannerService';
+import { classifyHttpFailure, classifyTransportFailure } from './scanErrors';
 
 /** Vision calls are slower than chat; Railway's free tier may also be waking up. */
 const REQUEST_TIMEOUT_MS = 60_000;
@@ -55,13 +61,13 @@ export class ProxyScanner implements MedicationScannerService {
 
       if (!response.ok) {
         const detail = await response.text().catch(() => '');
-        return fail(appError('ASSISTANT_UNAVAILABLE', `scan server responded ${response.status}: ${detail.slice(0, 200)}`));
+        return fail(appError(classifyHttpFailure(response.status, detail), `scan server responded ${response.status}: ${detail.slice(0, 200)}`));
       }
 
       const payload: unknown = await response.json();
       const parsed = scanResultSchema.safeParse((payload as { result?: unknown })?.result ?? payload);
       if (!parsed.success) {
-        return fail(appError('ASSISTANT_UNAVAILABLE', `scan server returned an unexpected shape: ${parsed.error.message.slice(0, 200)}`));
+        return fail(appError('SCAN_SERVER_ERROR', `scan server returned an unexpected shape: ${parsed.error.message.slice(0, 200)}`));
       }
       // Cross-check the fields against the transcription: anything the reader
       // did not actually read is flagged, never trusted.
@@ -73,8 +79,13 @@ export class ProxyScanner implements MedicationScannerService {
         }),
       );
     } catch (error) {
-      if (error instanceof TypeError) return fail(toAppError(error, 'NETWORK_UNAVAILABLE'));
-      return fail(toAppError(error, 'ASSISTANT_UNAVAILABLE'));
+      // No HTTP answer at all: timed out, offline, server down, or the
+      // connection was dropped. Find out which before telling the user.
+      const aborted = error instanceof Error && error.name === 'AbortError';
+      const probes = aborted
+        ? { internet: true, server: true }
+        : { internet: await probeInternet(), server: (await probeServer()).ok };
+      return fail(toAppError(error, classifyTransportFailure(probes, aborted)));
     } finally {
       clearTimeout(timer);
     }
