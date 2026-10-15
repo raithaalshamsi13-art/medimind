@@ -589,6 +589,8 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse): 
         ANTHROPIC_API_KEY: Boolean(process.env.ANTHROPIC_API_KEY?.trim()),
         APP_ACCESS_KEY: Boolean(APP_ACCESS_KEY),
         AI_PROVIDER: process.env.AI_PROVIDER?.trim() || null,
+        /** Names (never values) of any variable that looks like an AI key — catches a misspelt name. */
+        similarNames: Object.keys(process.env).filter((name) => /GEMINI|GROQ|ANTHROPIC|GOOGLE/i.test(name)),
       },
       deployment: {
         host: process.env.VERCEL ? 'vercel' : process.env.RAILWAY_ENVIRONMENT ? 'railway' : 'node',
