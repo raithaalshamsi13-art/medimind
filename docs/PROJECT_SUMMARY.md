@@ -1169,6 +1169,12 @@ Newest first. Every commit that changes the app adds an entry here **in the
 same commit**, and updates the sections above that it touches (rule in
 `AGENTS.md`, "Verify before claiming done").
 
+### 2026-10-15 — Health diagnostics (server 1.8.1)
+- `/health` now reports a `config` block (which AI-key / app-key variables
+  this deployment can see — presence only), a `deployment` block (host,
+  environment, commit) and a `hint` when no provider is configured, so a
+  missing or mis-scoped Vercel variable is read off the page, not guessed.
+
 ### 2026-10-15 — Free API on Vercel; demo ingredient renamed; spoken units and names
 - **Cause of "every scan says Paracetamol", restated for the record**: no
   real reader was reachable (the Railway deployment is gone — 404 at its

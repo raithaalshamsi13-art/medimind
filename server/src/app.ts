@@ -37,7 +37,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { ProviderError, selectProvider, type Turn } from './providers';
 
 /** Bumped on every change so /health shows which code is live. */
-const VERSION = '1.8.0';
+const VERSION = '1.8.1';
 
 const MAX_QUESTION_LENGTH = 500;
 const MAX_HISTORY_TURNS = 10;
@@ -580,6 +580,24 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse): 
       scan: Boolean(provider) && provider?.name !== 'groq',
       provider: provider?.name ?? null,
       model: provider?.model ?? null,
+      // Diagnostics: which variables THIS deployment can see (presence only,
+      // never a value), so a missing key or a stale deploy is visible from
+      // the health page instead of guessed at.
+      config: {
+        GEMINI_API_KEY: Boolean(process.env.GEMINI_API_KEY?.trim()),
+        GROQ_API_KEY: Boolean(process.env.GROQ_API_KEY?.trim()),
+        ANTHROPIC_API_KEY: Boolean(process.env.ANTHROPIC_API_KEY?.trim()),
+        APP_ACCESS_KEY: Boolean(APP_ACCESS_KEY),
+        AI_PROVIDER: process.env.AI_PROVIDER?.trim() || null,
+      },
+      deployment: {
+        host: process.env.VERCEL ? 'vercel' : process.env.RAILWAY_ENVIRONMENT ? 'railway' : 'node',
+        environment: process.env.VERCEL_ENV ?? process.env.RAILWAY_ENVIRONMENT ?? null,
+        commit: (process.env.VERCEL_GIT_COMMIT_SHA ?? process.env.RAILWAY_GIT_COMMIT_SHA ?? '').slice(0, 7) || null,
+      },
+      hint: provider
+        ? null
+        : 'No AI key is visible to this deployment. Add GEMINI_API_KEY (no EXPO_PUBLIC_ prefix) for the environment shown above, then redeploy — variables only apply to deployments made after they were added.',
     });
     return;
   }
