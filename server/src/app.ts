@@ -34,10 +34,19 @@
 
 import type { IncomingMessage, ServerResponse } from 'node:http';
 
-import { createGeminiProvider, listGeminiModels, ProviderError, readEnv, selectProvider, type LlmProvider, type Turn } from './providers';
+import {
+  createGeminiProvider,
+  DEFAULT_MODELS,
+  listGeminiModels,
+  ProviderError,
+  readEnv,
+  selectProvider,
+  type LlmProvider,
+  type Turn,
+} from './providers';
 
 /** Bumped on every change so /health shows which code is live. */
-const VERSION = '1.8.5';
+const VERSION = '1.8.6';
 
 const MAX_QUESTION_LENGTH = 500;
 const MAX_HISTORY_TURNS = 10;
@@ -57,8 +66,8 @@ const provider = selectProvider(process.env);
  */
 const fallbackProvider: LlmProvider | null = (() => {
   const key = readEnv(process.env, 'GEMINI_API_KEY');
-  const model = readEnv(process.env, 'GEMINI_FALLBACK_MODEL');
-  return provider?.name === 'gemini' && key && model && model !== provider.model ? createGeminiProvider(key, model) : null;
+  const model = readEnv(process.env, 'GEMINI_FALLBACK_MODEL') ?? DEFAULT_MODELS.geminiFallback;
+  return provider?.name === 'gemini' && key && model !== provider.model ? createGeminiProvider(key, model) : null;
 })();
 
 /**

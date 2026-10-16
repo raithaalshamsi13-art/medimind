@@ -1186,6 +1186,9 @@ same commit**, and updates the sections above that it touches (rule in
   with an empty 504 as it did on 1.8.4; optional `GEMINI_FALLBACK_MODEL`
   tried once when the first model stays busy; `GET /api/models` lists the
   Gemini models the key may call (names only) to choose it without guessing.
+- Server 1.8.6: the fallback defaults to `gemini-3.5-flash-lite` (present in
+  the key's model list; lite models are rarely saturated), so a busy
+  `gemini-3.6-flash` no longer blocks a scan without any dashboard change.
 
 ### 2026-10-15 — Variable names are case-insensitive (server 1.8.2)
 - Found via the new health diagnostics: the Vercel project had the key saved

@@ -315,6 +315,8 @@ export async function listGeminiModels(apiKey: string): Promise<string[]> {
 
 export const DEFAULT_MODELS = {
   gemini: 'gemini-3.6-flash',
+  /** Tried once when the main model keeps answering 503 "high demand"; lite models are rarely saturated. */
+  geminiFallback: 'gemini-3.5-flash-lite',
   groq: 'llama-3.3-70b-versatile',
   anthropic: 'claude-opus-5',
 } as const;
