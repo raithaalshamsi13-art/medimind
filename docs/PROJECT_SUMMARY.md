@@ -1182,6 +1182,17 @@ Newest first. Every commit that changes the app adds an entry here **in the
 same commit**, and updates the sections above that it touches (rule in
 `AGENTS.md`, "Verify before claiming done").
 
+### 2026-10-16 — Zero lint findings and editor diagnostics, no behaviour change
+- `expo lint` had 6 errors and 4 warnings; the editor flagged the server
+  tsconfig. All fixed without changing what the app does: `TypingIndicator`
+  keeps its animated values in lazy `useState` instead of reading a ref during
+  render; the tab icon renderer is a named component; the result screen
+  starts the spoken reading on the next tick instead of setting state inside
+  the effect; an unused `theme` and an unused import removed; the two
+  deliberate lazy `require()` calls annotated; server tsconfig moved from the
+  deprecated `Node10` resolution to `Node16` (still emits CommonJS — verified
+  by building and reading `dist/app.js`).
+
 ### 2026-10-16 — Real iOS notifications: date windows, one-time reminders, duplicates, Settings link
 - Inspection: the app already scheduled real local notifications through
   `expo-notifications` (Apple's UserNotifications on iOS) with persistence

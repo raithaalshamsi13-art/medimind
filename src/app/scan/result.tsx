@@ -137,7 +137,10 @@ export default function ScanResultScreen() {
   useEffect(() => {
     if (!result || (phase !== 'reviewing' && phase !== 'saved') || announced.current === result) return;
     announced.current = result;
-    if (voiceAlertsEnabled) void speak(result);
+    if (!voiceAlertsEnabled) return;
+    // Next tick, so the effect itself never sets state synchronously.
+    const timer = setTimeout(() => void speak(result), 0);
+    return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [result, phase]);
   useEffect(() => () => getVoiceService().stop(), []);

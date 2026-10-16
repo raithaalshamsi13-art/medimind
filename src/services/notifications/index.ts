@@ -14,6 +14,7 @@ export function getNotificationService(): NotificationService {
   try {
     // Required lazily so Jest (and any environment without the native
     // module) gets the no-op service instead of a load-time crash.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- deliberate lazy load, see comment above
     const { ExpoNotificationService } = require('./ExpoNotificationService') as typeof import('./ExpoNotificationService');
     service = new ExpoNotificationService();
   } catch (error) {

@@ -61,6 +61,7 @@ export async function persistScanImage(image: ScanImage): Promise<string | null>
 
   try {
     // Loaded lazily so the web bundle never touches the native module.
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- deliberate lazy load, see comment above
     const FileSystem = require('expo-file-system/legacy') as typeof import('expo-file-system/legacy');
     const directory = FileSystem.documentDirectory;
     if (!directory) return image.uri;

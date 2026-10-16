@@ -18,7 +18,7 @@ import {
   type HealthProfileFormValues,
 } from '@/domain/familyMember';
 import { useT } from '@/i18n';
-import { bloodTypeLabelT, genderLabel, localizeMessage } from '@/i18n/labels';
+import { bloodTypeLabelT, genderLabel } from '@/i18n/labels';
 import { useTheme } from '@/theme/ThemeContext';
 
 type Field = keyof HealthProfileFormValues;

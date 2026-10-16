@@ -94,8 +94,6 @@ export function LogoMark({ size = 48 }: { size?: number }) {
  * same description appears as real, scalable text on the About screen.
  */
 function Wordmark({ size, showTagline }: { size: number; showTagline: boolean }) {
-  const theme = useTheme();
-
   return (
     <View style={{ gap: size * 0.06 }}>
       <AppText

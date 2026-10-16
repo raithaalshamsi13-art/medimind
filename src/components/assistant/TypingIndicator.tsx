@@ -4,7 +4,7 @@
  * state is never conveyed by animation alone.
  */
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { Animated, Easing, View } from 'react-native';
 
 import { LogoMark } from '@/components/brand/Logo';
@@ -16,7 +16,9 @@ export function TypingIndicator({ label: labelProp }: { label?: string }) {
   const theme = useTheme();
   const { t } = useT();
   const label = labelProp ?? t('assistant.typing');
-  const dots = useRef([new Animated.Value(0.3), new Animated.Value(0.3), new Animated.Value(0.3)]).current;
+  // Created once (lazy state), never re-created on re-render — the same
+  // three values the effect animates and the dots render.
+  const [dots] = useState(() => [new Animated.Value(0.3), new Animated.Value(0.3), new Animated.Value(0.3)]);
 
   useEffect(() => {
     const pulse = (value: Animated.Value, delay: number) =>

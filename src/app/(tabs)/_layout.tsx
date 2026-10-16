@@ -39,9 +39,9 @@ const TAB_BAR_CONTENT_HEIGHT = 56;
  * Note: the navigator passes `ColorValue`, not `string`.
  */
 function tabIcon(filled: IconName, outline: IconName) {
-  return ({ focused, color }: { focused: boolean; color: ColorValue }) => (
-    <Ionicons name={focused ? filled : outline} size={TAB_ICON_SIZE} color={color} />
-  );
+  return function TabIcon({ focused, color }: { focused: boolean; color: ColorValue }) {
+    return <Ionicons name={focused ? filled : outline} size={TAB_ICON_SIZE} color={color} />;
+  };
 }
 
 export default function TabsLayout() {
