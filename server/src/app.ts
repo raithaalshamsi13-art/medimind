@@ -34,10 +34,10 @@
 
 import type { IncomingMessage, ServerResponse } from 'node:http';
 
-import { ProviderError, readEnv, selectProvider, type Turn } from './providers';
+import { createGeminiProvider, listGeminiModels, ProviderError, readEnv, selectProvider, type LlmProvider, type Turn } from './providers';
 
 /** Bumped on every change so /health shows which code is live. */
-const VERSION = '1.8.4';
+const VERSION = '1.8.5';
 
 const MAX_QUESTION_LENGTH = 500;
 const MAX_HISTORY_TURNS = 10;
@@ -51,6 +51,15 @@ const APP_ACCESS_KEY = readEnv(process.env, 'APP_ACCESS_KEY') ?? '';
 const ALLOWED_ORIGIN = readEnv(process.env, 'ALLOWED_ORIGIN') ?? '*';
 
 const provider = selectProvider(process.env);
+/**
+ * Optional second Gemini model tried once when the first keeps answering
+ * 503 "high demand" (set GEMINI_FALLBACK_MODEL on the host).
+ */
+const fallbackProvider: LlmProvider | null = (() => {
+  const key = readEnv(process.env, 'GEMINI_API_KEY');
+  const model = readEnv(process.env, 'GEMINI_FALLBACK_MODEL');
+  return provider?.name === 'gemini' && key && model && model !== provider.model ? createGeminiProvider(key, model) : null;
+})();
 
 /**
  * The rules every model must follow. Written for a general model, not a
@@ -483,24 +492,47 @@ function classifyProviderError(error: ProviderError): { http: number; code: stri
 /** Transient provider statuses worth one more try. */
 const RETRY_STATUSES = new Set([429, 500, 502, 503, 504, 529]);
 const RETRY_DELAYS_MS = [1500, 3000];
+/** The whole scan (all attempts) must finish inside the host's limit (Vercel: 60 s). */
+const SCAN_BUDGET_MS = 52_000;
+/** Do not start another attempt with less than this left. */
+const MIN_ATTEMPT_MS = 12_000;
 
 /**
  * Google's free tier answers 503 "high demand" in bursts that usually pass
- * within seconds. Two quiet retries turn most of those into a reading; the
- * rest are reported as PROVIDER_BUSY so the app can offer "Try again".
+ * within seconds. Quiet retries (and, if configured, one try on a fallback
+ * model) turn most of those into a reading, all inside one time budget so
+ * the host never kills the request with an empty 504. What still fails is
+ * reported as PROVIDER_BUSY so the app can offer "Try again".
  */
-async function withRetry<T>(call: () => Promise<T>): Promise<T> {
+async function readWithRetry(
+  input: { imageBase64: string; mimeType: string; prompt: string },
+): Promise<{ reply: string; usedProvider: LlmProvider }> {
+  const started = Date.now();
+  const remaining = () => SCAN_BUDGET_MS - (Date.now() - started);
   let attempt = 0;
+  let lastError: unknown;
   for (;;) {
+    const left = remaining();
+    if (left < MIN_ATTEMPT_MS) break;
     try {
-      return await call();
+      const reply = await provider!.readLabel({ ...input, timeoutMs: left });
+      return { reply, usedProvider: provider! };
     } catch (error) {
+      lastError = error;
       const status = error instanceof ProviderError ? error.status : 0;
-      if (!RETRY_STATUSES.has(status) || attempt >= RETRY_DELAYS_MS.length) throw error;
+      if (!RETRY_STATUSES.has(status) || attempt >= RETRY_DELAYS_MS.length) break;
       await new Promise((resolve) => setTimeout(resolve, RETRY_DELAYS_MS[attempt]));
       attempt += 1;
     }
   }
+  if (fallbackProvider && remaining() >= MIN_ATTEMPT_MS) {
+    const status = lastError instanceof ProviderError ? lastError.status : 0;
+    if (RETRY_STATUSES.has(status)) {
+      const reply = await fallbackProvider.readLabel({ ...input, timeoutMs: remaining() });
+      return { reply, usedProvider: fallbackProvider };
+    }
+  }
+  throw lastError ?? new ProviderError('No time left for a label read', 504, provider?.name ?? 'none');
 }
 
 async function handleScan(req: IncomingMessage, res: ServerResponse): Promise<void> {
@@ -549,13 +581,11 @@ async function handleScan(req: IncomingMessage, res: ServerResponse): Promise<vo
   const language = body.language === 'ar' ? 'Arabic' : 'English';
 
   try {
-    const reply = await withRetry(() =>
-      provider!.readLabel({
-        imageBase64: image,
-        mimeType,
-        prompt: scanPrompt(language),
-      }),
-    );
+    const { reply, usedProvider } = await readWithRetry({
+      imageBase64: image,
+      mimeType,
+      prompt: scanPrompt(language),
+    });
     let parsed: unknown;
     try {
       parsed = extractJson(reply);
@@ -564,7 +594,7 @@ async function handleScan(req: IncomingMessage, res: ServerResponse): Promise<vo
       json(res, 502, { error: 'The label reader returned something unexpected. Please try again.', code: 'BAD_REPLY' });
       return;
     }
-    json(res, 200, { result: normaliseScan(parsed), provider: provider.name, model: provider.model });
+    json(res, 200, { result: normaliseScan(parsed), provider: usedProvider.name, model: usedProvider.model });
   } catch (error) {
     if (error instanceof ProviderError) {
       // Never echo the provider's raw message to the app or the log in full:
@@ -601,6 +631,21 @@ export async function handleRequest(req: IncomingMessage, res: ServerResponse): 
   if (req.method === 'OPTIONS') {
     res.writeHead(204, CORS_HEADERS);
     res.end();
+    return;
+  }
+  if (req.method === 'GET' && url.pathname === '/models') {
+    // Diagnostic: which Gemini models this key may call (names only), to
+    // pick GEMINI_MODEL / GEMINI_FALLBACK_MODEL without guessing.
+    const key = readEnv(process.env, 'GEMINI_API_KEY');
+    if (!key) {
+      json(res, 200, { ok: false, reason: 'no GEMINI_API_KEY' });
+      return;
+    }
+    try {
+      json(res, 200, { ok: true, current: provider?.model ?? null, fallback: fallbackProvider?.model ?? null, models: await listGeminiModels(key) });
+    } catch (error) {
+      json(res, 502, { ok: false, reason: error instanceof Error ? error.message.replace(/key=[^&\s]+/g, 'key=***').slice(0, 200) : 'unknown' });
+    }
     return;
   }
   if (req.method === 'GET' && (url.pathname === '/' || url.pathname === '/health')) {

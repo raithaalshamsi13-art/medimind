@@ -1181,6 +1181,11 @@ same commit**, and updates the sections above that it touches (rule in
   `PROVIDER_BUSY`. App: new `SCAN_PROVIDER_BUSY` ("The label reader is
   busy… nothing is wrong with your photo") with **Try again**, which is now
   offered for busy / rate-limited / server-error cases too.
+- Server 1.8.5: all attempts share one **52 s budget** (per-attempt timeout
+  = time left; no new attempt under 12 s) so Vercel never cuts the request
+  with an empty 504 as it did on 1.8.4; optional `GEMINI_FALLBACK_MODEL`
+  tried once when the first model stays busy; `GET /api/models` lists the
+  Gemini models the key may call (names only) to choose it without guessing.
 
 ### 2026-10-15 — Variable names are case-insensitive (server 1.8.2)
 - Found via the new health diagnostics: the Vercel project had the key saved

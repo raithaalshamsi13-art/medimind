@@ -48,8 +48,10 @@ export type LabelReadInput = {
   /** Base64 image bytes, no data: prefix. */
   imageBase64: string;
   mimeType: string;
-  /** The instruction that asks for JSON — see index.ts SCAN_PROMPT. */
+  /** The instruction that asks for JSON — see app.ts SCAN_PROMPT. */
   prompt: string;
+  /** Give up after this many ms (default VISION_TIMEOUT_MS); lets a retry fit in the host's limit. */
+  timeoutMs?: number;
 };
 
 export interface LlmProvider {
@@ -143,7 +145,7 @@ export function createGeminiProvider(apiKey: string, model: string): LlmProvider
       // A vision call that hangs must not hold the request open forever:
       // the app gives up at 60 s, so the server gives up first and says why.
       const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), VISION_TIMEOUT_MS);
+      const timer = setTimeout(() => controller.abort(), input.timeoutMs ?? VISION_TIMEOUT_MS);
       const res = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -298,6 +300,18 @@ export function createAnthropicProvider(apiKey: string, model: string): LlmProvi
 // ---------------------------------------------------------------------------
 // Selection
 // ---------------------------------------------------------------------------
+
+/** Models the key can call (names only), for the /models diagnostic. */
+export async function listGeminiModels(apiKey: string): Promise<string[]> {
+  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?pageSize=200&key=${encodeURIComponent(apiKey)}`);
+  if (!res.ok) throw new ProviderError(`Gemini ${res.status}`, res.status, 'gemini');
+  const data = (await res.json()) as { models?: { name?: string; supportedGenerationMethods?: string[] }[] };
+  return (data.models ?? [])
+    .filter((m) => (m.supportedGenerationMethods ?? []).includes('generateContent'))
+    .map((m) => (m.name ?? '').replace(/^models\//, ''))
+    .filter((n) => n.length > 0)
+    .sort();
+}
 
 export const DEFAULT_MODELS = {
   gemini: 'gemini-3.6-flash',
