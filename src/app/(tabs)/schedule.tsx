@@ -14,7 +14,7 @@
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
-import { View } from 'react-native';
+import { Linking, View } from 'react-native';
 
 import { MemberContextBanner } from '@/components/family/MemberContextBanner';
 import { MemberSwitcher } from '@/components/family/MemberSwitcher';
@@ -163,11 +163,19 @@ export default function ScheduleScreen() {
             </View>
           </Card>
         ) : permission === 'denied' ? (
-          <InlineMessage
-            tone="warning"
-            title={t('schedule.offTitle')}
-            message={t('schedule.offBody')}
-          />
+          <View style={{ gap: theme.spacing.md }}>
+            <InlineMessage
+              tone="warning"
+              title={t('schedule.offTitle')}
+              message={t('schedule.offBody')}
+            />
+            <Button
+              label={t('schedule.openSettings')}
+              icon="settings-outline"
+              variant="secondary"
+              onPress={() => void Linking.openSettings()}
+            />
+          </View>
         ) : null}
 
         {/* ---------- Today ---------- */}

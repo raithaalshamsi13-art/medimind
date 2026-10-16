@@ -293,3 +293,70 @@ export function isFutureDay(key: string, today: Date = new Date()): boolean {
 export function isDue(scheduledAt: string, now: Date = new Date()): boolean {
   return !isBefore(now, scheduledDate(scheduledAt));
 }
+
+// ---------------------------------------------------------------------------
+// What to hand the operating system
+// ---------------------------------------------------------------------------
+
+/**
+ * iOS (UserNotifications) can repeat a notification every day or every
+ * week, but it cannot start or stop a repeat on a date. So:
+ *
+ *   - a reminder with no start or end date → repeating triggers, which keep
+ *     firing with the app closed, forever, until cancelled
+ *   - a reminder with a date window (a course, or a one-off: start = end)
+ *     → one notification per occurrence, up to `PLAN_HORIZON_DAYS` ahead;
+ *     the app re-plans on every launch and foreground, so the window rolls
+ *     forward as long as the app is opened now and then
+ *
+ * iOS keeps at most 64 pending notifications per app, so windowed plans are
+ * capped per reminder and ordered earliest-first.
+ */
+
+export type NotificationTrigger =
+  | { kind: 'daily'; hour: number; minute: number; time: string }
+  /** `weekday` uses the OS convention: 1 = Sunday … 7 = Saturday. */
+  | { kind: 'weekly'; weekday: number; hour: number; minute: number; time: string }
+  | { kind: 'date'; at: Date; time: string };
+
+export const PLAN_HORIZON_DAYS = 14;
+export const PLAN_MAX_DATED = 24;
+
+function clock(time: string): { hour: number; minute: number } {
+  const [h, m] = time.split(':').map(Number);
+  return { hour: Number.isFinite(h) ? h! : 8, minute: Number.isFinite(m) ? m! : 0 };
+}
+
+export function buildNotificationPlan(reminder: Reminder, now: Date = new Date()): NotificationTrigger[] {
+  if (!reminder.enabled || reminder.times.length === 0) return [];
+
+  const windowed = Boolean(reminder.startDate || reminder.endDate);
+  if (!windowed) {
+    const plan: NotificationTrigger[] = [];
+    for (const time of reminder.times) {
+      const { hour, minute } = clock(time);
+      if (reminder.frequency === 'SPECIFIC_DAYS') {
+        for (const day of reminder.days) plan.push({ kind: 'weekly', weekday: day + 1, hour, minute, time });
+      } else {
+        plan.push({ kind: 'daily', hour, minute, time });
+      }
+    }
+    return plan;
+  }
+
+  const todayKey = localDateKey(now);
+  if (reminder.endDate && reminder.endDate < todayKey) return [];
+
+  const horizon = addDays(now, PLAN_HORIZON_DAYS);
+  const dated: NotificationTrigger[] = [];
+  for (const key of dateKeysBetween(now, horizon)) {
+    const day = new Date(`${key}T12:00`);
+    for (const scheduledAt of occurrencesOn(reminder, day)) {
+      const at = scheduledDate(scheduledAt);
+      if (at.getTime() <= now.getTime()) continue;
+      dated.push({ kind: 'date', at, time: scheduledAt.slice(11, 16) });
+    }
+  }
+  dated.sort((a, b) => (a.kind === 'date' && b.kind === 'date' ? a.at.getTime() - b.at.getTime() : 0));
+  return dated.slice(0, PLAN_MAX_DATED);
+}

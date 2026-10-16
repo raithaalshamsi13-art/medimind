@@ -1,10 +1,14 @@
 /**
  * Local notifications through expo-notifications.
  *
- * WHAT IS SCHEDULED
- *   - for each reminder time: a repeating trigger — daily, or weekly on each
- *     chosen weekday — carrying `{ kind: 'dose', reminderId, time }` so the
- *     app can find the dose when the user taps Taken / Skip on it
+ * WHAT IS SCHEDULED (see `buildNotificationPlan` in domain/reminder.ts)
+ *   - a reminder with no date window: one repeating trigger per time — daily,
+ *     or weekly per chosen weekday — which iOS fires with the app closed
+ *   - a reminder with a start/end date (a course, or a one-off): one dated
+ *     notification per occurrence up to two weeks ahead, re-planned on every
+ *     launch / foreground
+ *   Every one carries `{ kind: 'dose', reminderId, time }` so the app can find
+ *   the dose when the user taps Taken / Skip / Snooze on it
  *   - a one-off follow-up per dose, scheduled by the dose store at
  *     scheduled time + grace, cancelled when the dose is marked
  *
@@ -16,7 +20,7 @@
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 
-import type { Reminder } from '@/domain/reminder';
+import { buildNotificationPlan, type Reminder } from '@/domain/reminder';
 import { tNow } from '@/i18n';
 
 import type {
@@ -102,44 +106,27 @@ export class ExpoNotificationService implements NotificationService {
     const ids: string[] = [];
     const body = reminder.doseLabel ? tNow('notif.body', { name: medicationName, dose: reminder.doseLabel }) : medicationName;
 
-    for (const time of reminder.times) {
-      const [hour, minute] = time.split(':').map(Number);
+    for (const step of buildNotificationPlan(reminder)) {
       const content: Notifications.NotificationContentInput = {
         title: tNow('notif.title'),
         body,
         categoryIdentifier: DOSE_CATEGORY,
         sound: notificationSound(),
-        data: { kind: 'dose', reminderId: reminder.id, time } satisfies DoseNotificationData,
+        data: { kind: 'dose', reminderId: reminder.id, time: step.time } satisfies DoseNotificationData,
       };
-
-      if (reminder.frequency === 'SPECIFIC_DAYS') {
-        for (const day of reminder.days) {
-          ids.push(
-            await Notifications.scheduleNotificationAsync({
-              content,
-              trigger: {
+      const trigger: Notifications.NotificationTriggerInput =
+        step.kind === 'daily'
+          ? { type: Notifications.SchedulableTriggerInputTypes.DAILY, hour: step.hour, minute: step.minute, channelId: 'reminders' }
+          : step.kind === 'weekly'
+            ? {
                 type: Notifications.SchedulableTriggerInputTypes.WEEKLY,
-                weekday: day + 1, // expo: 1 = Sunday
-                hour: hour ?? 8,
-                minute: minute ?? 0,
+                weekday: step.weekday,
+                hour: step.hour,
+                minute: step.minute,
                 channelId: 'reminders',
-              },
-            }),
-          );
-        }
-      } else {
-        ids.push(
-          await Notifications.scheduleNotificationAsync({
-            content,
-            trigger: {
-              type: Notifications.SchedulableTriggerInputTypes.DAILY,
-              hour: hour ?? 8,
-              minute: minute ?? 0,
-              channelId: 'reminders',
-            },
-          }),
-        );
-      }
+              }
+            : { type: Notifications.SchedulableTriggerInputTypes.DATE, date: step.at, channelId: 'reminders' };
+      ids.push(await Notifications.scheduleNotificationAsync({ content, trigger }));
     }
     return ids;
   }
@@ -172,6 +159,18 @@ export class ExpoNotificationService implements NotificationService {
 
   async cancelAll(): Promise<void> {
     await Notifications.cancelAllScheduledNotificationsAsync();
+  }
+
+  async pruneDoseNotifications(keepIds: string[]): Promise<void> {
+    // Anything the OS still holds for a reminder we no longer track (an id
+    // lost to a reinstall or a crash mid-save) would ring as a duplicate.
+    const keep = new Set(keepIds);
+    const pending = await Notifications.getAllScheduledNotificationsAsync().catch(() => []);
+    const stale = pending.filter((n) => {
+      const data = n.content.data as Partial<DoseNotificationData> | undefined;
+      return data?.kind === 'dose' && !keep.has(n.identifier);
+    });
+    await Promise.all(stale.map((n) => Notifications.cancelScheduledNotificationAsync(n.identifier).catch(() => {})));
   }
 
   subscribe(handler: (response: NotificationResponse) => void): () => void {

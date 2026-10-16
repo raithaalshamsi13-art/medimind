@@ -552,7 +552,7 @@ export const en = {
   'reminder.startDate': 'Start date (optional)',
   'reminder.startHelper': 'Leave blank to start today.',
   'reminder.endDate': 'End date (optional)',
-  'reminder.endHelper': 'For a short course, e.g. a week of antibiotics.',
+  'reminder.endHelper': 'For a short course, e.g. a week of antibiotics. Set the same start and end date for a one-time reminder.',
   'reminder.on': 'Reminder on',
   'reminder.pauseNote': 'Switch off to pause without deleting.',
   'reminder.note':
@@ -567,7 +567,7 @@ export const en = {
   'reminder.removeTime': 'Remove {time}',
 
   // --------------------------------------------------------- notifications
-  'notif.title': 'Time for your medicine',
+  'notif.title': 'It’s time for your medicine',
   'notif.body': '{name}, {dose}',
   'notif.taken': 'Taken',
   'notif.skip': 'Skip',
@@ -974,4 +974,5 @@ export const en = {
     'On-device reading is not in this build (Expo Go cannot load it). Photos are read by the MediMind server when it is configured.',
   'error.SCAN_DEVICE_ERROR': 'The phone could not read text from this photo. Please take it again.',
   'scan.fail.SCAN_DEVICE_ERROR': 'The photo could not be read',
+  'schedule.openSettings': 'Open iPhone Settings',
 } as const;

@@ -20,8 +20,8 @@ step adds an entry to §18 (change log) and updates the sections it touches._
 | Platform | iPhone via Expo Go (primary); web browser (UI work only) |
 | Stack | Expo SDK 57 · React Native 0.86 · React 19.2 · TypeScript 6 · Expo Router · SQLite · Zustand · Zod |
 | Source | 217 tracked files · ~29,000 lines across `src/`, tests, the API server, scripts and SQL |
-| Tests | **388 passing** in 26 suites — including real-SQLite tests and a WCAG contrast checker |
-| Commits | 51, all verified (typecheck + tests + iOS and web bundles) before committing |
+| Tests | **396 passing** in 26 suites — including real-SQLite tests and a WCAG contrast checker |
+| Commits | 64, all verified (typecheck + tests + iOS and web bundles) before committing |
 | Milestones | M1 Foundation ✅ · M2 UI & Auth ✅ · M3 Database & CRUD ✅ · Assistant ✅ · Deployment ✅ · Structured entry + health conditions ✅ · Family profiles ✅ · Personal health profile ✅ · M5 Reminders ✅ · M4 Scanner + safety engine ✅ · Voice alerts ✅ · M6 Polish ◐ (language, voice, privacy done) |
 | Live | Web + API: https://medimind-medimind3.vercel.app (`/api/health` shows version + model; API also deployable on Railway) · Accounts/DB: Supabase |
 | Native build needed | **None for Expo Go** (everything but on-device reading). **On-device label reading (Apple Vision) needs the MediMind development build** — built in the cloud with EAS, no Mac, but an Apple Developer account for a physical iPhone |
@@ -289,10 +289,20 @@ REMIND and TRACK. Built on the dose parser from the assistant work.
 - **Schedule tab** ("Schedule and history"): Today with Taken / Skip / Undo
   per dose, then the last seven days grouped by date with taken / missed
   counts. Home shows "N of M doses taken today" and the next dose.
-- **Notifications**: one repeating local notification per reminder time with
-  Taken / Skip buttons that mark the dose from the lock screen; permission
-  asked once, with the reason; Settings switch; web says it is unavailable.
-  Works inside Expo Go — still no native build.
+- **Notifications**: real iOS local notifications (Apple's UserNotifications
+  framework through `expo-notifications`) with Taken / Skip / Snooze buttons
+  that act from the lock screen; permission asked once, with the reason, and
+  a denied permission offers **Open iPhone Settings**; Settings switch; web
+  says it is unavailable. Works inside Expo Go — still no native build.
+  What the OS is handed is decided by `buildNotificationPlan`
+  (`domain/reminder.ts`, 16 Oct 2026): a reminder with no dates → repeating
+  daily / weekly triggers that fire with the app closed, forever, until
+  cancelled; a reminder with a start/end date (a course, or a one-off when
+  start = end) → one dated notification per occurrence up to 14 days ahead
+  (capped at 24, inside iOS's 64 pending limit), re-planned on every launch
+  and foreground. Edit / delete / disable cancels by stored id and
+  re-schedules; `pruneDoseNotifications` removes anything the OS still holds
+  that the app no longer tracks, so duplicates cannot ring.
 - **Missed doses**: swept to MISSED 120 minutes after the time; one gentle
   follow-up notification per dose ("You may have missed a dose … do not take
   a double dose"), cancelled when the dose is marked. The app never says
@@ -683,7 +693,7 @@ demo cannot be broken by a missing key or a dead network.
 
 ## 9. Testing and verification
 
-**388 tests in 26 suites**, all passing:
+**396 tests in 26 suites**, all passing:
 
 | Suite | Covers |
 |---|---|
@@ -696,7 +706,7 @@ demo cannot be broken by a missing key or a dead network.
 | `domain/labelText` | on-device extraction from recognised lines: printed date formats and month-only expiry, expiry only after an EXP / Use by marker (a lone date is never the expiry), strength / form / ingredient / frequency / instruction / manufacturer copied from the words, name = most prominent line and trusted only when clearly taller than the rest, empty or blurred photo → nulls + warning, lot / manufacturer / number lines never taken as the name, "PANADOL 500mg" split, reading order |
 | `i18n/translate` | every English key has an Arabic string with matching placeholders, interpolation, `localizeMessage` lookup, counts, 12-hour times per language, expiry wording, frequency display, possessives |
 | `db/ReminderRepository` | reminder CRUD, one per medicine, notification ids, per-user isolation; doses created once per occurrence, status kept on re-seed, missed sweep only touches UPCOMING before the cutoff, follow-up id; cascades from medicine and family member — **both** backends |
-| `domain/reminder` | suggestion from the label (blocked when expired, none when not understood, as-needed), input schema (sorted unique times, days rules, date order), occurrences per day, grace window, wording helpers |
+| `domain/reminder` | suggestion from the label (blocked when expired, none when not understood, as-needed), input schema (sorted unique times, days rules, date order), occurrences per day, grace window, wording helpers ; `buildNotificationPlan`: repeating daily / weekly (OS weekday numbering), disabled → nothing, dated course → one per future occurrence earliest first, one-time (start = end), nothing after the end date or before the start, 14-day horizon and per-reminder cap |
 | `db/migrations` | schema version, idempotence, indexes, every CHECK constraint; v2 columns, condition-type CHECK, link cascade; v3 one-"Me" index, relationship/colour CHECKs, member_id FK + cascade; v4 profile columns default null, value lists and ranges enforced; v5 one reminder per medicine, one dose per occurrence, enums, cascades; v6 nullable `label_text` |
 | `db/FamilyRepository` | `ensureSelf` idempotence and adoption of pre-v3 rows, ordering ("Me" first), one-"Me" rule, self kept as ME, per-user isolation, self cannot be removed, removal cascades to that member's medicines and conditions only; profile fields round trip; sign-up step pending for "Me" only and marked done once — **both** backends |
 | `domain/familyMember` | schema (Other needs wording, future DOB rejected; height/weight numeric with comma decimals and plausible ranges; gender/blood-type lists), addable relationships exclude Me, labels, age, initials, possessives, least-used avatar colour |
@@ -797,9 +807,10 @@ Scan the QR code with the iPhone Camera app (opens Expo Go). Then:
    *Expired medicine* → saved as expired, red banner, no reminder offered.
    *Unreadable label* → nothing is guessed; type the name or enter manually.
    Scan the same one twice → "Already in the list".
-10. **Settings → Voice alerts → Hear an example**; set a reminder one minute
-   ahead and keep the app open to hear it spoken when the notification
-   arrives; on the lock screen use **Snooze 10 min**.
+10. **Settings → Voice alerts → Hear an example**. Then open a medicine →
+   **Set a reminder**, pick a time two minutes ahead, save, and **lock the
+   phone**: the notification rings on the lock screen with Taken / Skip /
+   Snooze. Keep the app open instead to hear it spoken as it arrives.
 11. **Settings** → switch colour theme, large text, high contrast; log out; log in
 
 Everything above works with the phone in Airplane Mode. The same app is live
@@ -1062,6 +1073,8 @@ with no internet and no API key — exactly as the brief requires.
 ## 16. Commit history
 
 ```
+2026-10-16  Real iOS notifications: plan builder (date windows, one-time), launch/foreground re-plan, duplicate pruning, Settings link
+2026-10-16  Free Vercel API live: case-insensitive env, health diagnostics, Gemini retry + fallback model, Arabic translation fix (server 1.8.8)
 2026-10-15  API as a free Vercel function (server 1.8.0, no SDK), demo ingredient renamed, spoken units and names
 2026-10-15  On-device label reading with Apple Vision: local Expo module, labelText extraction, dev-build path (eas.json)
 2026-10-15  Scan connection: Railway 404 diagnosed, precise failure codes, probes, Test connection, photo downscaling (server 1.7.1)
@@ -1168,6 +1181,31 @@ with no internet and no API key — exactly as the brief requires.
 Newest first. Every commit that changes the app adds an entry here **in the
 same commit**, and updates the sections above that it touches (rule in
 `AGENTS.md`, "Verify before claiming done").
+
+### 2026-10-16 — Real iOS notifications: date windows, one-time reminders, duplicates, Settings link
+- Inspection: the app already scheduled real local notifications through
+  `expo-notifications` (Apple's UserNotifications on iOS) with persistence
+  in the `reminders` table, Taken / Skip / Snooze actions and cancel-on-edit.
+  Gaps found and fixed:
+  - **Date windows were ignored by the OS** — a repeating daily trigger kept
+    ringing after a course's end date and before a future start date. New
+    pure `buildNotificationPlan` (7 tests): no dates → repeating triggers;
+    dated → one notification per occurrence up to 14 days ahead; start = end
+    → a **one-time reminder**. `ExpoNotificationService.scheduleReminder`
+    schedules from the plan.
+  - **Windows need rolling forward and duplicates need pruning**: the root
+    layout re-plans every reminder on launch and on foreground (throttled to
+    once per 6 h, only when permitted and enabled) and
+    `pruneDoseNotifications` cancels any pending dose notification the app
+    no longer tracks (ids lost to a reinstall or a crash mid-save).
+  - **Denied permission** now offers **Open iPhone Settings** on the
+    Schedule tab (iOS never re-prompts once denied).
+  - Wording: title "It’s time for your medicine" (Arabic: "حان وقت دوائك"),
+    body "<name>, <dose>". Reminder screen says start = end gives a one-time
+    reminder.
+- Not changed: Expo Go still runs it all (no native build); the web build
+  cannot ring. Verified by tests, typecheck and both exports; a timed test
+  on an iPhone is described in §11 and left to Omar (no device here).
 
 ### 2026-10-16 — Live scan verified; Gemini "high demand" handled (server 1.8.4)
 - With the key visible, a **live scan through the Vercel function works**:

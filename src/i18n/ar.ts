@@ -542,7 +542,7 @@ export const ar: Record<keyof typeof en, string> = {
   'reminder.startDate': 'تاريخ البدء (اختياري)',
   'reminder.startHelper': 'اتركه فارغًا للبدء اليوم.',
   'reminder.endDate': 'تاريخ الانتهاء (اختياري)',
-  'reminder.endHelper': 'لدورة قصيرة، مثل أسبوع من المضاد الحيوي.',
+  'reminder.endHelper': 'لدورة قصيرة، مثل أسبوع من المضاد الحيوي. اضبط تاريخ البداية والنهاية نفسه لتذكير لمرة واحدة.',
   'reminder.on': 'التذكير مفعّل',
   'reminder.pauseNote': 'أوقفه للإيقاف المؤقت دون حذف.',
   'reminder.note':
@@ -556,7 +556,7 @@ export const ar: Record<keyof typeof en, string> = {
   'reminder.removeTime': 'إزالة {time}',
 
   // --------------------------------------------------------- notifications
-  'notif.title': 'وقت دوائك',
+  'notif.title': 'حان وقت دوائك',
   'notif.body': '{name}، {dose}',
   'notif.taken': 'أُخذت',
   'notif.skip': 'تخطّي',
@@ -933,4 +933,5 @@ export const ar: Record<keyof typeof en, string> = {
   'settings.readerDeviceAbsent': 'القراءة على الجهاز غير موجودة في هذا الإصدار (لا يستطيع Expo Go تحميلها). يقرأ خادم ميدي مايند الصور عند إعداده.',
   'error.SCAN_DEVICE_ERROR': 'لم يستطع الهاتف قراءة النص من هذه الصورة. يرجى التقاطها مجددًا.',
   'scan.fail.SCAN_DEVICE_ERROR': 'لم يمكن قراءة الصورة',
+  'schedule.openSettings': 'فتح إعدادات الآيفون',
 };

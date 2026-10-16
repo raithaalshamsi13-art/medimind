@@ -164,6 +164,9 @@ export const useReminderStore = create<ReminderState>((set, get) => {
           await syncNotifications(userId, reminder, medicationNames.get(reminder.medicationId) ?? 'your medicine');
         }
         await refresh(userId);
+        // Whatever the OS still holds that we did not just schedule is a duplicate.
+        const keep = get().reminders.flatMap((r) => r.notificationIds);
+        await getNotificationService().pruneDoseNotifications(keep);
       } catch (error) {
         set({ error: toAppError(error, 'DATABASE_ERROR') });
       }

@@ -1,10 +1,13 @@
 import {
+  buildNotificationPlan,
   dateKeysBetween,
   describeDays,
   describeTimes,
   isActionable,
   isPastGrace,
   occurrencesOn,
+  PLAN_HORIZON_DAYS,
+  PLAN_MAX_DATED,
   reminderInputSchema,
   remindsOn,
   suggestReminder,
@@ -153,5 +156,65 @@ describe('timing', () => {
     expect(describeDays(BASE)).toBe('Every day');
     expect(describeDays({ frequency: 'SPECIFIC_DAYS', days: [1, 3, 5] })).toBe('Mon, Wed and Fri');
     expect(describeDays({ frequency: 'SPECIFIC_DAYS', days: [0, 1, 2, 3, 4, 5, 6] })).toBe('Every day');
+  });
+});
+
+describe('buildNotificationPlan — what the OS is asked to schedule', () => {
+  const NOW = new Date(2026, 9, 16, 9, 30); // Fri 16 Oct 2026, 09:30 local
+
+  it('uses repeating daily triggers for an open-ended daily reminder', () => {
+    const plan = buildNotificationPlan(BASE, NOW);
+    expect(plan).toEqual([
+      { kind: 'daily', hour: 8, minute: 0, time: '08:00' },
+      { kind: 'daily', hour: 20, minute: 0, time: '20:00' },
+    ]);
+  });
+
+  it('uses repeating weekly triggers per chosen day, with the OS weekday numbering (1 = Sunday)', () => {
+    const plan = buildNotificationPlan({ ...BASE, times: ['09:00'], frequency: 'SPECIFIC_DAYS', days: [1, 5] }, NOW);
+    expect(plan).toEqual([
+      { kind: 'weekly', weekday: 2, hour: 9, minute: 0, time: '09:00' },
+      { kind: 'weekly', weekday: 6, hour: 9, minute: 0, time: '09:00' },
+    ]);
+  });
+
+  it('schedules nothing for a disabled reminder or one with no times', () => {
+    expect(buildNotificationPlan({ ...BASE, enabled: false }, NOW)).toEqual([]);
+    expect(buildNotificationPlan({ ...BASE, times: [] }, NOW)).toEqual([]);
+  });
+
+  it('turns a dated course into one notification per future occurrence, earliest first', () => {
+    const plan = buildNotificationPlan({ ...BASE, startDate: '2026-10-16', endDate: '2026-10-18' }, NOW);
+    // 16th 08:00 is already past at 09:30; 16th 20:00, then 17th and 18th twice each.
+    expect(plan.map((p) => (p.kind === 'date' ? `${p.at.getDate()} ${p.time}` : p.kind))).toEqual([
+      '16 20:00',
+      '17 08:00',
+      '17 20:00',
+      '18 08:00',
+      '18 20:00',
+    ]);
+    expect(plan.every((p) => p.kind === 'date')).toBe(true);
+  });
+
+  it('makes a one-time reminder from a start date equal to the end date', () => {
+    const plan = buildNotificationPlan({ ...BASE, times: ['18:00'], startDate: '2026-10-20', endDate: '2026-10-20' }, NOW);
+    expect(plan).toHaveLength(1);
+    expect(plan[0]?.kind).toBe('date');
+    expect(plan[0]?.kind === 'date' && plan[0].at.getHours()).toBe(18);
+    expect(plan[0]?.kind === 'date' && plan[0].at.getDate()).toBe(20);
+  });
+
+  it('schedules nothing once the end date has passed, and nothing before the start date', () => {
+    expect(buildNotificationPlan({ ...BASE, endDate: '2026-10-15' }, NOW)).toEqual([]);
+    const later = buildNotificationPlan({ ...BASE, times: ['08:00'], startDate: '2026-10-25' }, NOW);
+    expect(later.every((p) => p.kind === 'date' && p.at.getDate() >= 25)).toBe(true);
+    expect(later.length).toBeGreaterThan(0);
+  });
+
+  it('respects the two-week horizon and the per-reminder cap for dated plans', () => {
+    const plan = buildNotificationPlan({ ...BASE, times: ['06:00', '12:00', '18:00'], startDate: '2026-10-01', endDate: '2027-01-01' }, NOW);
+    expect(plan.length).toBeLessThanOrEqual(PLAN_MAX_DATED);
+    const last = plan[plan.length - 1];
+    expect(last?.kind === 'date' && last.at.getTime() <= NOW.getTime() + (PLAN_HORIZON_DAYS + 1) * 86_400_000).toBe(true);
   });
 });

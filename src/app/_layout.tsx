@@ -12,6 +12,7 @@ import { Stack, useRouter, useSegments } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
+import { AppState } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { useVoiceAnnouncer } from '@/components/voice/useVoiceAnnouncer';
@@ -99,11 +100,12 @@ function RootNavigator() {
       // Family first: ensureSelf() assigns any pre-v3 rows to "Me" before the
       // medicine and condition lists are read.
       void loadFamily(userId, userDisplayName ?? 'Me').then(async () => {
-        void loadMedications(userId);
+        await loadMedications(userId);
         void loadConditions(userId);
         // Doses are generated from the reminders, so those load first.
         await loadReminders(userId);
         void loadDoses(userId, useReminderStore.getState().reminders);
+        void refreshNotificationSchedules(userId);
       });
     } else {
       clearMedications();
@@ -128,6 +130,16 @@ function RootNavigator() {
   ]);
 
   const profileSetupNeeded = useFamilyStore(selectProfileSetupNeeded);
+
+  // Coming back to the foreground: roll dated reminder windows forward and
+  // drop anything the OS still holds that we no longer track.
+  useEffect(() => {
+    if (!userId) return;
+    const subscription = AppState.addEventListener('change', (state) => {
+      if (state === 'active') void refreshNotificationSchedules(userId);
+    });
+    return () => subscription.remove();
+  }, [userId]);
 
   useAuthGate({ isReady, isSignedIn, hasCompletedOnboarding, profileSetupNeeded });
   useNotificationResponses(userId);
@@ -159,6 +171,26 @@ function RootNavigator() {
       </Stack>
     </>
   );
+}
+
+/** Re-plan OS notifications at most this often (launch and foreground). */
+const SCHEDULE_REFRESH_MS = 6 * 60 * 60 * 1000;
+let lastScheduleRefresh = 0;
+
+/**
+ * Hand the OS a fresh set of notifications for every reminder: cancels and
+ * re-creates them (so edits, language changes and rolling date windows are
+ * honoured) and prunes duplicates. Skipped when notifications are off or not
+ * permitted, and throttled so a quick app switch costs nothing.
+ */
+async function refreshNotificationSchedules(userId: string): Promise<void> {
+  const notifications = getNotificationService();
+  if (!notifications.isAvailable || !useSettingsStore.getState().notificationsEnabled) return;
+  if (Date.now() - lastScheduleRefresh < SCHEDULE_REFRESH_MS) return;
+  if ((await notifications.getPermission()) !== 'granted') return;
+  lastScheduleRefresh = Date.now();
+  const names = new Map(useMedicationStore.getState().medications.map((m) => [m.id, m.name]));
+  await useReminderStore.getState().rescheduleAll(userId, names);
 }
 
 /**

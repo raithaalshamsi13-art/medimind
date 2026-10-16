@@ -29,6 +29,8 @@ export class NoopNotificationService implements NotificationService {
 
   async cancelAll(): Promise<void> {}
 
+  async pruneDoseNotifications(): Promise<void> {}
+
   subscribe(): () => void {
     return () => {};
   }

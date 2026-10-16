@@ -50,6 +50,9 @@ export interface NotificationService {
   cancel(identifiers: string[]): Promise<void>;
   cancelAll(): Promise<void>;
 
+  /** Cancel any pending dose notification whose id is not in `keepIds` (duplicates after a reinstall or a lost save). */
+  pruneDoseNotifications(keepIds: string[]): Promise<void>;
+
   /** Listen for taps and action buttons. Returns an unsubscribe function. */
   subscribe(handler: (response: NotificationResponse) => void): () => void;
 

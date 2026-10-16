@@ -125,6 +125,13 @@ It reads a medicine label, verifies it, and only then schedules reminders.
   is recorded and, at most, followed by one gentle notification that says to
   follow the label and never double up. Nothing may say "take it now".
   Notification wording lives in `services/notifications/` only.
+- **The OS schedule comes from `buildNotificationPlan` only.** Never call
+  `scheduleNotificationAsync` for a reminder outside
+  `ExpoNotificationService.scheduleReminder`; always cancel the stored ids
+  before scheduling; keep the launch / foreground re-plan and
+  `pruneDoseNotifications`, which are what stop duplicates and let dated
+  windows roll forward. A reminder with dates must never get a repeating
+  trigger (iOS cannot stop it on the end date).
 - **The scanner reads; it never guesses.** Whatever the reader returns goes
   through `scanResultSchema` in `src/domain/scan.ts` (blank → `null`,
   malformed date → `null`) before any screen sees it. A scanned medicine is
