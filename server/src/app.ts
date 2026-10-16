@@ -46,7 +46,7 @@ import {
 } from './providers';
 
 /** Bumped on every change so /health shows which code is live. */
-const VERSION = '1.8.6';
+const VERSION = '1.8.7';
 
 const MAX_QUESTION_LENGTH = 500;
 const MAX_HISTORY_TURNS = 10;
@@ -500,11 +500,13 @@ function classifyProviderError(error: ProviderError): { http: number; code: stri
 
 /** Transient provider statuses worth one more try. */
 const RETRY_STATUSES = new Set([429, 500, 502, 503, 504, 529]);
-const RETRY_DELAYS_MS = [1500, 3000];
+const RETRY_DELAYS_MS = [1500];
 /** The whole scan (all attempts) must finish inside the host's limit (Vercel: 60 s). */
 const SCAN_BUDGET_MS = 52_000;
 /** Do not start another attempt with less than this left. */
-const MIN_ATTEMPT_MS = 12_000;
+const MIN_ATTEMPT_MS = 10_000;
+/** Cap on one attempt, so a hung model still leaves time for a retry and the fallback. */
+const ATTEMPT_MS = 20_000;
 
 /**
  * Google's free tier answers 503 "high demand" in bursts that usually pass
@@ -524,12 +526,13 @@ async function readWithRetry(
     const left = remaining();
     if (left < MIN_ATTEMPT_MS) break;
     try {
-      const reply = await provider!.readLabel({ ...input, timeoutMs: left });
+      const reply = await provider!.readLabel({ ...input, timeoutMs: Math.min(ATTEMPT_MS, left) });
       return { reply, usedProvider: provider! };
     } catch (error) {
       lastError = error;
       const status = error instanceof ProviderError ? error.status : 0;
-      if (!RETRY_STATUSES.has(status) || attempt >= RETRY_DELAYS_MS.length) break;
+      // A timeout on the main model goes straight to the fallback; 503 / 429 get one more try first.
+      if (status === 504 || !RETRY_STATUSES.has(status) || attempt >= RETRY_DELAYS_MS.length) break;
       await new Promise((resolve) => setTimeout(resolve, RETRY_DELAYS_MS[attempt]));
       attempt += 1;
     }

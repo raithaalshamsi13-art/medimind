@@ -1189,6 +1189,9 @@ same commit**, and updates the sections above that it touches (rule in
 - Server 1.8.6: the fallback defaults to `gemini-3.5-flash-lite` (present in
   the key's model list; lite models are rarely saturated), so a busy
   `gemini-3.6-flash` no longer blocks a scan without any dashboard change.
+- Server 1.8.7: each attempt is capped at 20 s and a timeout on the main
+  model goes straight to the fallback (a 503 gets one retry first), so the
+  fallback always has time to run inside the 52 s budget.
 
 ### 2026-10-15 — Variable names are case-insensitive (server 1.8.2)
 - Found via the new health diagnostics: the Vercel project had the key saved
