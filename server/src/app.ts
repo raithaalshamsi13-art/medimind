@@ -37,7 +37,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { ProviderError, readEnv, selectProvider, type Turn } from './providers';
 
 /** Bumped on every change so /health shows which code is live. */
-const VERSION = '1.8.2';
+const VERSION = '1.8.3';
 
 const MAX_QUESTION_LENGTH = 500;
 const MAX_HISTORY_TURNS = 10;
@@ -547,7 +547,11 @@ async function handleScan(req: IncomingMessage, res: ServerResponse): Promise<vo
         error.message.slice(0, 160).replace(/key=[^&\s]+/g, 'key=***'),
       );
       const classified = classifyProviderError(error);
-      json(res, classified.http, { error: classified.message, code: classified.code });
+      // Google's / Anthropic's error body never contains the key; the request
+      // URL (which does) is redacted anyway. Enough for a dashboard owner to
+      // see "model not found" or "API key not valid" without server logs.
+      const detail = error.message.replace(/key=[^&s]+/g, 'key=***').slice(0, 300);
+      json(res, classified.http, { error: classified.message, code: classified.code, detail });
       return;
     }
     console.error('Unexpected scan error', error);
