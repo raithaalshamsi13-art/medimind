@@ -939,6 +939,9 @@ export const en = {
   'scan.fail.SCAN_PROVIDER_KEY_INVALID': 'The server’s AI key was rejected',
   'scan.fail.SCAN_NO_VISION': 'The server cannot read images',
   'scan.fail.SCAN_RATE_LIMITED': 'Too many scans',
+  'scan.fail.SCAN_PROVIDER_BUSY': 'The label reader is busy',
+  'error.SCAN_PROVIDER_BUSY':
+    'The AI provider that reads labels is busy right now (high demand). Nothing is wrong with your photo — please try again in a minute.',
   'scan.fail.SCAN_IMAGE_TOO_LARGE': 'Photo too large',
   'scan.fail.SCAN_TIMEOUT': 'Reading timed out',
   'scan.fail.SCAN_SERVER_ERROR': 'The server could not read the photo',

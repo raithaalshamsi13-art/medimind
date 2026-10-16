@@ -1169,6 +1169,19 @@ Newest first. Every commit that changes the app adds an entry here **in the
 same commit**, and updates the sections above that it touches (rule in
 `AGENTS.md`, "Verify before claiming done").
 
+### 2026-10-16 — Live scan verified; Gemini "high demand" handled (server 1.8.4)
+- With the key visible, a **live scan through the Vercel function works**:
+  a synthetic iron-supplement label came back as *Ferrous Sulphate, 200 mg,
+  film-coated tablets, EXP 2027-03-31* in 14 s via gemini-3.6-flash — not
+  paracetamol. The remaining 502s were Gemini answering **503 "This model is
+  currently experiencing high demand"** in bursts (visible since 1.8.3,
+  which returns a key-redacted provider `detail` with scan errors).
+- Server 1.8.4: `withRetry` retries a transient provider status (429 / 5xx)
+  twice with 1.5 s and 3 s pauses; a persisting 503 is reported as
+  `PROVIDER_BUSY`. App: new `SCAN_PROVIDER_BUSY` ("The label reader is
+  busy… nothing is wrong with your photo") with **Try again**, which is now
+  offered for busy / rate-limited / server-error cases too.
+
 ### 2026-10-15 — Variable names are case-insensitive (server 1.8.2)
 - Found via the new health diagnostics: the Vercel project had the key saved
   as `gemini_api_key` (lowercase), which Linux treats as a different

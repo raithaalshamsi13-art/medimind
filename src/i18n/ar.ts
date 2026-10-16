@@ -903,6 +903,8 @@ export const ar: Record<keyof typeof en, string> = {
   'scan.fail.SCAN_PROVIDER_KEY_INVALID': 'رُفض مفتاح الذكاء الاصطناعي على الخادم',
   'scan.fail.SCAN_NO_VISION': 'لا يستطيع الخادم قراءة الصور',
   'scan.fail.SCAN_RATE_LIMITED': 'عمليات مسح كثيرة',
+  'scan.fail.SCAN_PROVIDER_BUSY': 'قارئ الملصقات مشغول',
+  'error.SCAN_PROVIDER_BUSY': 'مزوّد الذكاء الاصطناعي الذي يقرأ الملصقات مشغول الآن (طلب مرتفع). لا مشكلة في صورتك — يرجى المحاولة مجددًا بعد دقيقة.',
   'scan.fail.SCAN_IMAGE_TOO_LARGE': 'الصورة كبيرة جدًا',
   'scan.fail.SCAN_TIMEOUT': 'انتهت مهلة القراءة',
   'scan.fail.SCAN_SERVER_ERROR': 'لم يستطع الخادم قراءة الصورة',

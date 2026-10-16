@@ -29,6 +29,7 @@ export type AppErrorCode =
   | 'SCAN_PROVIDER_KEY_INVALID'
   | 'SCAN_NO_VISION'
   | 'SCAN_RATE_LIMITED'
+  | 'SCAN_PROVIDER_BUSY'
   | 'SCAN_IMAGE_TOO_LARGE'
   | 'SCAN_TIMEOUT'
   | 'SCAN_SERVER_ERROR'
@@ -70,6 +71,8 @@ const FRIENDLY_MESSAGES: Record<AppErrorCode, string> = {
   SCAN_NO_VISION:
     'The server’s AI provider cannot read images. Label reading needs a Gemini or Claude key on the server.',
   SCAN_RATE_LIMITED: 'Too many scans in a short time. Please wait a minute and try again.',
+  SCAN_PROVIDER_BUSY:
+    'The AI provider that reads labels is busy right now (high demand). Nothing is wrong with your photo — please try again in a minute.',
   SCAN_IMAGE_TOO_LARGE: 'The photo was too large to send. Please take it again a little further from the label.',
   SCAN_TIMEOUT: 'Reading the label took too long and was stopped. Check your connection and try again.',
   SCAN_SERVER_ERROR: 'The MediMind server could not read this photo right now. Please try again in a moment.',

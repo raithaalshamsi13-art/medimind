@@ -63,6 +63,7 @@ const FAILURE_TITLES: readonly string[] = [
   'SCAN_PROVIDER_KEY_INVALID',
   'SCAN_NO_VISION',
   'SCAN_RATE_LIMITED',
+  'SCAN_PROVIDER_BUSY',
   'SCAN_IMAGE_TOO_LARGE',
   'SCAN_TIMEOUT',
   'SCAN_SERVER_ERROR',
@@ -197,7 +198,13 @@ export default function ScanResultScreen() {
     const code = error?.code;
     const title =
       code && FAILURE_TITLES.includes(code) ? t(`scan.fail.${code}` as TranslationKey) : t('scan.fail.other');
-    const connectionProblem = code === 'NETWORK_UNAVAILABLE' || code === 'SERVER_UNREACHABLE' || code === 'SCAN_TIMEOUT';
+    const connectionProblem =
+      code === 'NETWORK_UNAVAILABLE' ||
+      code === 'SERVER_UNREACHABLE' ||
+      code === 'SCAN_TIMEOUT' ||
+      code === 'SCAN_PROVIDER_BUSY' ||
+      code === 'SCAN_RATE_LIMITED' ||
+      code === 'SCAN_SERVER_ERROR';
     return (
       <Screen scroll>
         <View style={{ gap: theme.spacing.lg }}>

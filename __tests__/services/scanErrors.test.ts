@@ -46,3 +46,9 @@ describe('classifyTransportFailure', () => {
     expect(classifyTransportFailure({ internet: false, server: false }, true)).toBe('SCAN_TIMEOUT');
   });
 });
+
+describe('provider busy', () => {
+  it('maps the server’s PROVIDER_BUSY code to a retryable busy error, not a key problem', () => {
+    expect(classifyHttpFailure(503, JSON.stringify({ code: 'PROVIDER_BUSY' }))).toBe('SCAN_PROVIDER_BUSY');
+  });
+});

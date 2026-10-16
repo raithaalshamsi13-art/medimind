@@ -37,7 +37,7 @@ import type { IncomingMessage, ServerResponse } from 'node:http';
 import { ProviderError, readEnv, selectProvider, type Turn } from './providers';
 
 /** Bumped on every change so /health shows which code is live. */
-const VERSION = '1.8.3';
+const VERSION = '1.8.4';
 
 const MAX_QUESTION_LENGTH = 500;
 const MAX_HISTORY_TURNS = 10;
@@ -473,7 +473,34 @@ function classifyProviderError(error: ProviderError): { http: number; code: stri
   if (error.status === 429) {
     return { http: 429, code: 'PROVIDER_RATE_LIMITED', message: 'The label reader is busy. Please wait a minute and try again.' };
   }
+  if (error.status === 503 || error.status === 529) {
+    // Google answers 503 "high demand" on busy models; we already retried.
+    return { http: 503, code: 'PROVIDER_BUSY', message: 'The AI provider is busy right now. Please try again in a minute.' };
+  }
   return { http: 502, code: 'PROVIDER_UNAVAILABLE', message: 'The label reader is unavailable right now.' };
+}
+
+/** Transient provider statuses worth one more try. */
+const RETRY_STATUSES = new Set([429, 500, 502, 503, 504, 529]);
+const RETRY_DELAYS_MS = [1500, 3000];
+
+/**
+ * Google's free tier answers 503 "high demand" in bursts that usually pass
+ * within seconds. Two quiet retries turn most of those into a reading; the
+ * rest are reported as PROVIDER_BUSY so the app can offer "Try again".
+ */
+async function withRetry<T>(call: () => Promise<T>): Promise<T> {
+  let attempt = 0;
+  for (;;) {
+    try {
+      return await call();
+    } catch (error) {
+      const status = error instanceof ProviderError ? error.status : 0;
+      if (!RETRY_STATUSES.has(status) || attempt >= RETRY_DELAYS_MS.length) throw error;
+      await new Promise((resolve) => setTimeout(resolve, RETRY_DELAYS_MS[attempt]));
+      attempt += 1;
+    }
+  }
 }
 
 async function handleScan(req: IncomingMessage, res: ServerResponse): Promise<void> {
@@ -522,11 +549,13 @@ async function handleScan(req: IncomingMessage, res: ServerResponse): Promise<vo
   const language = body.language === 'ar' ? 'Arabic' : 'English';
 
   try {
-    const reply = await provider.readLabel({
-      imageBase64: image,
-      mimeType,
-      prompt: scanPrompt(language),
-    });
+    const reply = await withRetry(() =>
+      provider!.readLabel({
+        imageBase64: image,
+        mimeType,
+        prompt: scanPrompt(language),
+      }),
+    );
     let parsed: unknown;
     try {
       parsed = extractJson(reply);
