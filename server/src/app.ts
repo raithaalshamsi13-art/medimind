@@ -46,7 +46,7 @@ import {
 } from './providers';
 
 /** Bumped on every change so /health shows which code is live. */
-const VERSION = '1.8.7';
+const VERSION = '1.8.8';
 
 const MAX_QUESTION_LENGTH = 500;
 const MAX_HISTORY_TURNS = 10;
@@ -141,7 +141,8 @@ const TRANSLATION_RULE: Record<string, string> = {
 };
 
 function scanPrompt(language: string): string {
-  const lang = language === 'ar' ? 'ar' : 'en';
+  // `language` is the word handed to the model ('Arabic' / 'English'), not the code.
+  const lang = language === 'Arabic' ? 'ar' : 'en';
   return SCAN_PROMPT.replace('{language}', language)
     .replace('{translationShape}', TRANSLATION_SHAPE[lang])
     .replace('{translationRule}', TRANSLATION_RULE[lang]);

@@ -1192,6 +1192,12 @@ same commit**, and updates the sections above that it touches (rule in
 - Server 1.8.7: each attempt is capped at 20 s and a timeout on the main
   model goes straight to the fallback (a 503 gets one retry first), so the
   fallback always has time to run inside the 52 s budget.
+- Server 1.8.8: fixed the Arabic translation never being requested — the
+  prompt builder compared the mapped word "Arabic" with the code "ar", so
+  `translation` was always null; live Arabic scans now carry it.
+- Live on 1.8.7: iron → *Ferrous Sulphate 200 mg* (7 s), paracetamol →
+  *PANADOL EXTRA 500 mg / 65 mg, EXP 2026-11-30* (7–9 s), blank image →
+  every field null + "does not show a medicine package" (5 s).
 
 ### 2026-10-15 — Variable names are case-insensitive (server 1.8.2)
 - Found via the new health diagnostics: the Vercel project had the key saved
