@@ -57,7 +57,7 @@ Vercel's Hobby plan is free, and the Gemini key is free.
 2. **Deployments → Redeploy** the latest deployment (environment variables
    are baked into the web build at deploy time).
 3. Open `https://<your-vercel-domain>/api/health`. You should see
-   `{"ok":true,"service":"medimind-server","version":"1.8.8","assistant":true,"scan":true,"provider":"gemini",...}`.
+   `{"ok":true,"service":"medimind-server","version":"1.9.0","assistant":true,"scan":true,"provider":"gemini",...}`.
    The reply also has a `config` block that says, name by name, which
    variables **this deployment** can see (true / false, never the value) and
    a `deployment` block with the environment and commit. `assistant:false`
@@ -94,7 +94,7 @@ The Railway route below still works and is unchanged; use one or the other.
 4. **Settings → Networking → Generate Domain**. Copy it, e.g.
    `https://medimind-server-production.up.railway.app`.
 5. Check it works: open `<that domain>/health` in a browser. You should see
-   `{"ok":true,"service":"medimind-server","version":"1.8.8","assistant":true,"scan":true,...}`.
+   `{"ok":true,"service":"medimind-server","version":"1.9.0","assistant":true,"scan":true,...}`.
    If `version` is older than the one in `server/src/index.ts`, Railway has
    not picked up the latest push: open the service → **Deployments →
    Redeploy**, or connect the Railway GitHub App so pushes deploy automatically.

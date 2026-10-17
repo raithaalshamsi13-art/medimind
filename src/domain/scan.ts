@@ -63,6 +63,16 @@ export const scanResultSchema = z.object({
     activeIngredients: nullableText(200),
     /** The dosage form as printed ("film-coated tablets"); mapped to `form` when recognised. */
     form: nullableText(40),
+    // Extra printed details (multi-photo scans read the whole pack). Shown on
+    // the result screen and kept in the label text; not separate columns.
+    /** Pack quantity as printed, e.g. "28 tablets". */
+    quantity: nullableText(60),
+    /** Batch / lot number as printed. */
+    batchNumber: nullableText(60),
+    /** Storage instructions as printed. */
+    storage: nullableText(300),
+    /** Warnings and precautions as printed. */
+    warningsText: nullableText(600),
   }),
   confidence: z.object({
     name: confidence.default(0),
@@ -84,11 +94,26 @@ export const scanResultSchema = z.object({
       frequency: nullableText(60),
       instructions: nullableText(300),
       activeIngredients: nullableText(200),
+      storage: nullableText(300).optional(),
+      warningsText: nullableText(600).optional(),
       rawText: z.preprocess((v) => (typeof v === 'string' ? v.trim() : ''), z.string().max(6000)),
     })
     .nullable()
     .default(null),
+  // ---- Multi-photo scans -------------------------------------------------
+  /** Two photos disagreed about a field: the user must check it. */
+  conflicts: z
+    .array(z.object({ field: z.string().max(40), note: z.string().max(200) }))
+    .max(10)
+    .default([]),
+  /** The photos appear to show different medicines — never combined. */
+  differentMedicines: z.boolean().default(false),
+  /** Fields that need a clearer photo (blurred, cut off, glare). */
+  unclear: z.array(z.string().max(40)).max(12).default([]),
 });
+
+/** Pack details shown with the reading but not stored as columns. */
+export const EXTRA_SCAN_FIELDS = ['quantity', 'batchNumber', 'storage', 'warningsText'] as const;
 
 export type ScanResult = z.infer<typeof scanResultSchema>;
 export type ScanField = keyof ScanResult['fields'];
@@ -98,8 +123,26 @@ export type ScanTranslation = NonNullable<ScanResult['translation']>;
 export function displayField(result: ScanResult, field: ScanField, language: 'en' | 'ar'): string | null {
   const printed = result.fields[field];
   if (language === 'en' || !result.translation || printed === null) return printed;
-  if (field === 'expirationDate' || field === 'manufacturer' || field === 'form') return printed;
+  if (field === 'expirationDate' || field === 'manufacturer' || field === 'form' || field === 'quantity' || field === 'batchNumber') {
+    return printed;
+  }
   return result.translation[field] ?? printed;
+}
+
+/**
+ * A field two photos disagreed on cannot be trusted automatically: cap its
+ * confidence below the threshold so it is badged "Check this" (and the name,
+ * if it is one of them, is confirmed by the user).
+ */
+export function applyConflicts(result: ScanResult): ScanResult {
+  if (result.conflicts.length === 0) return result;
+  const confidence = { ...result.confidence };
+  for (const { field } of result.conflicts) {
+    if (field in confidence && confidence[field as keyof typeof confidence] > UNGROUNDED_CONFIDENCE) {
+      confidence[field as keyof typeof confidence] = UNGROUNDED_CONFIDENCE;
+    }
+  }
+  return { ...result, confidence };
 }
 
 // ---------------------------------------------------------------------------
@@ -296,10 +339,19 @@ export function demoScanResult(
   language: 'en' | 'ar' = 'en',
 ): ScanResult {
   const base = demoReading(scenario, today.getFullYear());
-  return { ...base, translation: language === 'ar' ? demoTranslation(scenario, today.getFullYear()) : null };
+  return {
+    ...base,
+    translation: language === 'ar' ? demoTranslation(scenario, today.getFullYear()) : null,
+    conflicts: [],
+    differentMedicines: false,
+    unclear: scenario === 'UNREADABLE' ? ['name', 'dosage', 'expirationDate'] : [],
+  };
 }
 
-function demoReading(scenario: DemoScenario, year: number): Omit<ScanResult, 'translation'> {
+function demoReading(
+  scenario: DemoScenario,
+  year: number,
+): Omit<ScanResult, 'translation' | 'conflicts' | 'differentMedicines' | 'unclear'> {
   switch (scenario) {
     case 'SAFE':
       return {
@@ -317,6 +369,10 @@ function demoReading(scenario: DemoScenario, year: number): Omit<ScanResult, 'tr
           manufacturer: 'Demo Pharma Ltd',
           activeIngredients: 'Example active ingredient',
           form: 'film-coated tablets',
+          quantity: '20 film-coated tablets',
+          batchNumber: '4471A',
+          storage: 'Store below 25°C. Keep out of the sight and reach of children.',
+          warningsText: null,
         },
         confidence: { name: 0.96, dosage: 0.94, frequency: 0.85, instructions: 0.9, expirationDate: 0.93 },
         warnings: [],
@@ -335,6 +391,10 @@ function demoReading(scenario: DemoScenario, year: number): Omit<ScanResult, 'tr
           manufacturer: 'Demo Pharma Ltd',
           activeIngredients: 'Cetirizine dihydrochloride',
           form: 'tablets',
+          quantity: '14 tablets',
+          batchNumber: '2209',
+          storage: null,
+          warningsText: null,
         },
         confidence: { name: 0.95, dosage: 0.92, frequency: 0.9, instructions: 0, expirationDate: 0.97 },
         warnings: [],
@@ -351,6 +411,10 @@ function demoReading(scenario: DemoScenario, year: number): Omit<ScanResult, 'tr
           manufacturer: null,
           activeIngredients: null,
           form: null,
+          quantity: null,
+          batchNumber: null,
+          storage: null,
+          warningsText: null,
         },
         confidence: { name: 0.2, dosage: 0.1, frequency: 0, instructions: 0, expirationDate: 0.1 },
         warnings: ['Most of the label is scratched or blurred. Nothing could be read with confidence.'],

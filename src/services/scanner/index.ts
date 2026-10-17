@@ -51,6 +51,7 @@ export function getScannerService(demoMode: boolean): MedicationScannerService {
   return proxy;
 }
 
+export { MAX_SCAN_PHOTOS } from './MedicationScannerService';
 export type { MedicationScannerService, ScanImage, ScanRequest } from './MedicationScannerService';
 export { MockScanner } from './MockScanner';
 export { OnDeviceScanner } from './OnDeviceScanner';

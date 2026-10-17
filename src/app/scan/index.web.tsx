@@ -6,17 +6,20 @@
  */
 
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { View } from 'react-native';
 
 import { MemberContextBanner } from '@/components/family/MemberContextBanner';
 import { DemoScenarioPicker } from '@/components/scan/DemoScenarioPicker';
+import { PhotoTray } from '@/components/scan/PhotoTray';
 import { ScanModeBanner } from '@/components/scan/ScanModeBanner';
-import { pickLabelPhoto } from '@/components/scan/pickLabelPhoto';
+import { pickLabelPhoto, pickLabelPhotos } from '@/components/scan/pickLabelPhoto';
 import { useStartScan } from '@/components/scan/useStartScan';
 import { AppText, Button, Card, Screen } from '@/components/ui';
 import { useT } from '@/i18n';
+import { MAX_SCAN_PHOTOS, type ScanImage } from '@/services/scanner';
+import { useScanStore } from '@/stores/useScanStore';
 import { memberById, selectActiveMemberId, selectMembers, useFamilyStore } from '@/stores/useFamilyStore';
 import { useTheme } from '@/theme/ThemeContext';
 
@@ -30,6 +33,21 @@ export default function ScanScreen() {
   const member = useMemo(() => memberById(members, activeMemberId), [members, activeMemberId]);
   const { start, demoMode, scenario, setScenario } = useStartScan();
   const [isPicking, setPicking] = useState(false);
+
+  // Several photos of one medicine, scanned together. `keep=1` (from "Add
+  // more photos") starts with the photos of the previous scan.
+  const { keep } = useLocalSearchParams<{ keep?: string }>();
+  const keptPhotos = useScanStore((state) => state.images);
+  const [tray, setTray] = useState<ScanImage[]>(() => (keep === '1' ? keptPhotos : []));
+  const chooseSeveral = async () => {
+    setPicking(true);
+    try {
+      const photos = await pickLabelPhotos(MAX_SCAN_PHOTOS - tray.length);
+      if (photos.length > 0) setTray((current) => [...current, ...photos].slice(0, MAX_SCAN_PHOTOS));
+    } finally {
+      setPicking(false);
+    }
+  };
 
   const choose = async () => {
     setPicking(true);
@@ -80,6 +98,26 @@ export default function ScanScreen() {
           onPress={() => void choose()}
           loading={isPicking}
         />
+        {tray.length > 0 ? (
+          <Card>
+            <PhotoTray
+              photos={tray}
+              max={MAX_SCAN_PHOTOS}
+              onRemove={(index) => setTray((current) => current.filter((_, i) => i !== index))}
+              onAdd={() => void chooseSeveral()}
+              onScanAll={() => start(tray)}
+            />
+          </Card>
+        ) : (
+          <Button
+            label={t('scan.multi.choosePhotos')}
+            icon="images-outline"
+            variant="secondary"
+            onPress={() => void chooseSeveral()}
+            loading={isPicking}
+            accessibilityHint={t('scan.multi.hint')}
+          />
+        )}
         <Button
           label={t('scan.enterManually')}
           icon="create-outline"

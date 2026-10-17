@@ -20,8 +20,8 @@ step adds an entry to §18 (change log) and updates the sections it touches._
 | Platform | iPhone via Expo Go (primary); web browser (UI work only) |
 | Stack | Expo SDK 57 · React Native 0.86 · React 19.2 · TypeScript 6 · Expo Router · SQLite · Zustand · Zod |
 | Source | 217 tracked files · ~29,000 lines across `src/`, tests, the API server, scripts and SQL |
-| Tests | **396 passing** in 26 suites — including real-SQLite tests and a WCAG contrast checker |
-| Commits | 64, all verified (typecheck + tests + iOS and web bundles) before committing |
+| Tests | **401 passing** in 26 suites — including real-SQLite tests and a WCAG contrast checker |
+| Commits | 66, all verified (typecheck + tests + iOS and web bundles) before committing |
 | Milestones | M1 Foundation ✅ · M2 UI & Auth ✅ · M3 Database & CRUD ✅ · Assistant ✅ · Deployment ✅ · Structured entry + health conditions ✅ · Family profiles ✅ · Personal health profile ✅ · M5 Reminders ✅ · M4 Scanner + safety engine ✅ · Voice alerts ✅ · M6 Polish ◐ (language, voice, privacy done) |
 | Live | Web + API: https://medimind-medimind3.vercel.app (`/api/health` shows version + model; API also deployable on Railway) · Accounts/DB: Supabase |
 | Native build needed | **None for Expo Go** (everything but on-device reading). **On-device label reading (Apple Vision) needs the MediMind development build** — built in the cloud with EAS, no Mac, but an Apple Developer account for a physical iPhone |
@@ -410,6 +410,27 @@ SCAN → CHECK → CONFIRM is now real. Built 19 Sep 2026.
   Supabase mirror updated.
 - **Entry points**: the Home hero card and a **Scan a label** button on the
   Medicines tab.
+- **Several photos of one medicine** (17 Oct 2026): a *Several photos*
+  switch on the camera screen (and *Choose several photos* on the web) turns
+  the shutter and the library into a tray of up to 5 previews — remove any,
+  add more, then **Scan all photos (N)**. The single-photo flow is untouched
+  (the switch is off by default). All photos go to the server in ONE request
+  (`images: [{ data, mimeType }]`, legacy `image` still accepted) and the
+  model is told they are different sides of the SAME pack: combine, never
+  duplicate; set `differentMedicines` when they are clearly two products
+  (nothing is combined or saved — "Scan one medicine at a time"); put a
+  field two photos disagree on in `conflicts` (the app caps its confidence
+  → "Check this", a conflicting name must be confirmed); list fields that
+  are visible but unreadable in `unclear` ("Needs a clearer photo"). The
+  reading also carries pack quantity, batch / lot number, storage and
+  warnings as printed (shown on the result, kept in the label text, not
+  separate columns). The result screen shows every photo used (tap to
+  enlarge), "Not found on the provided photos" for empty fields, **Add more
+  photos and scan again** (keeps the photos), and **Correct the details**
+  after saving. On-device reading stacks each photo's lines under the
+  previous one, so the same extractor combines them. Identical photos are
+  sent once; each is resized first; the first photo is the one kept with
+  the medicine.
 - **Which reader runs is never silent** (15 Oct 2026). Demo Mode defaults
   on only when no server address is configured, is healed off on existing
   installs that never chose it, has a switch under **Settings → Scanner**,
@@ -693,17 +714,17 @@ demo cannot be broken by a missing key or a dead network.
 
 ## 9. Testing and verification
 
-**396 tests in 26 suites**, all passing:
+**401 tests in 26 suites**, all passing:
 
 | Suite | Covers |
 |---|---|
 | `domain/safety` | SAFE / EXPIRING_SOON / EXPIRED / NEEDS_REVIEW boundaries against a fixed today; missing dosage, frequency, expiry; scan-confidence threshold applies to scans only; reason ordering |
-| `domain/scan` | result schema (trim, blank → null, malformed date dropped, confidence range, lengths), name confirmation rule, "check this" per field, overall confidence, scan → medicine input (label-read fields only, confirmed name wins, no name → null), duplicate detection (normalised name, same member, archived ignored), the three demo readings ; Arabic translation block (validated, display fallback to the printed text, never for dates or manufacturer, demo readings carry it only in Arabic) ; grounding (a name, strength or expiry year not found in the transcription is capped below the threshold and flagged — a guessed "Paracetamol" on an iron label asks for the name), printed form → TABLET/CAPSULE/…, supplement wording → SUPPLEMENT |
+| `domain/scan` | result schema (trim, blank → null, malformed date dropped, confidence range, lengths), name confirmation rule, "check this" per field, overall confidence, scan → medicine input (label-read fields only, confirmed name wins, no name → null), duplicate detection (normalised name, same member, archived ignored), the three demo readings ; Arabic translation block (validated, display fallback to the printed text, never for dates or manufacturer, demo readings carry it only in Arabic) ; grounding (a name, strength or expiry year not found in the transcription is capped below the threshold and flagged — a guessed "Paracetamol" on an iron label asks for the name), printed form → TABLET/CAPSULE/…, supplement wording → SUPPLEMENT ; multi-photo flags default for older servers, `applyConflicts` caps a conflicting field, extra printed details kept in the reading but not in the medicine |
 | `components/scanSpeech` | the spoken reading: name, dosage, frequency, instructions, expiry; expired warning without advice; unreadable sentence; asks for the name and to check low-confidence fields; Arabic wording in Arabic |
 | `services/sentences` | speech chunking: sentence ends and newlines, Arabic punctuation, decimals kept, long sentences broken under the engine limit |
 | `services/speakable` | spoken form of label text: units expanded to words in English and Arabic ("500 mg" → "500 milligrams", "10 mg/5 ml" → "per"), ALL-CAPS names made pronounceable, everything else untouched |
 | `services/scanErrors` | a failed scan names what happened: server error codes and HTTP statuses → app key rejected / AI key rejected / no vision provider / busy / too large / timed out / server fault / nothing deployed (404); request never answered → offline vs. server unreachable vs. dropped, from the two probes |
-| `domain/labelText` | on-device extraction from recognised lines: printed date formats and month-only expiry, expiry only after an EXP / Use by marker (a lone date is never the expiry), strength / form / ingredient / frequency / instruction / manufacturer copied from the words, name = most prominent line and trusted only when clearly taller than the rest, empty or blurred photo → nulls + warning, lot / manufacturer / number lines never taken as the name, "PANADOL 500mg" split, reading order |
+| `domain/labelText` | on-device extraction from recognised lines: printed date formats and month-only expiry, expiry only after an EXP / Use by marker (a lone date is never the expiry), strength / form / ingredient / frequency / instruction / manufacturer copied from the words, name = most prominent line and trusted only when clearly taller than the rest, empty or blurred photo → nulls + warning, lot / manufacturer / number lines never taken as the name, "PANADOL 500mg" split, reading order ; two stacked photos combine name + strength (front) with ingredients, storage, batch and expiry (back); a printed warning is not mistaken for an instruction |
 | `i18n/translate` | every English key has an Arabic string with matching placeholders, interpolation, `localizeMessage` lookup, counts, 12-hour times per language, expiry wording, frequency display, possessives |
 | `db/ReminderRepository` | reminder CRUD, one per medicine, notification ids, per-user isolation; doses created once per occurrence, status kept on re-seed, missed sweep only touches UPCOMING before the cutoff, follow-up id; cascades from medicine and family member — **both** backends |
 | `domain/reminder` | suggestion from the label (blocked when expired, none when not understood, as-needed), input schema (sorted unique times, days rules, date order), occurrences per day, grace window, wording helpers ; `buildNotificationPlan`: repeating daily / weekly (OS weekday numbering), disabled → nothing, dated course → one per future occurrence earliest first, one-time (start = end), nothing after the end date or before the start, 14-day horizon and per-reminder cap |
@@ -1073,6 +1094,7 @@ with no internet and no API key — exactly as the brief requires.
 ## 16. Commit history
 
 ```
+2026-10-17  Several photos of one medicine scanned together: tray UI, images[] request, conflicts / different-medicines / unclear flags, extra printed details (server 1.9.0)
 2026-10-16  Real iOS notifications: plan builder (date windows, one-time), launch/foreground re-plan, duplicate pruning, Settings link
 2026-10-16  Free Vercel API live: case-insensitive env, health diagnostics, Gemini retry + fallback model, Arabic translation fix (server 1.8.8)
 2026-10-15  API as a free Vercel function (server 1.8.0, no SDK), demo ingredient renamed, spoken units and names
@@ -1181,6 +1203,36 @@ with no internet and no API key — exactly as the brief requires.
 Newest first. Every commit that changes the app adds an entry here **in the
 same commit**, and updates the sections above that it touches (rule in
 `AGENTS.md`, "Verify before claiming done").
+
+### 2026-10-17 — Several photos of one medicine, scanned together
+- **Camera / web**: "Several photos" switch (off by default — the single
+  photo flow is unchanged) → `PhotoTray` with previews, remove, add from the
+  library, **Scan all photos (N)**; up to `MAX_SCAN_PHOTOS` = 5. "Add more
+  photos and scan again" returns to the tray with the previous photos.
+- **One request, one reading**: `ScanRequest.images[]`; `ProxyScanner` posts
+  `images: [{ data, mimeType }]`; server **1.9.0** accepts that or the
+  legacy `image`, validates 1–5 photos, base64, 6 MB together (413 now
+  replies cleanly instead of dropping the socket), and hands every photo to
+  Gemini / Claude in one call with a prompt that says they are sides of the
+  SAME pack. New reply fields: `quantity`, `batchNumber`, `storage`,
+  `warningsText`, `conflicts[{field,note}]`, `differentMedicines`,
+  `unclear[]` — all optional, so an older server still validates.
+- **Honesty rules**: different medicines → nothing combined, nothing saved,
+  "Scan one medicine at a time"; a conflicting field is capped to "Check
+  this" (`applyConflicts`) and a conflicting name must be typed; unclear
+  fields are listed with "Needs a clearer photo"; empty fields read "Not
+  found on the provided photos".
+- **On-device** (Apple Vision): every photo is recognised and the lines are
+  stacked photo under photo for the same extractor; it now also reads
+  quantity, lot number, storage and printed warnings.
+- **Result screen**: photos used (tap any to enlarge), the extra rows,
+  conflict / unclear messages, **Correct the details** (edit form) after
+  saving. Arabic: the translation block gains `storage` / `warningsText`.
+- Tests +5 (401 in 26 suites): schema defaults, `applyConflicts`, extra
+  details kept out of the medicine columns, stacked-photo combination,
+  warning vs instruction. Server validation exercised locally (0 / 6
+  photos → 400, bad base64 → 400, 9 MB → 413). Live multi-photo scans
+  through the Vercel function are recorded below once run.
 
 ### 2026-10-16 — Zero lint findings and editor diagnostics, no behaviour change
 - `expo lint` had 6 errors and 4 warnings; the editor flagged the server

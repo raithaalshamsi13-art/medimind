@@ -25,7 +25,7 @@ import type { Medication } from '@/domain/medication';
 import type { AppError } from '@/lib/errors';
 import { appError, toAppError } from '@/lib/errors';
 import { persistScanImage, prepareScanImage } from '@/lib/scanImage';
-import { getScannerService, type ScanImage } from '@/services/scanner';
+import { getScannerService, MAX_SCAN_PHOTOS, type ScanImage } from '@/services/scanner';
 
 import { useMedicationStore } from './useMedicationStore';
 
@@ -33,6 +33,9 @@ export type ScanPhase = 'idle' | 'scanning' | 'reviewing' | 'saved' | 'failed';
 
 type ScanState = {
   phase: ScanPhase;
+  /** The photos of this one medicine, in the order they were taken. The first is kept with the medicine. */
+  images: ScanImage[];
+  /** The first photo — what older screens and the save path use. */
   image: ScanImage | null;
   result: ScanResult | null;
   /** The id of the medicine that was created (or the duplicate that was found). */
@@ -42,8 +45,11 @@ type ScanState = {
   error: AppError | null;
   isSaving: boolean;
 
-  /** Read a photo. Uses the mock in Demo Mode. */
-  run: (image: ScanImage, options: { demoMode: boolean; language: 'en' | 'ar'; demoScenario?: DemoScenario }) => Promise<void>;
+  /** Read one medicine from one or more photos. Uses the mock in Demo Mode. */
+  run: (
+    images: ScanImage | ScanImage[],
+    options: { demoMode: boolean; language: 'en' | 'ar'; demoScenario?: DemoScenario },
+  ) => Promise<void>;
   /**
    * Save the scanned medicine for `memberId`. Refuses when the name still
    * needs confirmation and none was given. `force` skips the duplicate check.
@@ -58,6 +64,7 @@ type ScanState = {
 
 export const useScanStore = create<ScanState>((set, get) => ({
   phase: 'idle',
+  images: [],
   image: null,
   result: null,
   savedMedicationId: null,
@@ -65,15 +72,25 @@ export const useScanStore = create<ScanState>((set, get) => ({
   error: null,
   isSaving: false,
 
-  run: async (image, options) => {
-    set({ phase: 'scanning', image, result: null, error: null, savedMedicationId: null, duplicateOf: null });
+  run: async (input, options) => {
+    const chosen = (Array.isArray(input) ? input : [input]).slice(0, MAX_SCAN_PHOTOS);
+    set({ phase: 'scanning', images: chosen, image: chosen[0] ?? null, result: null, error: null, savedMedicationId: null, duplicateOf: null });
     try {
       const scanner = getScannerService(options.demoMode);
-      // Shrink a multi-megabyte camera photo before it travels; the resized
-      // copy is also what gets kept with the medicine.
-      const prepared = scanner.kind === 'mock' ? image : await prepareScanImage(image);
-      set({ image: prepared });
-      const result = await scanner.scan({ image: prepared, language: options.language, demoScenario: options.demoScenario });
+      // Shrink multi-megabyte camera photos before they travel; the resized
+      // copies are also what the screen shows and the first is kept with the
+      // medicine. The same photo chosen twice is sent once.
+      const prepared: ScanImage[] = [];
+      const seen = new Set<string>();
+      for (const image of chosen) {
+        const ready = scanner.kind === 'mock' ? image : await prepareScanImage(image);
+        const key = ready.base64.length + ':' + ready.base64.slice(0, 64) + ready.base64.slice(-64);
+        if (seen.has(key)) continue;
+        seen.add(key);
+        prepared.push(ready);
+      }
+      set({ images: prepared, image: prepared[0] ?? null });
+      const result = await scanner.scan({ images: prepared, language: options.language, demoScenario: options.demoScenario });
       if (!result.ok) {
         set({ phase: 'failed', error: result.error });
         return;
@@ -123,5 +140,5 @@ export const useScanStore = create<ScanState>((set, get) => ({
   },
 
   reset: () =>
-    set({ phase: 'idle', image: null, result: null, savedMedicationId: null, duplicateOf: null, error: null, isSaving: false }),
+    set({ phase: 'idle', images: [], image: null, result: null, savedMedicationId: null, duplicateOf: null, error: null, isSaving: false }),
 }));

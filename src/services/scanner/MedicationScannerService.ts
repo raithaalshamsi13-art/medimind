@@ -1,14 +1,18 @@
 /**
  * Label-scanner contract.
  *
- * Two implementations, the pattern used everywhere else in `services/`:
- *   MockScanner    Demo Mode — fixed results for the three demo scenarios
- *                  (safe / expired / unreadable); no network, no key
- *   ProxyScanner   the real thing — posts the photo to the Railway server,
- *                  which holds the AI key and asks a vision model to read it
+ * Three implementations, the pattern used everywhere else in `services/`:
+ *   MockScanner      Demo Mode — fixed results for the three demo scenarios
+ *                    (safe / expired / unreadable); no network, no key
+ *   OnDeviceScanner  Apple Vision on the iPhone (development build only)
+ *   ProxyScanner     the real thing — posts the photo(s) to the MediMind
+ *                    server, which holds the AI key and asks a vision model
  *
- * Whatever comes back is validated with `scanResultSchema` before any screen
- * sees it. The reader is untrusted input, exactly like a form.
+ * A request carries ONE medicine as one or more photos (front, back, side…)
+ * and every reader must combine them into ONE reading — or say that the
+ * photos show different medicines. Whatever comes back is validated with
+ * `scanResultSchema` before any screen sees it. The reader is untrusted
+ * input, exactly like a form.
  */
 
 import type { DemoScenario, ScanResult } from '@/domain/scan';
@@ -24,9 +28,13 @@ export type ScanImage = {
   height?: number;
 };
 
+/** Photos per scan: enough for every side of a pack, inside the server's body limit. */
+export const MAX_SCAN_PHOTOS = 5;
+
 export type ScanRequest = {
-  image: ScanImage;
-  /** 'en' | 'ar' — the language for the reader's warnings. */
+  /** One medicine, one or more photos of it. Never empty. */
+  images: ScanImage[];
+  /** 'en' | 'ar' — the language for the reader's warnings and translation. */
   language: 'en' | 'ar';
   /** Mock only: which demo scenario to play. */
   demoScenario?: DemoScenario;

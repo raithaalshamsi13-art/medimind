@@ -43,7 +43,7 @@ import {
 import { useT, type TranslationKey } from '@/i18n';
 import { localizeMessage } from '@/i18n/labels';
 import { formatIsoDate } from '@/lib/datetime';
-import { readerKind } from '@/services/scanner';
+import { MAX_SCAN_PHOTOS, readerKind } from '@/services/scanner';
 import { getVoiceService } from '@/services/voice/VoiceService';
 import { selectUser, useAuthStore } from '@/stores/useAuthStore';
 import { memberById, selectActiveMemberId, selectMembers, useFamilyStore } from '@/stores/useFamilyStore';
@@ -54,6 +54,22 @@ import { useTheme } from '@/theme/ThemeContext';
 
 /** Photo and details sit side by side from this width up. */
 const SIDE_BY_SIDE_MIN_WIDTH = 720;
+
+/** Field keys the reader may name in conflicts / unclear → their on-screen labels. */
+const FIELD_LABELS: Record<string, TranslationKey> = {
+  name: 'form.name',
+  dosage: 'detail.dosage',
+  frequency: 'detail.howOften',
+  instructions: 'detail.instructions',
+  expirationDate: 'detail.expiryDate',
+  manufacturer: 'scan.manufacturer',
+  activeIngredients: 'scan.activeIngredients',
+  form: 'scan.form',
+  quantity: 'scan.quantity',
+  batchNumber: 'scan.batchNumber',
+  storage: 'scan.storage',
+  warningsText: 'scan.warningsText',
+};
 
 /** Error codes that have their own headline on the failure screen. */
 const FAILURE_TITLES: readonly string[] = [
@@ -88,6 +104,7 @@ export default function ScanResultScreen() {
 
   const phase = useScanStore((state) => state.phase);
   const image = useScanStore((state) => state.image);
+  const images = useScanStore((state) => state.images);
   const result = useScanStore((state) => state.result);
   const error = useScanStore((state) => state.error);
   const isSaving = useScanStore((state) => state.isSaving);
@@ -106,7 +123,7 @@ export default function ScanResultScreen() {
 
   const [confirmedName, setConfirmedName] = useState('');
   const [nameError, setNameError] = useState<string | null>(null);
-  const [isEnlarged, setEnlarged] = useState(false);
+  const [enlargedUri, setEnlargedUri] = useState<string | null>(null);
   const [textTab, setTextTab] = useState<TextTab>('translated');
   const [isSpeaking, setSpeaking] = useState(false);
 
@@ -115,7 +132,8 @@ export default function ScanResultScreen() {
   const autoSaved = useRef(false);
   useEffect(() => {
     if (phase !== 'reviewing' || !result || !user || !member || autoSaved.current) return;
-    if (needsNameConfirmation(result)) return;
+    // Photos of different medicines are never combined or saved.
+    if (result.differentMedicines || needsNameConfirmation(result)) return;
     autoSaved.current = true;
     void save(user.id, member.id);
   }, [phase, result, user, member, save]);
@@ -180,7 +198,7 @@ export default function ScanResultScreen() {
     return (
       <Screen scroll>
         <View style={{ gap: theme.spacing.lg, alignItems: 'center', paddingTop: theme.spacing.xl }}>
-          {image ? <LabelPhoto uri={image.uri} onPress={() => setEnlarged(true)} height={220} /> : null}
+          {image ? <LabelPhoto uri={image.uri} onPress={() => setEnlargedUri(image.uri)} height={220} /> : null}
           <ActivityIndicator size="large" color={theme.colors.primary} />
           <AppText variant="heading" align="center">
             {t('scan.reading')}
@@ -189,7 +207,7 @@ export default function ScanResultScreen() {
             {t('scan.readingBody')}
           </AppText>
         </View>
-        {image ? <EnlargedPhoto uri={image.uri} visible={isEnlarged} onClose={() => setEnlarged(false)} /> : null}
+        <EnlargedPhoto uri={enlargedUri} onClose={() => setEnlargedUri(null)} />
       </Screen>
     );
   }
@@ -234,6 +252,12 @@ export default function ScanResultScreen() {
   }
 
   const nameNeeded = needsNameConfirmation(result);
+  const several = images.length > 1;
+  const fieldLabel = (field: string): string => {
+    const key = FIELD_LABELS[field];
+    return key ? t(key) : field;
+  };
+  const differentMedicines = result.differentMedicines;
   const nothingRead =
     result.rawText.trim().length === 0 && SCANNED_MEDICATION_FIELDS.every((f) => result.fields[f] === null);
   const memberName = member?.name ?? '';
@@ -246,8 +270,13 @@ export default function ScanResultScreen() {
     { value: 'original', label: t('scan.originalTab') },
   ];
 
-  const outcome =
-    phase === 'saved' && saved ? (
+  const outcome = differentMedicines ? (
+      <View style={{ gap: theme.spacing.md }}>
+        <InlineMessage tone="danger" title={t('scan.differentTitle')} message={t('scan.differentBody')} />
+        <Button label={t('scan.retake')} icon="camera-outline" onPress={retake} />
+        <Button label={t('scan.enterManually')} icon="create-outline" variant="secondary" onPress={enterManually} />
+      </View>
+    ) : phase === 'saved' && saved ? (
       <View style={{ gap: theme.spacing.md }}>
         <InlineMessage
           tone="success"
@@ -267,6 +296,12 @@ export default function ScanResultScreen() {
           label={t('scan.openMedicine')}
           icon="open-outline"
           onPress={() => leave(() => router.replace({ pathname: '/medication/[id]', params: { id: saved.id } }))}
+        />
+        <Button
+          label={t('scan.editDetails')}
+          icon="create-outline"
+          variant="secondary"
+          onPress={() => leave(() => router.replace({ pathname: '/medication/edit/[id]', params: { id: saved.id } }))}
         />
         {saved.safetyStatus === 'EXPIRED' ? null : (
           <Button
@@ -386,6 +421,10 @@ export default function ScanResultScreen() {
         <FieldRow label={t('detail.expiryDate')} field="expirationDate" result={result} language={language} />
         <FieldRow label={t('scan.activeIngredients')} field="activeIngredients" result={result} language={language} />
         <FieldRow label={t('scan.form')} field="form" result={result} language={language} />
+        <FieldRow label={t('scan.quantity')} field="quantity" result={result} language={language} />
+        <FieldRow label={t('scan.batchNumber')} field="batchNumber" result={result} language={language} />
+        <FieldRow label={t('scan.storage')} field="storage" result={result} language={language} />
+        <FieldRow label={t('scan.warningsText')} field="warningsText" result={result} language={language} />
         <FieldRow label={t('scan.manufacturer')} field="manufacturer" result={result} language={language} />
 
         {translation ? (
@@ -405,9 +444,26 @@ export default function ScanResultScreen() {
   const photo = image ? (
     <View style={{ gap: theme.spacing.sm }}>
       <AppText variant="label" color="textMuted">
-        {t('scan.photo').toUpperCase()}
+        {(several ? t('scan.photosUsed', { count: images.length }) : t('scan.photo')).toUpperCase()}
       </AppText>
-      <LabelPhoto uri={image.uri} onPress={() => setEnlarged(true)} height={sideBySide ? 420 : 240} />
+      <LabelPhoto uri={image.uri} onPress={() => setEnlargedUri(image.uri)} height={sideBySide ? 420 : 240} />
+      {several ? (
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: theme.spacing.sm }}>
+          {images.map((photoItem, index) => (
+            <Pressable
+              key={`${index}-${photoItem.uri.slice(-24)}`}
+              onPress={() => setEnlargedUri(photoItem.uri)}
+              accessibilityRole="imagebutton"
+              accessibilityLabel={t('scan.multi.photoN', { n: index + 1 })}
+              style={{ width: 64, height: 64 }}>
+              <Image
+                source={{ uri: photoItem.uri }}
+                style={{ width: 64, height: 64, borderRadius: theme.radius.md, borderWidth: 1, borderColor: theme.colors.border }}
+              />
+            </Pressable>
+          ))}
+        </ScrollView>
+      ) : null}
       <AppText variant="caption" color="textMuted" align="center">
         {t('scan.tapToEnlarge')}
       </AppText>
@@ -455,6 +511,20 @@ export default function ScanResultScreen() {
 
         {outcome}
 
+        {result.conflicts.length > 0 ? (
+          <InlineMessage
+            tone="warning"
+            title={t('scan.conflictsTitle')}
+            message={t('scan.conflictsBody', { list: result.conflicts.map((c) => `${fieldLabel(c.field)} (${c.note})`).join('; ') })}
+          />
+        ) : null}
+        {result.unclear.length > 0 ? (
+          <InlineMessage
+            tone="info"
+            title={t('scan.unclearTitle')}
+            message={t('scan.unclearBody', { list: result.unclear.map(fieldLabel).join(', ') })}
+          />
+        ) : null}
         {result.warnings.length > 0 ? (
           <InlineMessage tone="warning" title={t('scan.warnings')} message={result.warnings.join('\n')} />
         ) : null}
@@ -475,6 +545,18 @@ export default function ScanResultScreen() {
           </>
         )}
 
+        {differentMedicines ? null : (
+          <Button
+            label={t('scan.addMorePhotos')}
+            icon="images-outline"
+            variant="secondary"
+            onPress={() => {
+              stopSpeaking();
+              router.replace({ pathname: '/scan', params: { keep: '1' } });
+            }}
+            disabled={images.length >= MAX_SCAN_PHOTOS}
+          />
+        )}
         {phase === 'saved' ? null : (
           <View style={{ flexDirection: 'row', gap: theme.spacing.md }}>
             <Button label={t('scan.retake')} icon="camera-outline" variant="secondary" onPress={retake} style={{ flex: 1 }} />
@@ -483,19 +565,23 @@ export default function ScanResultScreen() {
         )}
       </View>
 
-      {image ? <EnlargedPhoto uri={image.uri} visible={isEnlarged} onClose={() => setEnlarged(false)} /> : null}
+      <EnlargedPhoto uri={enlargedUri} onClose={() => setEnlargedUri(null)} />
     </Screen>
   );
 }
 
 // ---------------------------------------------------------------------------
 
-function StatusBadge({ result, field }: { result: ScanResult; field: ScanField }) {
+function StatusBadge({ result, field, several }: { result: ScanResult; field: ScanField; several?: boolean }) {
   const { t } = useT();
   const value = result.fields[field];
+  const notFound = several ? t('scan.notFoundOnPhotos') : t('scan.notOnLabel');
+  const conflicted = result.conflicts.some((c) => c.field === field);
+  const unclearField = result.unclear.includes(field);
+  if (value === null && (conflicted || unclearField)) return <Badge label={t('scan.checkThis')} tone="warning" icon="alert-circle-outline" />;
   const hasConfidence = (SCANNED_MEDICATION_FIELDS as readonly string[]).includes(field);
   const uncertain = hasConfidence && isUncertain(result, field as (typeof SCANNED_MEDICATION_FIELDS)[number]);
-  if (value === null) return <Badge label={t('scan.notOnLabel')} tone="neutral" icon="remove-circle-outline" />;
+  if (value === null) return <Badge label={notFound} tone="neutral" icon="remove-circle-outline" />;
   if (uncertain) return <Badge label={t('scan.checkThis')} tone="warning" icon="alert-circle-outline" />;
   return <Badge label={t('scan.readFromLabel')} tone="success" icon="checkmark-circle-outline" />;
 }
@@ -512,7 +598,7 @@ function NameBlock({ result, language }: { result: ScanResult; language: 'en' | 
         <AppText variant="label" color="textMuted" style={{ flex: 1 }}>
           {t('form.name').toUpperCase()}
         </AppText>
-        <StatusBadge result={result} field="name" />
+        <StatusBadge result={result} field="name" several={useScanStore.getState().images.length > 1} />
       </View>
       {shown ? (
         <AppText variant="display" selectable>
@@ -555,7 +641,7 @@ function FieldRow({
         <AppText variant="label" color="textMuted" style={{ flex: 1 }}>
           {label.toUpperCase()}
         </AppText>
-        <StatusBadge result={result} field={field} />
+        <StatusBadge result={result} field={field} several={useScanStore.getState().images.length > 1} />
       </View>
       {display === null ? (
         <AppText variant="bodyLarge" color="textMuted" style={{ fontStyle: 'italic' }}>
@@ -598,11 +684,12 @@ function LabelPhoto({ uri, onPress, height }: { uri: string; onPress: () => void
   );
 }
 
-function EnlargedPhoto({ uri, visible, onClose }: { uri: string; visible: boolean; onClose: () => void }) {
+function EnlargedPhoto({ uri, onClose }: { uri: string | null; onClose: () => void }) {
   const theme = useTheme();
   const { t } = useT();
+  if (!uri) return null;
   return (
-    <Modal visible={visible} transparent={false} animationType="fade" onRequestClose={onClose}>
+    <Modal visible transparent={false} animationType="fade" onRequestClose={onClose}>
       <View style={{ flex: 1, backgroundColor: '#000000' }}>
         <ScrollView
           maximumZoomScale={4}

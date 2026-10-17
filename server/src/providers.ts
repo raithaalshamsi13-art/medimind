@@ -44,10 +44,14 @@ export class ProviderError extends Error {
   }
 }
 
+export type LabelImage = { data: string; mimeType: string };
+
 export type LabelReadInput = {
-  /** Base64 image bytes, no data: prefix. */
+  /** Base64 image bytes, no data: prefix (the first photo; kept for callers that send one). */
   imageBase64: string;
   mimeType: string;
+  /** Every photo of the one medicine, first included. */
+  images?: LabelImage[];
   /** The instruction that asks for JSON — see app.ts SCAN_PROMPT. */
   prompt: string;
   /** Give up after this many ms (default VISION_TIMEOUT_MS); lets a retry fit in the host's limit. */
@@ -72,6 +76,11 @@ export interface LlmProvider {
  * mid-sentence. The prompt itself keeps answers short.
  */
 const MAX_OUTPUT_TOKENS = 8192;
+/** All photos of the one medicine, in order. */
+function labelImages(input: LabelReadInput): LabelImage[] {
+  return input.images && input.images.length > 0 ? input.images : [{ data: input.imageBase64, mimeType: input.mimeType }];
+}
+
 /** The vision model must answer within this, or the server reports a timeout. */
 const VISION_TIMEOUT_MS = 50_000;
 
@@ -155,7 +164,7 @@ export function createGeminiProvider(apiKey: string, model: string): LlmProvider
             {
               role: 'user',
               parts: [
-                { inlineData: { mimeType: input.mimeType, data: input.imageBase64 } },
+                ...labelImages(input).map((image) => ({ inlineData: { mimeType: image.mimeType, data: image.data } })),
                 { text: input.prompt },
               ],
             },
@@ -278,7 +287,6 @@ export function createAnthropicProvider(apiKey: string, model: string): LlmProvi
     },
 
     async readLabel(input) {
-      const mediaType = input.mimeType === 'image/png' ? 'image/png' : 'image/jpeg';
       const reply = await call({
         model,
         max_tokens: MAX_OUTPUT_TOKENS,
@@ -286,7 +294,14 @@ export function createAnthropicProvider(apiKey: string, model: string): LlmProvi
           {
             role: 'user',
             content: [
-              { type: 'image', source: { type: 'base64', media_type: mediaType, data: input.imageBase64 } },
+              ...labelImages(input).map((image) => ({
+                type: 'image',
+                source: {
+                  type: 'base64',
+                  media_type: image.mimeType === 'image/png' ? 'image/png' : 'image/jpeg',
+                  data: image.data,
+                },
+              })),
               { type: 'text', text: input.prompt },
             ],
           },

@@ -13,6 +13,7 @@
  */
 
 import { extractFromLines } from '@/domain/labelText';
+import type { OcrLine } from '../../../modules/label-ocr';
 import { groundResult, type ScanResult } from '@/domain/scan';
 import { tNow } from '@/i18n';
 import { appError, toAppError } from '@/lib/errors';
@@ -37,7 +38,16 @@ export class OnDeviceScanner implements MedicationScannerService {
       return fail(appError('SCANNER_NOT_CONFIGURED', 'on-device OCR module missing'));
     }
     try {
-      const lines = await recognizeLabelText(request.image.uri, recognitionLanguages(request.language));
+      // Every photo is read, then the lines are stacked photo under photo
+      // (each photo's `y` offset by its index) so the extractor sees one
+      // long label: the tallest text anywhere is the name, the first EXP
+      // marker wins, and the raw text lists every photo in order.
+      const languages = recognitionLanguages(request.language);
+      const lines: OcrLine[] = [];
+      for (const [index, image] of request.images.entries()) {
+        const found = await recognizeLabelText(image.uri, languages);
+        for (const line of found) lines.push({ ...line, y: line.y + index });
+      }
       const result = extractFromLines(lines);
       // Translate the extractor's warning codes into sentences for the screen.
       const warnings = result.warnings.map((code) =>

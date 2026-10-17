@@ -152,6 +152,13 @@ It reads a medicine label, verifies it, and only then schedules reminders.
   the real reader (an error when unconfigured, never the mock), the scan
   screens show `ScanModeBanner`, and `groundResult` runs on every real
   reading so a field that is not in the transcription is never trusted.
+  Several photos are ONE request and ONE reading (`ScanRequest.images`);
+  never scan photos one by one and merge the results in the app. Keep the
+  server's rules: `differentMedicines` → every field null and nothing
+  saved; a disagreement → `conflicts`, never a silent choice; `unclear` only
+  for text that is visible but unreadable. Extra printed details (quantity,
+  batch, storage, warnings) are shown and kept in `label_text`, not added as
+  medicine columns.
 - **A failed scan names its cause.** `ProxyScanner` must map every failure
   through `scanErrors.ts` (server `code` / HTTP status, or the internet +
   `/health` probes when no answer came) — never a generic "could not be

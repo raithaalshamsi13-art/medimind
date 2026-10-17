@@ -54,6 +54,13 @@ const FREQUENCY =
 const INSTRUCTION =
   /\b(?:do not (?:take|exceed|use) more than[^.\n]*|do not exceed[^.\n]*|take [^.\n]*?(?:with|after|before) (?:food|meals?|water)[^.\n]*|with (?:food|meals?)\b[^.\n]*|swallow whole[^.\n]*|do not crush[^.\n]*|shake well[^.\n]*|for external use only|not to be taken[^.\n]*|keep out of (?:the )?(?:sight and )?reach of children)/i;
 
+const QUANTITY =
+  /\b(\d{1,4})\s?(?:x\s?\d+\s?)?(film[- ]coated tablets?|tablets?|caplets?|capsules?|softgels?|sachets?|ampoules?|vials?|patches?|lozenges?|suppositories|ml|mL|g)\b/i;
+const BATCH = /\b(?:LOT|BATCH|B\.?\s?N\.?|BN)\s*(?:NO\.?|#)?\s*[:.\-]?\s*([A-Z0-9][A-Z0-9\-\/]{1,19})\b/i;
+const STORAGE = /\b(?:store[sd]?\s+(?:below|under|at|in|between|away)[^.\n]*|keep\s+(?:refrigerated|in a (?:cool|dry)[^.\n]*|away from (?:heat|light|moisture)[^.\n]*)|do not (?:freeze|refrigerate)[^.\n]*|protect from (?:light|moisture)[^.\n]*)/i;
+const WARNING_TEXT =
+  /\b(?:warnings?|caution|precautions?|do not use if[^.\n]*|not (?:suitable|recommended) for[^.\n]*|consult (?:a|your) (?:doctor|pharmacist)[^.\n]*|if symptoms persist[^.\n]*|may cause[^.\n]*|contains? (?:lactose|gluten|soya|peanut)[^.\n]*)\b[^.\n]*/i;
+
 const MANUFACTURER = /\b(?:ltd|limited|inc|gmbh|plc|llc|s\.?a\.?|pharma(?:ceuticals?)?|laboratories|labs|manufactured by|marketed by|made in)\b/i;
 
 /** Lines that are never a medicine name. */
@@ -161,6 +168,10 @@ export function extractFromLines(input: readonly OcrLine[]): ScanResult {
     manufacturer: null,
     activeIngredients: null,
     form: null,
+    quantity: null,
+    batchNumber: null,
+    storage: null,
+    warningsText: null,
   };
   const confidence: ScanResult['confidence'] = { name: 0, dosage: 0, frequency: 0, instructions: 0, expirationDate: 0 };
   const warnings: string[] = [];
@@ -213,6 +224,31 @@ export function extractFromLines(input: readonly OcrLine[]): ScanResult {
         taken.add(index);
       }
     }
+    if (fields.quantity === null && !STRENGTH.test(text)) {
+      const m = QUANTITY.exec(text);
+      if (m) fields.quantity = m[0].trim();
+    }
+    if (fields.batchNumber === null) {
+      const m = BATCH.exec(text);
+      if (m) {
+        fields.batchNumber = m[1]!;
+        taken.add(index);
+      }
+    }
+    if (fields.storage === null) {
+      const m = STORAGE.exec(text);
+      if (m) {
+        fields.storage = m[0].trim().replace(/[.;]$/, '');
+        taken.add(index);
+      }
+    }
+    if (fields.warningsText === null && !INSTRUCTION.test(text)) {
+      const m = WARNING_TEXT.exec(text);
+      if (m) {
+        fields.warningsText = m[0].trim().replace(/[.;]$/, '');
+        taken.add(index);
+      }
+    }
     if (fields.manufacturer === null && MANUFACTURER.test(text) && !STRENGTH.test(text)) {
       fields.manufacturer = text;
       taken.add(index);
@@ -251,5 +287,5 @@ export function extractFromLines(input: readonly OcrLine[]): ScanResult {
     warnings.push('LOW_QUALITY');
   }
 
-  return { rawText, fields, confidence, warnings, translation: null };
+  return { rawText, fields, confidence, warnings, translation: null, conflicts: [], differentMedicines: false, unclear: [] };
 }

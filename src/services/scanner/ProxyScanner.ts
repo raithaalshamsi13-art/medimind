@@ -12,7 +12,7 @@
  */
 
 import { env } from '@/config/env';
-import { groundResult, scanResultSchema, type ScanResult } from '@/domain/scan';
+import { applyConflicts, groundResult, scanResultSchema, type ScanResult } from '@/domain/scan';
 import { tNow } from '@/i18n';
 import { appError, toAppError } from '@/lib/errors';
 import { fail, ok, type Result } from '@/lib/result';
@@ -53,8 +53,9 @@ export class ProxyScanner implements MedicationScannerService {
         headers,
         signal: controller.signal,
         body: JSON.stringify({
-          image: request.image.base64,
-          mimeType: request.image.mimeType,
+          // One medicine, several sides: the server hands every photo to the
+          // vision model in one call so it can combine them.
+          images: request.images.map((image) => ({ data: image.base64, mimeType: image.mimeType })),
           language: request.language,
         }),
       });
@@ -72,7 +73,7 @@ export class ProxyScanner implements MedicationScannerService {
       // Cross-check the fields against the transcription: anything the reader
       // did not actually read is flagged, never trusted.
       return ok(
-        groundResult(parsed.data, {
+        groundResult(applyConflicts(parsed.data), {
           nameNotOnLabel: tNow('scan.ground.name'),
           dosageNotOnLabel: tNow('scan.ground.dosage'),
           expiryNotOnLabel: tNow('scan.ground.expiry'),

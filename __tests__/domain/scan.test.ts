@@ -7,6 +7,7 @@
  */
 
 import {
+  applyConflicts,
   DEMO_SCENARIOS,
   demoScanResult,
   displayField,
@@ -38,10 +39,17 @@ const READ: ScanResult = {
     manufacturer: null,
     activeIngredients: 'Paracetamol',
     form: null,
+    quantity: null,
+    batchNumber: null,
+    storage: null,
+    warningsText: null,
   },
   confidence: { name: 0.95, dosage: 0.9, frequency: 0, instructions: 0, expirationDate: 0.8 },
   warnings: [],
   translation: null,
+  conflicts: [],
+  differentMedicines: false,
+  unclear: [],
 };
 
 describe('scanResultSchema', () => {
@@ -280,5 +288,45 @@ describe('form and kind from the printed words', () => {
     expect(input?.form).toBe('TABLET');
     expect(input?.kind).toBe('SUPPLEMENT');
     expect(scanToMedicationInput({ ...READ, rawText: 'Panadol 500 mg' }, { memberId: 'self', imageUri: null })?.form).toBeNull();
+  });
+});
+
+describe('several photos of one medicine', () => {
+  it('accepts the multi-photo flags and defaults them for older servers', () => {
+    const legacy = scanResultSchema.parse({ ...READ, conflicts: undefined, differentMedicines: undefined, unclear: undefined });
+    expect(legacy.conflicts).toEqual([]);
+    expect(legacy.differentMedicines).toBe(false);
+    expect(legacy.unclear).toEqual([]);
+
+    const flagged = scanResultSchema.parse({
+      ...READ,
+      conflicts: [{ field: 'dosage', note: 'front says 500 mg, back says 650 mg' }],
+      differentMedicines: true,
+      unclear: ['expirationDate'],
+    });
+    expect(flagged.conflicts).toHaveLength(1);
+    expect(flagged.differentMedicines).toBe(true);
+    expect(flagged.unclear).toEqual(['expirationDate']);
+  });
+
+  it('caps the confidence of a conflicting field so the user must check it', () => {
+    const result = applyConflicts({ ...READ, conflicts: [{ field: 'name', note: 'two names' }, { field: 'nope', note: 'x' }] });
+    expect(result.confidence.name).toBe(UNGROUNDED_CONFIDENCE);
+    expect(needsNameConfirmation(result)).toBe(true);
+    expect(result.confidence.dosage).toBe(0.9);
+    expect(applyConflicts(READ)).toBe(READ);
+  });
+
+  it('keeps the extra printed details (quantity, batch, storage, warnings) in the reading', () => {
+    const parsed = scanResultSchema.parse({
+      ...READ,
+      fields: { ...READ.fields, quantity: '28 tablets', batchNumber: ' 4471A ', storage: 'Store below 25°C', warningsText: 'Keep out of reach of children' },
+    });
+    expect(parsed.fields.quantity).toBe('28 tablets');
+    expect(parsed.fields.batchNumber).toBe('4471A');
+    // Shown and kept in the label text, never stored as separate columns.
+    const input = scanToMedicationInput(parsed, { memberId: 'self', imageUri: null });
+    expect(input).not.toHaveProperty('quantity');
+    expect(displayField(parsed, 'quantity', 'ar')).toBe('28 tablets');
   });
 });

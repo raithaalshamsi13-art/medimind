@@ -118,3 +118,35 @@ describe('extractFromLines', () => {
     expect(ordered.map((l) => l.text)).toEqual(['top', 'left', 'right']);
   });
 });
+
+describe('several photos stacked into one reading', () => {
+  it('combines the name from one photo with the ingredients and expiry from another', () => {
+    const front: OcrLine[] = [line('Ferrous Sulphate', 0.1, 0.07), line('200 mg', 0.2, 0.04), line('28 tablets', 0.3)];
+    const back: OcrLine[] = [
+      line('Each tablet contains: ferrous sulphate 200 mg', 0.1),
+      line('Store below 25°C in a dry place', 0.2),
+      line('EXP 03/2027  LOT 4471A', 0.3),
+      line('Keep out of the sight and reach of children', 0.4),
+    ];
+    // What OnDeviceScanner does: photo 2's lines are offset by +1 in y.
+    const stacked = [...front, ...back.map((l) => ({ ...l, y: l.y + 1 }))];
+    const result = extractFromLines(stacked);
+    expect(result.fields.name).toBe('Ferrous Sulphate');
+    expect(result.fields.dosage).toBe('200 mg');
+    expect(result.fields.activeIngredients).toBe('ferrous sulphate 200 mg');
+    expect(result.fields.expirationDate).toBe('2027-03-31');
+    expect(result.fields.quantity).toBe('28 tablets');
+    expect(result.fields.batchNumber).toBe('4471A');
+    expect(result.fields.storage).toBe('Store below 25°C in a dry place');
+    expect(result.rawText.split('\n')[0]).toBe('Ferrous Sulphate');
+    expect(result.rawText).toContain('EXP 03/2027');
+    expect(result.differentMedicines).toBe(false);
+    expect(result.conflicts).toEqual([]);
+  });
+
+  it('reads a printed warning line without taking it for an instruction', () => {
+    const result = extractFromLines([line('Panadol', 0.1, 0.06), line('Caution: may cause drowsiness', 0.3)]);
+    expect(result.fields.warningsText).toBe('Caution: may cause drowsiness');
+    expect(result.fields.instructions).toBeNull();
+  });
+});

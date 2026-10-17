@@ -23,8 +23,8 @@ export function useStartScan() {
   const [scenario, setScenario] = useState<DemoScenario>('SAFE');
 
   const start = useCallback(
-    (image: ScanImage) => {
-      void run(image, { demoMode, language, demoScenario: scenario });
+    (images: ScanImage | ScanImage[]) => {
+      void run(images, { demoMode, language, demoScenario: scenario });
       router.push('/scan/result');
     },
     [run, demoMode, language, scenario, router],

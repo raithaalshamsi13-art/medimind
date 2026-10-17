@@ -46,7 +46,7 @@ import {
 } from './providers';
 
 /** Bumped on every change so /health shows which code is live. */
-const VERSION = '1.8.8';
+const VERSION = '1.9.0';
 
 const MAX_QUESTION_LENGTH = 500;
 const MAX_HISTORY_TURNS = 10;
@@ -103,10 +103,10 @@ About the person (when a profile is supplied below):
  * the fields the app stores. The rules mirror the app's: nothing is guessed,
  * an unreadable field is null with a low confidence, and the wording is kept.
  */
-const SCAN_PROMPT = `You are an OCR reader for a medication-reminder app. You are given ONE photo of a medicine package, bottle, blister pack or supplement container. Work in two steps: FIRST transcribe every piece of legible printed text exactly as printed; THEN fill the fields ONLY by copying words from that transcription. Return ONLY a JSON object, no prose, with exactly this shape:
+const SCAN_PROMPT = `You are an OCR reader for a medication-reminder app. You are given {photoCount} of ONE medicine package, bottle, blister pack or supplement container{photoNote}. Work in two steps: FIRST transcribe every piece of legible printed text exactly as printed; THEN fill the fields ONLY by copying words from that transcription. Return ONLY a JSON object, no prose, with exactly this shape:
 
 {
-  "rawText": "every piece of legible printed text on the packaging, in reading order, one line per printed line, wording and numbers preserved exactly (do not translate, do not summarise; keep units, lot numbers and warnings)",
+  "rawText": "every piece of legible printed text on the packaging, in reading order, one line per printed line, wording and numbers preserved exactly (do not translate, do not summarise; keep units, lot numbers and warnings). With several photos, start each photo's text with a line 'Photo 1:', 'Photo 2:', …",
   "fields": {
     "name": "the medicine's name: the brand or product name printed most prominently on the front of the pack (e.g. \"Panadol Extra\"); if only the generic name is printed use that; or null",
     "dosage": "the strength of ONE unit as printed, e.g. \\"500 mg\\" or \\"10 mg/5 ml\\", or null",
@@ -115,14 +115,23 @@ const SCAN_PROMPT = `You are an OCR reader for a medication-reminder app. You ar
     "expirationDate": "the expiry date as YYYY-MM-DD; if only month and year are printed use the last day of that month; or null",
     "manufacturer": "the manufacturer or marketing company as printed, or null",
     "activeIngredients": "the active ingredient(s) as printed, or null",
-    "form": "the dosage form as printed, e.g. \"film-coated tablets\", \"capsules\", \"syrup\", \"oral drops\", \"cream\", or null"
+    "form": "the dosage form as printed, e.g. \"film-coated tablets\", \"capsules\", \"syrup\", \"oral drops\", \"cream\", or null",
+    "quantity": "the pack quantity as printed, e.g. \"28 tablets\" or \"100 ml\", or null",
+    "batchNumber": "the batch / lot number as printed (after LOT, Batch, B.N.), or null",
+    "storage": "the storage instructions as printed, or null",
+    "warningsText": "the printed warnings and precautions, as printed, or null"
   },
   "confidence": { "name": 0-1, "dosage": 0-1, "frequency": 0-1, "instructions": 0-1, "expirationDate": 0-1 },
   "warnings": ["short plain-language notes about anything unclear, cut off, blurred or hidden, in {language}"],
-  "translation": {translationShape}
+  "translation": {translationShape},
+  "conflicts": [{ "field": "the field name", "note": "what the photos disagree about, in {language}" }],
+  "differentMedicines": false,
+  "unclear": ["field names whose printed text is blurred, cut off or hidden by glare and would need a clearer photo"]
 }
 
 Rules:
+- With several photos: they show the SAME medicine from different sides. Combine them into ONE reading — the name may be on the front, the ingredients on the side, the expiry on the bottom. Never list the same item twice. If the photos clearly show two different products (different names or different active ingredients), set "differentMedicines" to true, fill only "rawText", and leave every field null. If two photos print different values for the same field (two different strengths, two different expiry dates), choose neither: put the field in "conflicts" with a short note and set that field to null.
+- "unclear" lists only fields whose printed text you could see but not read reliably; a field simply not printed anywhere is null and NOT listed.
 - Every value in "fields" must appear, word for word, somewhere in "rawText". If you cannot point to the printed words, the value is null. Never complete, correct or normalise a name: "Ferrous Sulphate 200 mg" stays exactly that.
 - This is OCR, not recognition: identify the product ONLY from the printed text. Never infer the medicine from the colour, shape, logo or style of the packaging, and never substitute a common medicine (such as paracetamol) for what is printed. An iron supplement, a vitamin, an antibiotic and a painkiller are all simply whatever their label says.
 - Never invent a value. If something is not printed, or you cannot read it clearly, set the field to null and its confidence low. A confidence of 0.9 or more means you can read it clearly; below 0.7 means the user must check it.
@@ -133,23 +142,27 @@ Rules:
 
 const TRANSLATION_SHAPE: Record<string, string> = {
   en: 'null',
-  ar: '{ "language": "ar", "name": "the name in Arabic script (transliterate a brand name), or null", "dosage": "the dosage in Arabic, or null", "frequency": "the frequency in Arabic, or null", "instructions": "the instructions in Arabic, or null", "activeIngredients": "the active ingredients in Arabic, or null", "rawText": "a faithful Arabic translation of rawText, line by line, numbers and units kept" }',
+  ar: '{ "language": "ar", "name": "the name in Arabic script (transliterate a brand name), or null", "dosage": "the dosage in Arabic, or null", "frequency": "the frequency in Arabic, or null", "instructions": "the instructions in Arabic, or null", "activeIngredients": "the active ingredients in Arabic, or null", "storage": "the storage instructions in Arabic, or null", "warningsText": "the warnings in Arabic, or null", "rawText": "a faithful Arabic translation of rawText, line by line, numbers and units kept" }',
 };
 const TRANSLATION_RULE: Record<string, string> = {
   en: '- "translation" must be null.',
   ar: '- "translation" is a faithful Arabic rendering of the fields and of rawText for display only. Translate; never add, interpret or summarise. Keep every number, unit, date and lot number exactly. A field that is null in "fields" is null in "translation" too.',
 };
 
-function scanPrompt(language: string): string {
+function scanPrompt(language: string, photoCount = 1): string {
   // `language` is the word handed to the model ('Arabic' / 'English'), not the code.
   const lang = language === 'Arabic' ? 'ar' : 'en';
-  return SCAN_PROMPT.replace('{language}', language)
+  return SCAN_PROMPT.replace(/\{language\}/g, language)
+    .replace('{photoCount}', photoCount === 1 ? 'ONE photo' : `${photoCount} photos`)
+    .replace('{photoNote}', photoCount === 1 ? '' : ' (the same pack photographed from different sides)')
     .replace('{translationShape}', TRANSLATION_SHAPE[lang])
     .replace('{translationRule}', TRANSLATION_RULE[lang]);
 }
 
 const MAX_IMAGE_BASE64 = 8 * 1024 * 1024; // ~6 MB of image
 const MAX_SCAN_BODY_BYTES = MAX_IMAGE_BASE64 + 64 * 1024;
+/** Photos of one medicine in one request (the app resizes each to about 300 KB). */
+const MAX_SCAN_IMAGES = 5;
 
 const SAFE_DECLINE =
   'I am not able to help with that question. Please speak to your pharmacist or doctor.\n' +
@@ -208,8 +221,11 @@ function readBody(req: IncomingMessage, limit: number = MAX_BODY_BYTES): Promise
     req.on('data', (chunk: Buffer) => {
       size += chunk.length;
       if (size > limit) {
+        // Drain instead of destroying the socket, so the 413 reply can still
+        // reach the app (a destroyed socket reads as a dropped connection).
         reject(new Error('body too large'));
-        req.destroy();
+        req.removeAllListeners('data');
+        req.resume();
         return;
       }
       chunks.push(chunk);
@@ -426,7 +442,20 @@ function extractJson(text: string): unknown {
   return JSON.parse(trimmed.slice(start, end + 1));
 }
 
-const SCAN_FIELDS = ['name', 'dosage', 'frequency', 'instructions', 'expirationDate', 'manufacturer', 'activeIngredients', 'form'] as const;
+const SCAN_FIELDS = [
+  'name',
+  'dosage',
+  'frequency',
+  'instructions',
+  'expirationDate',
+  'manufacturer',
+  'activeIngredients',
+  'form',
+  'quantity',
+  'batchNumber',
+  'storage',
+  'warningsText',
+] as const;
 const CONFIDENCE_FIELDS = ['name', 'dosage', 'frequency', 'instructions', 'expirationDate'] as const;
 
 /** Coerce whatever the model returned into the exact shape the app validates. */
@@ -441,7 +470,7 @@ function normaliseScan(raw: unknown) {
     typeof v === 'number' && Number.isFinite(v) ? Math.min(1, Math.max(0, v)) : 0;
 
   const fields: Record<string, string | null> = {};
-  for (const key of SCAN_FIELDS) fields[key] = text(fieldsIn[key], key === 'instructions' ? 300 : key === 'activeIngredients' ? 200 : key === 'form' ? 40 : 100);
+  for (const key of SCAN_FIELDS) fields[key] = text(fieldsIn[key], key === 'instructions' || key === 'storage' ? 300 : key === 'warningsText' ? 600 : key === 'activeIngredients' ? 200 : key === 'form' ? 40 : key === 'quantity' || key === 'batchNumber' ? 60 : 100);
   const confidence: Record<string, number> = {};
   for (const key of CONFIDENCE_FIELDS) confidence[key] = fields[key] === null ? 0 : number01(confIn[key]);
 
@@ -455,6 +484,8 @@ function normaliseScan(raw: unknown) {
           frequency: text(trIn.frequency, 60),
           instructions: text(trIn.instructions, 300),
           activeIngredients: text(trIn.activeIngredients, 200),
+          storage: text(trIn.storage, 300),
+          warningsText: text(trIn.warningsText, 600),
           rawText: typeof trIn.rawText === 'string' ? trIn.rawText.slice(0, 6000) : '',
         }
       : null;
@@ -464,6 +495,15 @@ function normaliseScan(raw: unknown) {
     fields,
     confidence,
     translation,
+    conflicts: Array.isArray(r.conflicts)
+      ? r.conflicts
+          .filter((c): c is { field: unknown; note: unknown } => typeof c === 'object' && c !== null)
+          .map((c) => ({ field: String(c.field ?? '').slice(0, 40), note: String(c.note ?? '').slice(0, 200) }))
+          .filter((c) => c.field.length > 0)
+          .slice(0, 10)
+      : [],
+    differentMedicines: r.differentMedicines === true,
+    unclear: Array.isArray(r.unclear) ? r.unclear.filter((u): u is string => typeof u === 'string').map((u) => u.slice(0, 40)).slice(0, 12) : [],
     warnings: Array.isArray(r.warnings)
       ? r.warnings.filter((w): w is string => typeof w === 'string').map((w) => w.slice(0, 200)).slice(0, 10)
       : [],
@@ -517,7 +557,7 @@ const ATTEMPT_MS = 20_000;
  * reported as PROVIDER_BUSY so the app can offer "Try again".
  */
 async function readWithRetry(
-  input: { imageBase64: string; mimeType: string; prompt: string },
+  input: { imageBase64: string; mimeType: string; images: { data: string; mimeType: string }[]; prompt: string },
 ): Promise<{ reply: string; usedProvider: LlmProvider }> {
   const started = Date.now();
   const remaining = () => SCAN_BUDGET_MS - (Date.now() - started);
@@ -570,7 +610,7 @@ async function handleScan(req: IncomingMessage, res: ServerResponse): Promise<vo
     return;
   }
 
-  let body: { image?: unknown; mimeType?: unknown; language?: unknown };
+  let body: { image?: unknown; images?: unknown; mimeType?: unknown; language?: unknown };
   try {
     body = JSON.parse(await readBody(req, MAX_SCAN_BODY_BYTES));
   } catch (error) {
@@ -581,23 +621,38 @@ async function handleScan(req: IncomingMessage, res: ServerResponse): Promise<vo
     });
     return;
   }
-  const image = typeof body.image === 'string' ? body.image.replace(/^data:[^,]+,/, '') : '';
-  if (image.length > MAX_IMAGE_BASE64) {
-    json(res, 413, { error: 'The photo is too large. Please send one under 6 MB.', code: 'IMAGE_TOO_LARGE' });
+  // One photo (`image` + `mimeType`, the original shape) or several
+  // (`images: [{ data, mimeType }]`) of the same medicine.
+  const rawImages: { data: unknown; mimeType: unknown }[] = Array.isArray(body.images)
+    ? body.images.filter((i): i is { data: unknown; mimeType: unknown } => typeof i === 'object' && i !== null)
+    : [{ data: body.image, mimeType: body.mimeType }];
+  if (rawImages.length === 0 || rawImages.length > MAX_SCAN_IMAGES) {
+    json(res, 400, { error: `Send between 1 and ${MAX_SCAN_IMAGES} photos.`, code: 'BAD_REQUEST' });
     return;
   }
-  if (image.length === 0 || !/^[A-Za-z0-9+/=\s]+$/.test(image.slice(0, 200))) {
-    json(res, 400, { error: 'image must be base64 (JPEG or PNG)', code: 'BAD_REQUEST' });
+  const images = rawImages.map((i) => ({
+    data: typeof i.data === 'string' ? i.data.replace(/^data:[^,]+,/, '') : '',
+    mimeType: i.mimeType === 'image/png' ? 'image/png' : 'image/jpeg',
+  }));
+  const totalBase64 = images.reduce((sum, i) => sum + i.data.length, 0);
+  if (totalBase64 > MAX_IMAGE_BASE64) {
+    json(res, 413, { error: 'The photos are too large together. Please send fewer or smaller photos (under 6 MB in total).', code: 'IMAGE_TOO_LARGE' });
     return;
   }
-  const mimeType = body.mimeType === 'image/png' ? 'image/png' : 'image/jpeg';
+  if (images.some((i) => i.data.length === 0 || !/^[A-Za-z0-9+/=\s]+$/.test(i.data.slice(0, 200)))) {
+    json(res, 400, { error: 'Every image must be base64 (JPEG or PNG)', code: 'BAD_REQUEST' });
+    return;
+  }
+  const image = images[0]!.data;
+  const mimeType = images[0]!.mimeType;
   const language = body.language === 'ar' ? 'Arabic' : 'English';
 
   try {
     const { reply, usedProvider } = await readWithRetry({
       imageBase64: image,
       mimeType,
-      prompt: scanPrompt(language),
+      images,
+      prompt: scanPrompt(language, images.length),
     });
     let parsed: unknown;
     try {
