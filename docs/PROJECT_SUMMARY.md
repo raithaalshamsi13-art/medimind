@@ -1231,8 +1231,18 @@ same commit**, and updates the sections above that it touches (rule in
 - Tests +5 (401 in 26 suites): schema defaults, `applyConflicts`, extra
   details kept out of the medicine columns, stacked-photo combination,
   warning vs instruction. Server validation exercised locally (0 / 6
-  photos → 400, bad base64 → 400, 9 MB → 413). Live multi-photo scans
-  through the Vercel function are recorded below once run.
+  photos → 400, bad base64 → 400, 9 MB → 413).
+- **Live through the Vercel function (1.9.0, synthetic labels)**: front +
+  back of an iron pack → one reading with the name and strength from the
+  front and the ingredients, storage, batch, warning and expiry from the
+  back (9 s); front of iron + a cetirizine photo → `differentMedicines`,
+  every field null, nothing saved (6 s); front saying 650 mg + back saying
+  200 mg → dosage left null and listed in `conflicts` (11 s); front + a
+  blank photo → fields from the front only and "Photo 2 contains no readable
+  text" (11 s); the same pair in Arabic → Arabic translation present (via
+  the fallback model); a single photo through the new request shape →
+  unchanged reading. Not yet run on a physical iPhone: the camera tray UI
+  and the on-device (Apple Vision) stacking.
 
 ### 2026-10-16 — Zero lint findings and editor diagnostics, no behaviour change
 - `expo lint` had 6 errors and 4 warnings; the editor flagged the server
