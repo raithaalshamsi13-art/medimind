@@ -1204,6 +1204,13 @@ Newest first. Every commit that changes the app adds an entry here **in the
 same commit**, and updates the sections above that it touches (rule in
 `AGENTS.md`, "Verify before claiming done").
 
+### 2026-10-27 — QR code for the public web link
+- `public/medimind-qr.png` and `.svg` (also `docs/medimind-qr.png`) encode
+  **https://medimind-puce.vercel.app** — a plain web link, so any phone
+  camera opens the web app directly; no Expo Go. Served at
+  `https://medimind-puce.vercel.app/medimind-qr.png` once deployed.
+  Generated with `npx qrcode` (no dependency added).
+
 ### 2026-10-17 — Several photos of one medicine, scanned together
 - **Camera / web**: "Several photos" switch (off by default — the single
   photo flow is unchanged) → `PhotoTray` with previews, remove, add from the

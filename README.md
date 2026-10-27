@@ -49,6 +49,13 @@ straight into the graduation report.
 
 ---
 
+## Try it without installing anything
+
+Scan this with any phone camera — it is a plain link to the live web app
+(`https://medimind-puce.vercel.app`), no Expo Go needed:
+
+![MediMind QR code](docs/medimind-qr.png)
+
 ## Getting started
 
 ### Requirements
